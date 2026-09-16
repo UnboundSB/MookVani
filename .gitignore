@@ -1,0 +1,31 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyTorch models
+*.pth
+*.pt
+
+# Virtual Environments
+Backend/venv/
+venv/
+env/
+ENV/
+
+# Datasets and extracted features
+Backend/data/isl_csltr_dataset/
+Backend/data/tensors_*
+Backend/data/tensors_video_163_backup.zip
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# MediaPipe models
+*.task
+
+# Jupyter Notebook
+.ipynb_checkpoints
