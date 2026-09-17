@@ -29,3 +29,7 @@ Backend/data/tensors_video_163_backup.zip
 
 # Jupyter Notebook
 .ipynb_checkpoints
+
+# Plots and Logs
+*.png
+*.log

@@ -68,6 +68,10 @@ def extract_word_level(data_dir, output_dir):
             os.makedirs(save_dir, exist_ok=True)
             save_path = os.path.join(save_dir, f"{img_name}.pt")
 
+            if os.path.exists(save_path):
+                success_count += 1
+                continue
+
             tensor_data = process_static_image(img_path, hand_lm, pose_lm, face_lm)
             if tensor_data is not None:
                 torch.save(tensor_data, save_path)
@@ -133,6 +137,10 @@ def extract_sentence_level(data_dir, output_dir):
                 os.makedirs(save_dir, exist_ok=True)
                 save_path = os.path.join(save_dir, f"{rep_id}.pt")
 
+                if os.path.exists(save_path):
+                    success_count += 1
+                    continue
+
                 tensor_data = process_sentence_repetition_folder(rep_dir, hand_lm, pose_lm, face_lm)
                 if tensor_data is not None:
                     torch.save(tensor_data, save_path)
@@ -162,15 +170,15 @@ def process_video(video_path, landmarker):
 
         results = landmarker.detect_for_video(mp_image, timestamp_ms)
 
-        lh_raw = np.array([[lm.x, lm.y, lm.z] for lm in results.left_hand_landmarks[0]]) \
+        lh_raw = np.array([[lm.x, lm.y, lm.z] for lm in results.left_hand_landmarks]) \
                  if results.left_hand_landmarks else np.zeros((21, 3))
-        rh_raw = np.array([[lm.x, lm.y, lm.z] for lm in results.right_hand_landmarks[0]]) \
+        rh_raw = np.array([[lm.x, lm.y, lm.z] for lm in results.right_hand_landmarks]) \
                  if results.right_hand_landmarks else np.zeros((21, 3))
         lh_flag = 1.0 if results.left_hand_landmarks else 0.0
         rh_flag = 1.0 if results.right_hand_landmarks else 0.0
 
-        pose_landmarks = results.pose_landmarks[0] if results.pose_landmarks else None
-        face_landmarks = results.face_landmarks[0] if results.face_landmarks else None
+        pose_landmarks = results.pose_landmarks if results.pose_landmarks else None
+        face_landmarks = results.face_landmarks if results.face_landmarks else None
 
         feats, last_lh, last_rh, last_arms, last_face = extract_frame_features_video_mode(
             lh_raw, rh_raw, lh_flag, rh_flag, pose_landmarks, face_landmarks,
@@ -200,6 +208,10 @@ def extract_video_level(data_dir, output_dir):
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, os.path.basename(vid_path).replace(".mp4", ".pt"))
 
+        if os.path.exists(save_path):
+            success_count += 1
+            continue
+
         with vision.HolisticLandmarker.create_from_options(video_options) as landmarker:
             tensor_data = process_video(vid_path, landmarker)
             if tensor_data is not None:
@@ -212,14 +224,15 @@ if __name__ == "__main__":
     download_models()
     
     # Update these paths to match your local dataset location
-    DATASET_DIR = "./data/isl_csltr_dataset"
-    WORD_LEVEL_DIR = os.path.join(DATASET_DIR, "ISL_CSLRT_Corpus/ISL_CSLRT_Corpus/Frames_Word_Level")
-    SENTENCE_LEVEL_DIR = os.path.join(DATASET_DIR, "ISL_CSLRT_Corpus/ISL_CSLRT_Corpus/Frames_Sentence_Level")
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DATASET_DIR = os.path.join(BASE_DIR, "data", "isl_csltr_dataset")
+    WORD_LEVEL_DIR = os.path.join(DATASET_DIR, "ISL_CSLRT_Corpus", "ISL_CSLRT_Corpus", "Frames_Word_Level")
+    SENTENCE_LEVEL_DIR = os.path.join(DATASET_DIR, "ISL_CSLRT_Corpus", "ISL_CSLRT_Corpus", "Frames_Sentence_Level")
     
-    OUTPUT_WORD = "./data/tensors_word_level_163"
-    OUTPUT_SENTENCE = "./data/tensors_sentence_level_163"
-    OUTPUT_VIDEO = "./data/tensors_video_163"
+    OUTPUT_WORD = os.path.join(BASE_DIR, "data", "tensors_word_level_163")
+    OUTPUT_SENTENCE = os.path.join(BASE_DIR, "data", "tensors_sentence_level_163")
+    OUTPUT_VIDEO = os.path.join(BASE_DIR, "data", "tensors_video_163")
     
-    # extract_word_level(WORD_LEVEL_DIR, OUTPUT_WORD)
-    # extract_sentence_level(SENTENCE_LEVEL_DIR, OUTPUT_SENTENCE)
-    # extract_video_level(DATASET_DIR, OUTPUT_VIDEO)
+    extract_word_level(WORD_LEVEL_DIR, OUTPUT_WORD)
+    extract_sentence_level(SENTENCE_LEVEL_DIR, OUTPUT_SENTENCE)
+    extract_video_level(DATASET_DIR, OUTPUT_VIDEO)

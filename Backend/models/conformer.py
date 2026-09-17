@@ -209,9 +209,11 @@ class ISL_Conformer(nn.Module):
 
         x = self.transpose_to_ct(x)
         x = self.mbconv(x, pad_mask_ct)
-        x = self.pool(x)
-
-        lengths_pooled = lengths // 2
+        if x.size(-1) > 1:
+            x = self.pool(x)
+            lengths_pooled = torch.clamp(lengths // 2, min=1)
+        else:
+            lengths_pooled = lengths
         T_pooled = x.size(-1)
         pad_mask_bt_pooled = lengths_to_padding_mask(lengths_pooled, T_pooled)
         pad_mask_ct_pooled = pad_mask_bt_pooled.unsqueeze(1)
