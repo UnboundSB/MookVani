@@ -1,5 +1,5 @@
-from itertools import groupby
 import torch
+from itertools import groupby
 
 def ctc_greedy_decode(log_probs_row):
     """log_probs_row: (T, C) log-probs for one sample. Returns list of predicted word ids (blank/dup collapsed)."""
@@ -18,26 +18,31 @@ def edit_distance(ref, hyp):
             dp[i][j] = min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
     return dp[n][m]
 
-def compute_wer(model, loader, device):
+def compute_sentence_metrics(model, loader, device):
+    """Returns WER (edit-distance based, the standard CSLR metric) AND plain sequence-exact-match
+    accuracy (fraction of sentences where the predicted word sequence exactly matches the reference)."""
     model.eval()
     total_errors, total_ref_len = 0, 0
+    exact_matches, total_sentences = 0, 0
     examples = []
+    
     with torch.no_grad():
         for batch_inputs, batch_targets, in_lens, tgt_lens in loader:
             batch_inputs = batch_inputs.to(device)
             in_lens = in_lens.to(device)
-            log_probs, _ = model(batch_inputs, in_lens)
+            log_probs, pooled_lens = model(batch_inputs, in_lens)
 
             for i in range(batch_inputs.size(0)):
                 ref = batch_targets[i, :tgt_lens[i]].tolist()
                 hyp = ctc_greedy_decode(log_probs[i])
                 total_errors += edit_distance(ref, hyp)
                 total_ref_len += len(ref)
+                total_sentences += 1
+                if ref == hyp:
+                    exact_matches += 1
                 if len(examples) < 5:
                     examples.append((ref, hyp))
 
     wer = total_errors / max(1, total_ref_len)
-    return wer, examples
-
-if __name__ == "__main__":
-    print("This script provides functions for WER and decoding. Import it in evaluation scripts.")
+    exact_match_acc = exact_matches / max(1, total_sentences)
+    return wer, exact_match_acc, examples

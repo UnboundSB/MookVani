@@ -1,0 +1,1009 @@
+{
+    "A LOT": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/A LOT/A LOT (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/A LOT/A LOT (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/A LOT/A LOT (2).pt"
+    ],
+    "ABUSE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/ABUSE/ABUSE (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ABUSE/ABUSE (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ABUSE/ABUSE (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ABUSE/ABUSE (3).pt"
+    ],
+    "AFRAID": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/AFRAID/AFRAID (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/AFRAID/AFRAID (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/AFRAID/AFRAID (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/AFRAID/AFRAID (1).pt"
+    ],
+    "AGREE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/AGREE/AGREE (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/AGREE/AGREE (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/AGREE/AGREE (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/AGREE/AGREE (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/AGREE/AGREE (7).pt"
+    ],
+    "ALL": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/ALL/ALL (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ALL/ALL (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ALL/ALL (3).pt"
+    ],
+    "ANGRY": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/ANGRY/ANGRY (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ANGRY/ANGRY (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ANGRY/ANGRY (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ANGRY/ANGRY (10).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ANGRY/ANGRY (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ANGRY/ANGRY (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ANGRY/ANGRY (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ANGRY/ANGRY (9).pt"
+    ],
+    "ANYTHING": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/ANYTHING/ANYTHING (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ANYTHING/ANYTHING (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ANYTHING/ANYTHING (1).pt"
+    ],
+    "APPRECIATE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/APPRECIATE/APPRECIATE (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/APPRECIATE/APPRECIATE (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/APPRECIATE/APPRECIATE (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/APPRECIATE/APPRECIATE (1).pt"
+    ],
+    "BAD": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/BAD/BAD (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BAD/BAD (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BAD/BAD (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BAD/BAD (3).pt"
+    ],
+    "BEAUTIFUL": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/BEAUTIFUL/BEAUTIFUL (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BEAUTIFUL/BEAUTIFUL (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BEAUTIFUL/BEAUTIFUL (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BEAUTIFUL/BEAUTIFUL (2).pt"
+    ],
+    "BECOME": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/BECOME/BECOME (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BECOME/BECOME (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BECOME/BECOME (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BECOME/BECOME (1).pt"
+    ],
+    "BED": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/BED/BED (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BED/BED (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BED/BED (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BED/BED (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BED/BED (7).pt"
+    ],
+    "BORED": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/BORED/BORED (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BORED/BORED (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BORED/BORED (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BORED/BORED (1).pt"
+    ],
+    "BRING": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/BRING/BRING-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BRING/BRING-2.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BRING/BRING-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BRING/BRING-7.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/BRING/BRING-4.pt"
+    ],
+    "CHAT": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/CHAT/CHAT (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CHAT/CHAT (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CHAT/CHAT (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CHAT/CHAT (5).pt"
+    ],
+    "CLASS": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/CLASS/CLASS (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CLASS/CLASS (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CLASS/CLASS (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CLASS/CLASS (3).pt"
+    ],
+    "COLD": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLD/COLD (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLD/COLD (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLD/COLD (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLD/COLD (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLD/COLD (1).pt"
+    ],
+    "COLLEGE_SCHOOL": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLLEGE_SCHOOL/COLLEGE OR SCHOOL (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLLEGE_SCHOOL/FROM (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLLEGE_SCHOOL/COLLEGE OR SCHOOL (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLLEGE_SCHOOL/FROM (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLLEGE_SCHOOL/WHICH (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLLEGE_SCHOOL/WHICH (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLLEGE_SCHOOL/FROM (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLLEGE_SCHOOL/WHICH (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLLEGE_SCHOOL/COLLEGE OR SCHOOL (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLLEGE_SCHOOL/FROM (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLLEGE_SCHOOL/WHICH (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLLEGE_SCHOOL/COLLEGE OR SCHOOL (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLLEGE_SCHOOL/FROM (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COLLEGE_SCHOOL/WHICH (6).pt"
+    ],
+    "COMB": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/COMB/COMB (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COMB/COMB (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COMB/COMB (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COMB/COMB (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COMB/COMB (6).pt"
+    ],
+    "COME": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/COME/COME (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COME/COME (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COME/COME (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/COME/COME.pt"
+    ],
+    "CONGRATULATIONS": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/CONGRATULATIONS/CONGRATULATIONS (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CONGRATULATIONS/CONGRATULATIONS (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CONGRATULATIONS/CONGRATULATIONS (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CONGRATULATIONS/CONGRATULATIONS (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CONGRATULATIONS/CONGRATULATIONS (4).pt"
+    ],
+    "CRYING": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/CRYING/CRYING (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CRYING/CRYING (11).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CRYING/CRYING (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CRYING/CRYING (13).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CRYING/CRYING (8).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CRYING/CRYING (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CRYING/CRYING (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CRYING/CRYING (9).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CRYING/CRYING (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/CRYING/CRYING (10).pt"
+    ],
+    "DARE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/DARE/DARE (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DARE/DARE (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DARE/DARE (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DARE/DARE (4).pt"
+    ],
+    "DIFFERENCE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/DIFFERENCE/DIFFERENCE (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DIFFERENCE/DIFFERENCE (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DIFFERENCE/difference (3) 41.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DIFFERENCE/DIFFERENCE (4).pt"
+    ],
+    "DILEMMA": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/DILEMMA/DILEMMA (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DILEMMA/DILEMMA (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DILEMMA/DILEMMA (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DILEMMA/DILEMMA (4).pt"
+    ],
+    "DISAPPOINTED": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/DISAPPOINTED/DISAPPOINTED (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DISAPPOINTED/DISAPPOINTED (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DISAPPOINTED/DISAPPOINTED (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DISAPPOINTED/DISAPPOINTED (5).pt"
+    ],
+    "DO": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/DO/DOING (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DO/DO-4.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DO/DOING (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DO/DO-6.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DO/DOING (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DO/DO-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DO/DO-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DO/DOING (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DO/DO-2.pt"
+    ],
+    "DON'T CARE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/DON'T CARE/DONT CARE (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/DON'T CARE/DONT CARE (2).pt"
+    ],
+    "ENJOY": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/ENJOY/ENJOY (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ENJOY/ENJOY (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ENJOY/ENJOY (4).pt"
+    ],
+    "FAVOUR": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/FAVOUR/FAVOUR (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FAVOUR/FAVOUR (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FAVOUR/FAVOUR (4).pt"
+    ],
+    "FEVER": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/FEVER/FEVER (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FEVER/FEVER (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FEVER/FEVER (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FEVER/FEVER (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FEVER/FEVER (3).pt"
+    ],
+    "FINE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/FINE/FINE (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FINE/FINE (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FINE/FINE (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FINE/FINE (5).pt"
+    ],
+    "FOOD": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/FOOD-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/FOOD (10).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/food 18.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/FOOD (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/FOOD (12).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/FOOD.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/FOOD-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/FOOD (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/FOOD (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/FOOD (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/FOOD-2.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/FOOD (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/FOOD-6.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/food 08.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/FOOD-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/FOOD (11).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/FOOD (13).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FOOD/FOOD (1).pt"
+    ],
+    "FREE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/FREE/FREE (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FREE/FREE (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FREE/FREE (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FREE/FREE (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FREE/FREE (6).pt"
+    ],
+    "FRIEND": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/FRIEND/FRIEND (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FRIEND/FRIEND (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FRIEND/FRIEND (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FRIEND/FRIEND (3).pt"
+    ],
+    "FROM": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/FROM/FROM-6.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FROM/FROM-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FROM/FROM-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FROM/FROM-2.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/FROM/FROM-4.pt"
+    ],
+    "GO": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/GO/GO (8).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/GO/GO (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/GO/GO (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/GO/GO (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/GO/GO (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/GO/GO (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/GO/GO (2).pt"
+    ],
+    "GOOD": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/GOOD/GOOD (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/GOOD/GOOD (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/GOOD/GOOD (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/GOOD/GOOD (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/GOOD/GOOD (7).pt"
+    ],
+    "GRATEFUL": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/GRATEFUL/GRATEFUL (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/GRATEFUL/GRATEFUL.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/GRATEFUL/GRATEFUL (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/GRATEFUL/GRATEFUL (3).pt"
+    ],
+    "HAD": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/HAD/HAD (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HAD/HAD (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HAD/HAD (3).pt"
+    ],
+    "HAPPENED": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/HAPPENED/HAPPENED (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HAPPENED/HAPPENED (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HAPPENED/HAPPENED (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HAPPENED/HAPPENED (1).pt"
+    ],
+    "HAPPY": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/HAPPY/HAPPY (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HAPPY/HAPPY (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HAPPY/HAPPY (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HAPPY/HAPPY (1).pt"
+    ],
+    "HEAR": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/HEAR/HEAR (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HEAR/HEAR (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HEAR/HEAR (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HEAR/HEAR (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HEAR/HEAR (4).pt"
+    ],
+    "HEART": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/HEART/HEART (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HEART/HEART (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HEART/HEART (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HEART/HEART (4).pt"
+    ],
+    "HELLO_HI": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELLO_HI/HELLO HI-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELLO_HI/HI HELLO-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELLO_HI/HI_HELLO-4.pt"
+    ],
+    "HELP": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/HELP (8).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/HELP (11).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/HELP-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/NOT (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/HELP (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/HELP (10).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/HELP (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/HELP (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/NOT (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/HELP-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/HELP-7.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/NOT (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/HELP (12).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/HELP-2.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/NOT (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/HELP-4.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/HELP (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/HELP (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/HELP (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HELP/NOT (2).pt"
+    ],
+    "HIDING": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/HIDING/HIDING (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HIDING/HIDING (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HIDING/HIDING (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HIDING/HIDING (2).pt"
+    ],
+    "HOW": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/HOW/HOW (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HOW/HOW (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HOW/HOW (12).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HOW/HOW (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HOW/HOW (13).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HOW/HOW-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HOW/HOW (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HOW/HOW (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HOW/HOW-2.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HOW/HOW (11).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HOW/HOW-4.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HOW/HOW (15).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HOW/HOW (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HOW/HOW (9).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HOW/HOW (16).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HOW/HOW (8).pt"
+    ],
+    "HUNGRY": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/HUNGRY/HUNGRY-4.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HUNGRY/HUNGRY-7.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HUNGRY/HUNGRY-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HUNGRY/HUNGRY-6.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HUNGRY/HUNGRY-1.pt"
+    ],
+    "HURT": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/HURT/HURT (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HURT/HURT (9).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HURT/HURT (10).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HURT/HURT (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HURT/HURT (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HURT/HURT (11).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HURT/HURT (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HURT/HURT (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HURT/HURT (12).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HURT/HURT (8).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/HURT/HURT (13).pt"
+    ],
+    "I_ME_MINE_MY": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/MY-7.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I-11.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (13).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/MY-11.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (48).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/MY-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (9).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME-66.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (8).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (31).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (46).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (40).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (23).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME-77.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME-44.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (50).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (10).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/MY-6.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I-9.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I-12.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I-7.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (41).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (18).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (22).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME-2.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (51).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (39).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME-222.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (33).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I-14.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (36).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (17).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME-33.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (54).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I-2.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (32).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (47).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (27).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (20).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (38).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/MY-2.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I-8.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/MY-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME-555.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (52).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (43).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (35).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I-4.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME (8).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME-777.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (42).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (19).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (53).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME-333.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (45).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (34).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/ME-444.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (21).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/I_ME_MINE_MY/I (11).pt"
+    ],
+    "KIND": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/KIND/KIND (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/KIND/KIND (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/KIND/KIND (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/KIND/KIND (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/KIND/KIND (5).pt"
+    ],
+    "LEAVE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/LEAVE/LEAVE (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/LEAVE/LEAVE (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/LEAVE/LEAVE (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/LEAVE/LEAVE (2).pt"
+    ],
+    "LIKE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/LIKE/LIKE (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/LIKE/LIKE (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/LIKE/LIKE (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/LIKE/LIKE (1).pt"
+    ],
+    "LIKE_LOVE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/LIKE_LOVE/love or like (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/LIKE_LOVE/love or like (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/LIKE_LOVE/love or like (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/LIKE_LOVE/love or like (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/LIKE_LOVE/love or like (6).pt"
+    ],
+    "MEAN IT": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/MEAN IT/MEAN (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/MEAN IT/MEAN (2).pt"
+    ],
+    "MEDICINE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/MEDICINE/MEDICINE (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/MEDICINE/MEDICINE (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/MEDICINE/MEDICINE (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/MEDICINE/MEDICINE (5).pt"
+    ],
+    "MEET": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/MEET/MEET-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/MEET/MEET-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/MEET/MEET-4.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/MEET/MEET-6.pt"
+    ],
+    "NAME": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/NAME/NAME-4.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NAME/NAME-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NAME/NAME-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NAME/NAME-7.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NAME/NAME-6.pt"
+    ],
+    "NICE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/NICE/NICE (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NICE/NICE (10).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NICE/NICE-4.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NICE/NICE (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NICE/NICE (8).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NICE/NICE-6.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NICE/NICE (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NICE/NICE (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NICE/NICE (9).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NICE/NICE-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NICE/NICE (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NICE/NICE (3).pt"
+    ],
+    "NOT": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/NOT/NOT (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NOT/NOT (13).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NOT/NOT (12).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NOT/NOT (14).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NOT/NOT (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NOT/NOT (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NOT/NOT (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NOT/NOT (11).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NOT/NOT (9).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NOT/NOT (15).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NOT/NOT (8).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NOT/NOT (7).pt"
+    ],
+    "NUMBER": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/NUMBER/NUMBER.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NUMBER/NUMBER (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NUMBER/NUMBER (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NUMBER/NUMBER (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NUMBER/NUMBER (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/NUMBER/NUMBER (3).pt"
+    ],
+    "OLD_AGE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/OLD_AGE/OLD (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/OLD_AGE/AGE (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/OLD_AGE/AGE (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/OLD_AGE/OLD (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/OLD_AGE/OLD (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/OLD_AGE/AGE (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/OLD_AGE/OLD (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/OLD_AGE/AGE (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/OLD_AGE/OLD (5).pt"
+    ],
+    "ON THE WAY": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/ON THE WAY/ON THE WAY (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ON THE WAY/ON THE WAY (2).pt"
+    ],
+    "OUTSIDE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/OUTSIDE/OUTSIDE (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/OUTSIDE/OUTSIDE (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/OUTSIDE/OUTSIDE (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/OUTSIDE/OUTSIDE (1).pt"
+    ],
+    "PHONE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/PHONE/PHONE-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/PHONE/PHONE-2.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/PHONE/PHONE-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/PHONE/PHONE-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/PHONE/PHONE-4.pt"
+    ],
+    "PLACE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/PLACE/THIS PLACE (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/PLACE/THIS PLACE (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/PLACE/THIS PLACE (2).pt"
+    ],
+    "PLEASE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/PLEASE/PLEASE.pt"
+    ],
+    "POUR": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/POUR/POUR (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/POUR/POUR (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/POUR/POUR (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/POUR/POUR (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/POUR/POUR (1).pt"
+    ],
+    "PREPARE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/PREPARE/PREPARE (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/PREPARE/PREPARE (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/PREPARE/PREPARE (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/PREPARE/PREPARE (2).pt"
+    ],
+    "PROMISE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/PROMISE/PROMISE (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/PROMISE/PROMISE (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/PROMISE/PROMISE (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/PROMISE/PROMISE (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/PROMISE/PROMISE (5).pt"
+    ],
+    "REALLY": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/REALLY/REALLY.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/REALLY/REALLY (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/REALLY/REALLY (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/REALLY/REALLY 2 (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/REALLY/REALLY (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/REALLY/REALLY (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/REALLY/REALLY 2 (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/REALLY/REALLY 2.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/REALLY/REALLY 2 (1).pt"
+    ],
+    "REPEAT": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/REPEAT/REPEAT-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/REPEAT/REPEAT-7.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/REPEAT/REPEAT-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/REPEAT/REPEAT-1.pt"
+    ],
+    "ROOM": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/ROOM/ROOM (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ROOM/ROOM (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ROOM/ROOM (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ROOM/GO (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ROOM/GO (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/ROOM/GO (3).pt"
+    ],
+    "SERVE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/SERVE/SERVE (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SERVE/SERVE (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SERVE/SERVE (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SERVE/SERVE (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SERVE/SERVE (2).pt"
+    ],
+    "SHIRT": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/SHIRT/SHIRT (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SHIRT/SHIRT (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SHIRT/SHIRT (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SHIRT/SHIRT (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SHIRT/SHIRT (5).pt"
+    ],
+    "SITTING": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/SITTING/SITTING.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SITTING/SITTING (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SITTING/SITTING (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SITTING/SITTING (3).pt"
+    ],
+    "SLEEP": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/SLEEP/SLEEP (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SLEEP/SLEEP (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SLEEP/SLEEP (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SLEEP/SLEEP (5).pt"
+    ],
+    "SLOWER": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/SLOWER/SLOWER-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SLOWER/SLOWER-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SLOWER/SLOWER-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SLOWER/SLOWER-6.pt"
+    ],
+    "SO MUCH": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/SO MUCH/SO MUCH-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SO MUCH/SO MUCH-6.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SO MUCH/SO MUCH-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SO MUCH/SO MUCH-4.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SO MUCH/SO MUCH-7.pt"
+    ],
+    "SOFTLY": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOFTLY/SOFTLY (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOFTLY/SOFTLY (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOFTLY/SOFTLY (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOFTLY/SOFTLY (5).pt"
+    ],
+    "SOME HOW": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOME HOW/SOMEHOW (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOME HOW/SOMEHOW (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOME HOW/SOMEHOW (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOME HOW/SOMEHOW (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOME HOW/SOMEHOW (7).pt"
+    ],
+    "SOME ONE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOME ONE/SOMEONE (9).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOME ONE/SOMEONE (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOME ONE/SOMEONE (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOME ONE/SOMEONE (10).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOME ONE/SOMEONE (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOME ONE/SOMEONE (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOME ONE/SOMEONE (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOME ONE/SOMEONE (1).pt"
+    ],
+    "SOMETHING": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOMETHING/SOMETHING (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SOMETHING/SOMETHING (2).pt"
+    ],
+    "SORRY": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/SORRY/SORRY (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SORRY/SORRY (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SORRY/SORRY (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SORRY/SORRY (6).pt"
+    ],
+    "SPEAK": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/SPEAK/SPEAK (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SPEAK/SPEAK (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SPEAK/SPEAK (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SPEAK/SPEAK (4).pt"
+    ],
+    "STOP": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/STOP/STOP (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/STOP/STOP (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/STOP/STOP (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/STOP/STOP (6).pt"
+    ],
+    "STUBBORN": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/STUBBORN/STUBBORN (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/STUBBORN/STUBBORN (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/STUBBORN/STUBBORN (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/STUBBORN/STUBBORN (3).pt"
+    ],
+    "SURE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/SURE/SURE (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SURE/SURE (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SURE/SURE (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/SURE/SURE (4).pt"
+    ],
+    "TAKE CARE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/TAKE CARE/TAKE CARE (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TAKE CARE/TAKE CARE (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TAKE CARE/TAKE CARE (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TAKE CARE/TAKE CARE (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TAKE CARE/TAKE CARE (8).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TAKE CARE/TAKE CARE (5).pt"
+    ],
+    "TAKE TIME": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/TAKE TIME/TIME (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TAKE TIME/TIME (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TAKE TIME/TIME (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TAKE TIME/TIME (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TAKE TIME/TIME (4).pt"
+    ],
+    "TALK": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/TALK/TALK-4.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TALK/TALK-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TALK/TALK-2.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TALK/TALK-6.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TALK/TALK-5.pt"
+    ],
+    "TELL": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/TELL/TELL (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TELL/TELL  (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TELL/TELL.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TELL/TELL  (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TELL/TELL (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TELL/TELL (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TELL/TELL (2).pt"
+    ],
+    "THANK": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/THANK/THANK (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THANK/THANK-2.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THANK/THANK (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THANK/THANK-7.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THANK/THANK (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THANK/THANK (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THANK/THANK-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THANK/THANK-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THANK/THANK-6.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THANK/THANK-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THANK/THANK (4).pt"
+    ],
+    "THAT": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/THAT/THAT (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THAT/THAT (8).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THAT/THAT (12).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THAT/THAT (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THAT/THAT (11).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THAT/THAT (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THAT/THAT (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THAT/THAT (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THAT/THAT (9).pt"
+    ],
+    "THINGS": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/THINGS/THINGS (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THINGS/THINGS (2).pt"
+    ],
+    "THINK": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/THINK/THINK-2.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THINK/THINK-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THINK/THINK-7.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THINK/THINK-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THINK/THINK-4.pt"
+    ],
+    "THIRSTY": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/THIRSTY/THIRSTY-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THIRSTY/THIRSTY-2.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THIRSTY/THIRSTY-6.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THIRSTY/THIRSTY-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/THIRSTY/THIRSTY-7.pt"
+    ],
+    "TIRED": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/TIRED/TIRED (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TIRED/TIRED (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TIRED/TIRED (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TIRED/TIRED (3).pt"
+    ],
+    "TODAY": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/TODAY/TODAY (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TODAY/TODAY (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TODAY/TODAY (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TODAY/TODAY (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TODAY/TODAY (6).pt"
+    ],
+    "TRAIN": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/TRAIN/TRAIN (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TRAIN/TRAIN (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TRAIN/TRAIN (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TRAIN/TRAIN.pt"
+    ],
+    "TRUST": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/TRUST/TRUST (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TRUST/TRUST (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TRUST/TRUST (4).pt"
+    ],
+    "TRUTH": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/TRUTH/TRUTH.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TRUTH/TRUTH (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TRUTH/TRUTH (1).pt"
+    ],
+    "TURN ON": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/TURN ON/TURN ON (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TURN ON/TURN ON (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TURN ON/TURN ON (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/TURN ON/TURN ON (6).pt"
+    ],
+    "UNDERSTAND": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/UNDERSTAND/UNDERSTAND (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/UNDERSTAND/UNDERSTAND (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/UNDERSTAND/UNDERSTAND (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/UNDERSTAND/UNDERSTAND (5).pt"
+    ],
+    "WANT": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/WANT/want-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WANT/want-4.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WANT/want.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WANT/want-6.pt"
+    ],
+    "WATER": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/WATER/WATER (18).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WATER/WATER (20).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WATER/WATER (26).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WATER/WATER (22).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WATER/WATER (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WATER/WATER (12).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WATER/WATER (24).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WATER/WATER (25).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WATER/WATER (15).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WATER/WATER (21).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WATER/WATER (27).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WATER/WATER (9).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WATER/WATER (14).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WATER/WATER (13).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WATER/WATER (16).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WATER/WATER (10).pt"
+    ],
+    "WEAR": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/WEAR/WEAR (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WEAR/WEAR (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WEAR/WEAR (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WEAR/WEAR (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WEAR/WEAR (3).pt"
+    ],
+    "WELCOME": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/WELCOME/WELCOME (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WELCOME/WELCOME (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WELCOME/WELCOME (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WELCOME/WELCOME (4).pt"
+    ],
+    "WHAT": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/what-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT-6 (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/what-6.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT (16).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT (10).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT-4 (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/what-7.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/what-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT-3 (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT-2 (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT (15).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT (12).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/what-4.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT (13).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT-2 (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/what-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT (9).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHAT/WHAT (6).pt"
+    ],
+    "WHERE": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHERE/WHERE-7.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHERE/WHERE-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHERE/WHERE-3.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHERE/WHERE-2.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHERE/WHERE-4.pt"
+    ],
+    "WHO": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHO/WHO-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHO/WHO-6.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHO/WHO-4.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHO/WHO-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WHO/WHO-7.pt"
+    ],
+    "WORRY": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/WORRY/WORRY (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WORRY/WORRY (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/WORRY/WORRY (2).pt"
+    ],
+    "YOU": [
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-4 (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-4 (8).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-4 (9).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (24).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-5 (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (46).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (42).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-4 (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-1 (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-7 (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/you-6 (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (16).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-5 (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (31).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (35).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (39).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-4 (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-1 (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-7 (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (48).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-3 (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-4.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-7 (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-2 (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-3 (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (17).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (12).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (37).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-6 (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-1 (8).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-7 (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (29).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOUR.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOUR (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (20).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (30).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (32).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (40).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (9).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-6 (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-5 (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (38).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (22).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (33).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (15).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-5.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (8).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-3 (6).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/you-55.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (23).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-6 (9).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOUR (1).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (10).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-7.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-1 (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (26).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-4 (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (43).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-4 (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-2 (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/you-1 (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-1 (9).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/you-3 (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (34).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (44).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-5 (8).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-3 (9).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-2 (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-5 (5).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (45).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-6.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-5 (2).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-5 (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU (21).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-1 (7).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOUR (3).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-2.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOUR-1.pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-6 (4).pt",
+        "D:/MookVani/Backend/data/tensors_word_level_163/YOU/YOU-7 (3).pt"
+    ]
+}

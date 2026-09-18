@@ -1,53 +1,13 @@
 import numpy as np
 
-def _normalize_skeleton(lh, rh, arms, face_pts, lh_flag, rh_flag, arms_flag, face_flag):
-    """Core robust cascade normalization logic."""
-    # 1. Robust Anchoring
-    anchor = np.array([0.5, 0.5, 0.0]) # Default fallback: center of normalized image coordinates
-    if face_flag:
-        anchor = face_pts[2] # Nose
-    elif arms_flag:
-        anchor = (arms[0] + arms[1]) / 2.0 # Neck (midpoint between shoulders)
-    elif lh_flag:
-        anchor = lh[0] # Wrist of left hand
-    elif rh_flag:
-        anchor = rh[0] # Wrist of right hand
-
-    # 2. Robust Scaling
-    scale = 0.3 # Fixed typical fallback scale (prevents zero division and scale collapse)
-    if arms_flag:
-        pose_scale = np.linalg.norm(arms[0] - arms[1])
-        if pose_scale > 0.05:
-            scale = pose_scale
-    elif face_flag:
-        face_scale = np.linalg.norm(face_pts[3] - face_pts[4]) * 3.0 # Face width * 3 approximates shoulder width
-        if face_scale > 0.05:
-            scale = face_scale
-
-    # 3. Handle Missing Hands (Resting Default)
-    # If a hand is missing, put it in a distinct "resting" position at the side/leg.
-    # We do this AFTER anchor and scale so it always ends up exactly at these logical coordinates.
-    lh_out = lh - anchor if lh_flag else np.ones((21, 3)) * np.array([-1.5 * scale, 3.0 * scale, 0.0])
-    rh_out = rh - anchor if rh_flag else np.ones((21, 3)) * np.array([1.5 * scale, 3.0 * scale, 0.0])
-    arms_out = arms - anchor if arms_flag else np.zeros((4, 3))
-    face_out = face_pts - anchor if face_flag else np.zeros((7, 3))
-
-    lh_out = lh_out / scale
-    rh_out = rh_out / scale
-    arms_out = arms_out / scale
-    face_out = face_out / scale
-
-    return lh_out, rh_out, arms_out, face_out
-
-
 def extract_frame_features(hands_result, pose_result, face_result):
     """Canonical 163-dim feature extraction, shared by ALL stages (word image / sentence frame / video frame).
-    
-    Layout:
+
+    Layout (must match MultiStreamEmbedding slicing exactly):
       [0:63]    lh (21 landmarks x 3)
       [63:126]  rh (21 landmarks x 3)
-      [126:138] arms (4 landmarks x 3)
-      [138:159] face (7 landmarks x 3)
+      [126:138] arms (4 landmarks x 3)  -> shoulders(11,12) + elbows(13,14)
+      [138:159] face (7 landmarks x 3)  -> eyes/nose/cheeks/mouth corners
       [159:163] flags [lh_flag, rh_flag, arms_flag, face_flag]
     """
     # --- Hands ---
@@ -86,13 +46,19 @@ def extract_frame_features(hands_result, pose_result, face_result):
         ])
         face_flag = 1.0
 
-    # Normalization
-    lh_out, rh_out, arms_out, face_out = _normalize_skeleton(
-        lh, rh, arms, face_pts, lh_flag, rh_flag, arms_flag, face_flag
-    )
+    # --- Normalization: anchor to nose, scale by shoulder width (PER-FRAME, not sequence-mean) ---
+    anchor = face_pts[2] if face_flag else np.array([0.0, 0.0, 0.0])
+    if lh_flag: lh = lh - anchor
+    if rh_flag: rh = rh - anchor
+    if arms_flag: arms = arms - anchor
+    if face_flag: face_pts = face_pts - anchor
+
+    scale = np.linalg.norm(arms[0] - arms[1]) if arms_flag else 0.0
+    if scale > 0.05:
+        lh = lh / scale; rh = rh / scale; arms = arms / scale; face_pts = face_pts / scale
 
     frame_data = np.concatenate([
-        lh_out.flatten(), rh_out.flatten(), arms_out.flatten(), face_out.flatten(),
+        lh.flatten(), rh.flatten(), arms.flatten(), face_pts.flatten(),
         [lh_flag, rh_flag, arms_flag, face_flag]
     ])
     return frame_data.astype(np.float32)  # (163,)
@@ -101,7 +67,10 @@ def extract_frame_features(hands_result, pose_result, face_result):
 def extract_frame_features_video_mode(hands_lh, hands_rh, hands_lh_flag, hands_rh_flag,
                                        pose_landmarks, face_landmarks,
                                        last_lh, last_rh, last_arms, last_face):
-    """Variant for VIDEO streams: carries forward last-known landmarks on tracking dropout."""
+    """Variant for VIDEO streams: carries forward last-known landmarks on tracking dropout
+    instead of zeroing (prevents 'teleporting' hands / spurious zero-frames that corrupt
+    per-frame normalization). Returns (frame_features, new_last_lh, new_last_rh, new_last_arms, new_last_face).
+    """
     lh = hands_lh if hands_lh_flag else last_lh
     rh = hands_rh if hands_rh_flag else last_rh
     lh_flag = 1.0 if hands_lh_flag else (1.0 if np.any(last_lh != 0) else 0.0)
@@ -129,13 +98,18 @@ def extract_frame_features_video_mode(hands_lh, hands_rh, hands_lh_flag, hands_r
         face_pts = last_face
         face_flag = 1.0 if np.any(last_face != 0) else 0.0
 
-    # Normalization
-    lh_out, rh_out, arms_out, face_out = _normalize_skeleton(
-        lh, rh, arms, face_pts, lh_flag, rh_flag, arms_flag, face_flag
-    )
+    anchor = face_pts[2] if face_flag else np.array([0.0, 0.0, 0.0])
+    lh2 = lh - anchor if lh_flag else lh
+    rh2 = rh - anchor if rh_flag else rh
+    arms2 = arms - anchor if arms_flag else arms
+    face2 = face_pts - anchor if face_flag else face_pts
+
+    scale = np.linalg.norm(arms2[0] - arms2[1]) if arms_flag else 0.0
+    if scale > 0.05:
+        lh2 = lh2 / scale; rh2 = rh2 / scale; arms2 = arms2 / scale; face2 = face2 / scale
 
     frame_data = np.concatenate([
-        lh_out.flatten(), rh_out.flatten(), arms_out.flatten(), face_out.flatten(),
+        lh2.flatten(), rh2.flatten(), arms2.flatten(), face2.flatten(),
         [lh_flag, rh_flag, arms_flag, face_flag]
     ]).astype(np.float32)
 

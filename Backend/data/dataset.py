@@ -25,6 +25,15 @@ class SaneSkeletalAugmentation:
         coords[:, 0] += (torch.rand(1).item() * 2 - 1) * self.max_shift
         coords[:, 1] += (torch.rand(1).item() * 2 - 1) * self.max_shift
         coords += torch.randn_like(coords) * self.noise_std
+        
+        # BLOCK MASKING (To prevent instance memorization)
+        # 53 points: 0-20 (Left Hand), 21-41 (Right Hand), 42-45 (Arms), 46-52 (Face)
+        if torch.rand(1).item() < 0.3:
+            # 30% chance to drop left hand
+            coords[0:21] = 0.0
+        if torch.rand(1).item() < 0.1:
+            # 10% chance to drop face
+            coords[46:53] = 0.0
 
         aug[0, :159] = coords.view(159)
         return aug
@@ -42,7 +51,7 @@ class ISLWordLevelDataset(Dataset):
 
     def __getitem__(self, idx):
         path, label = self.pairs[idx]
-        tensor = torch.load(path)  # (1, 163)
+        tensor = torch.load(path, weights_only=True)  # (1, 163)
         if self.transform:
             tensor = self.transform(tensor)
         return tensor, torch.tensor(self.class_to_idx[label], dtype=torch.long)
@@ -81,3 +90,28 @@ def sentence_collate_fn(batch):
     return (pad_sequence(inputs, batch_first=True, padding_value=0.0),
             pad_sequence(targets, batch_first=True, padding_value=0),
             in_lens, tgt_lens)
+
+class ISLVideoLevelDataset(Dataset):
+    """Video-level dataset: each sample is a (T, 163) sequence extracted from video with a MULTI-WORD target
+    (list of word indices, in signing order) for CTC. Requires `sentence_to_words`
+    and a shared `word_vocab`.
+    """
+    def __init__(self, file_label_pairs, sentence_to_words, word_vocab):
+        self.sentence_to_words = sentence_to_words
+        self.word_vocab = word_vocab  # word -> idx (1-indexed, 0 reserved for CTC blank)
+
+        self.samples = []
+        for path, phrase in file_label_pairs:
+            if phrase in self.sentence_to_words:
+                words = self.sentence_to_words[phrase]
+                if all(w in self.word_vocab for w in words):
+                    self.samples.append((path, words))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        path, words = self.samples[idx]
+        keypoints = torch.load(path, weights_only=True)  # (T, 163)
+        target = torch.tensor([self.word_vocab[w] for w in words], dtype=torch.long)
+        return keypoints, target
