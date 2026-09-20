@@ -32,9 +32,9 @@ def train_word_model(
         json.dump(class_to_idx, f, indent=4)
 
     # Word-level model: ISL_Conformer outputting logits for single-frame classification
-    model = ISL_Conformer(num_classes=num_classes, mode="word").to(device)
+    model = ISL_Conformer(num_classes=num_classes).to(device)
     
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
     train_losses, val_losses, val_accuracies = [], [], []
@@ -45,12 +45,8 @@ def train_word_model(
         total_loss = 0
         for inputs, targets in train_loader:
             inputs, targets = inputs.to(device), targets.to(device)
-            # Add length tensor for conformer (all lengths are 1 for word mode)
-            lengths = torch.ones(inputs.size(0), dtype=torch.long, device=device)
-            
             optimizer.zero_grad()
-            outputs, _ = model(inputs, lengths)  # (B, 1, num_classes)
-            outputs = outputs.squeeze(1)         # (B, num_classes)
+            outputs = model.forward_single_frame_logits(inputs)
             
             loss = criterion(outputs, targets)
             loss.backward()
@@ -68,10 +64,7 @@ def train_word_model(
         with torch.no_grad():
             for inputs, targets in val_loader:
                 inputs, targets = inputs.to(device), targets.to(device)
-                lengths = torch.ones(inputs.size(0), dtype=torch.long, device=device)
-                
-                outputs, _ = model(inputs, lengths)
-                outputs = outputs.squeeze(1)
+                outputs = model.forward_single_frame_logits(inputs)
                 
                 loss = criterion(outputs, targets)
                 val_loss += loss.item()

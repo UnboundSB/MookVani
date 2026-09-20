@@ -47,7 +47,7 @@ def train_sentence_model(
     print(f"Training sentence model. Vocab size (incl blank): {num_classes}")
 
     # 3. Model & Loss
-    model = ISL_Conformer(num_classes=num_classes, mode="sentence").to(device)
+    model = ISL_Conformer(num_classes=num_classes).to(device)
     ctc_loss_fn = nn.CTCLoss(blank=0, zero_infinity=True)
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
 

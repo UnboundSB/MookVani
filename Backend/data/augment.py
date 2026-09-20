@@ -108,7 +108,7 @@ def prepare_augmented_dataset(raw_dir, augmented_dir, holdout_dir, target_count=
             print(f"   {cls}: {n} real image(s)")
 
 if __name__ == "__main__":
-    RAW_WORD_LEVEL_DIR = "../data/ISL_CSLRT_Corpus/Frames_Word_Level"
-    AUGMENTED_WORD_LEVEL_DIR = "../data/word_level_images_augmented"
-    VAL_HOLDOUT_DIR = "../data/word_level_images_val_holdout"
+    RAW_WORD_LEVEL_DIR = "d:/MookVani/Backend/data/isl_csltr_dataset/ISL_CSLRT_Corpus/ISL_CSLRT_Corpus/Frames_Word_Level"
+    AUGMENTED_WORD_LEVEL_DIR = "d:/MookVani/Backend/data/word_level_images_augmented"
+    VAL_HOLDOUT_DIR = "d:/MookVani/Backend/data/word_level_images_val_holdout"
     prepare_augmented_dataset(RAW_WORD_LEVEL_DIR, AUGMENTED_WORD_LEVEL_DIR, VAL_HOLDOUT_DIR)

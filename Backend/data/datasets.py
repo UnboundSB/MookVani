@@ -18,7 +18,7 @@ class ISLWordLevelDataset(Dataset):
 
     def __getitem__(self, idx):
         path, label = self.pairs[idx]
-        tensor = torch.load(path)  # (1, 163)
+        tensor = torch.load(path, weights_only=True)  # (1, 163)
         return tensor, label  # label resolved to an index via class_to_idx at collate/setup time
 
 class ISLWordLevelDatasetIndexed(Dataset):
@@ -31,7 +31,7 @@ class ISLWordLevelDatasetIndexed(Dataset):
 
     def __getitem__(self, idx):
         path, label = self.pairs[idx]
-        tensor = torch.load(path)
+        tensor = torch.load(path, weights_only=True)
         return tensor, torch.tensor(self.class_to_idx[label], dtype=torch.long)
 
 def word_level_collate(batch):
@@ -60,7 +60,7 @@ class ISLSentenceLevelDataset(Dataset):
 
     def __getitem__(self, idx):
         path, words = self.samples[idx]
-        keypoints = torch.load(path)  # (T, 163)
+        keypoints = torch.load(path, weights_only=True)  # (T, 163)
         target = torch.tensor([self.word_vocab[w] for w in words], dtype=torch.long)
         return keypoints, target
 
@@ -72,7 +72,7 @@ def sentence_collate_fn(batch):
             pad_sequence(targets, batch_first=True, padding_value=0),
             in_lens, tgt_lens)
 
-def build_word_dataloaders(train_dir, val_dir, batch_size=32, num_workers=2):
+def build_word_dataloaders(train_dir, val_dir, batch_size=32, num_workers=0):
     if not (os.path.exists(train_dir) and os.path.exists(val_dir)):
         return None, None, None
 
@@ -92,7 +92,7 @@ def build_word_dataloaders(train_dir, val_dir, batch_size=32, num_workers=2):
 
     return train_loader, val_loader, class_to_idx
 
-def build_sentence_dataloaders(sentence_dir, sentence_to_words, class_to_idx, batch_size=8, num_workers=2):
+def build_sentence_dataloaders(sentence_dir, sentence_to_words, class_to_idx, batch_size=8, num_workers=0):
     word_vocab = {w: i + 1 for w, i in class_to_idx.items()}  # +1: 0 reserved for CTC blank
     
     all_sentence_files = glob.glob(f"{sentence_dir}/*/*.pt")

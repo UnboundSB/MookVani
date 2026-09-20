@@ -116,10 +116,10 @@ def extract_directory(source_dir, output_dir, label):
     return success_count
 
 if __name__ == "__main__":
-    AUGMENTED_WORD_LEVEL_DIR = "../data/word_level_images_augmented"
-    VAL_HOLDOUT_DIR = "../data/word_level_images_val_holdout"
-    OUTPUT_DIR_WORD_TRAIN = "../data/tensors_word_level_163_train"
-    OUTPUT_DIR_WORD_VAL = "../data/tensors_word_level_163_val"
+    AUGMENTED_WORD_LEVEL_DIR = "d:/MookVani/Backend/data/word_level_images_augmented"
+    VAL_HOLDOUT_DIR = "d:/MookVani/Backend/data/word_level_images_val_holdout"
+    OUTPUT_DIR_WORD_TRAIN = "d:/MookVani/Backend/data/tensors_word_level_163_train"
+    OUTPUT_DIR_WORD_VAL = "d:/MookVani/Backend/data/tensors_word_level_163_val"
     os.makedirs(OUTPUT_DIR_WORD_TRAIN, exist_ok=True)
     os.makedirs(OUTPUT_DIR_WORD_VAL, exist_ok=True)
 

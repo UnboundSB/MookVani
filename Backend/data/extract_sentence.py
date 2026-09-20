@@ -23,7 +23,9 @@ face_options = vision.FaceLandmarkerOptions(base_options=BaseOptions(model_asset
 
 def extract_sentence_directory(source_dir, output_dir, label):
     os.makedirs(output_dir, exist_ok=True)
-    all_videos = glob.glob(os.path.join(source_dir, "*.mp4"))
+    all_videos = glob.glob(f"{source_dir}/**/*.mp4", recursive=True)
+    if not all_videos:
+        all_videos = glob.glob(f"{source_dir}/**/*.avi", recursive=True)
 
     print(f"⚙️ [{label}] Found {len(all_videos)} continuous videos. Extracting frames...")
     success_count = 0
@@ -33,8 +35,11 @@ def extract_sentence_directory(source_dir, output_dir, label):
          vision.FaceLandmarker.create_from_options(face_options) as face_lm:
 
         for vid_path in tqdm(all_videos, desc=label):
+            class_name = os.path.basename(os.path.dirname(vid_path))
             vid_name = os.path.splitext(os.path.basename(vid_path))[0]
-            save_path = os.path.join(output_dir, f"{vid_name}.pt")
+            save_dir = os.path.join(output_dir, class_name)
+            os.makedirs(save_dir, exist_ok=True)
+            save_path = os.path.join(save_dir, f"{vid_name}.pt")
 
             # SKIP if already exists to save massive time
             if os.path.exists(save_path):
@@ -74,13 +79,8 @@ def extract_sentence_directory(source_dir, output_dir, label):
     return success_count
 
 if __name__ == "__main__":
-    RAW_SENTENCE_TRAIN_DIR = "../data/ISL_CSLRT_Corpus/Videos_Sentence_Level/Train"
-    RAW_SENTENCE_TEST_DIR = "../data/ISL_CSLRT_Corpus/Videos_Sentence_Level/Test"
+    RAW_SENTENCE_DIR = "d:/MookVani/Backend/data/isl_csltr_dataset/ISL_CSLRT_Corpus/ISL_CSLRT_Corpus/Videos_Sentence_Level"
+    OUTPUT_DIR_SENTENCE = "d:/MookVani/Backend/data/tensors_sentence_level_163"
 
-    OUTPUT_DIR_SENTENCE_TRAIN = "../data/tensors_sentence_level_163_train"
-    OUTPUT_DIR_SENTENCE_TEST = "../data/tensors_sentence_level_163_test"
-
-    train_success = extract_sentence_directory(RAW_SENTENCE_TRAIN_DIR, OUTPUT_DIR_SENTENCE_TRAIN, "SENTENCE TRAIN")
-    test_success = extract_sentence_directory(RAW_SENTENCE_TEST_DIR, OUTPUT_DIR_SENTENCE_TEST, "SENTENCE TEST")
-
-    print(f"\n✅ Sentence-level extraction complete. Train: {train_success}, Test: {test_success}")
+    success = extract_sentence_directory(RAW_SENTENCE_DIR, OUTPUT_DIR_SENTENCE, "SENTENCE DATASET")
+    print(f"\n✅ Sentence-level extraction complete. Processed: {success}")
