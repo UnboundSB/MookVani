@@ -1,5 +1,6 @@
 import os
 import json
+import gc
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -8,21 +9,22 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.isl_conformer import ISL_Conformer
 from models.isl_sentence_model import ISL_Sentence_Model
-from data.datasets import build_sentence_dataloaders
-from utils.gloss_utils import load_sentence_to_words
+from data.synthetic_dataset import build_synthetic_dataloaders
 from utils.metrics import compute_sentence_metrics
 
-def train_sentence_model(
-    train_sentence_dir,
-    val_sentence_dir,
-    gloss_csv_path,
-    word_frames_dir,
+def clear_garbage():
+    gc.collect()
+    torch.cuda.empty_cache()
+
+def train_synthetic_model(
+    word_train_dir,
     word_class_json="models/word_class_to_idx.json",
     model_dir="models",
     plot_dir="models/plots",
-    epochs=100,
+    epochs=20,
     batch_size=8,
     lr=1e-4,
+    epoch_size=2000,
     device="cuda" if torch.cuda.is_available() else "cpu"
 ):
     os.makedirs(model_dir, exist_ok=True)
@@ -35,48 +37,33 @@ def train_sentence_model(
     with open(word_class_json, "r") as f:
         class_to_idx = json.load(f)
 
-    # 1. Load mappings
-    sentence_to_words, _, _ = load_sentence_to_words(gloss_csv_path, word_frames_dir)
-    
-    # 2. Build loaders
-    train_loader, val_loader, word_vocab = build_sentence_dataloaders(
-        train_sentence_dir, val_sentence_dir, sentence_to_words, class_to_idx, batch_size=batch_size
+    # 1. Build loaders
+    print("Building Synthetic Sentence DataLoaders...")
+    train_loader, val_loader, word_vocab = build_synthetic_dataloaders(
+        word_train_dir, class_to_idx, batch_size=batch_size, epoch_size=epoch_size, max_words=10
     )
 
-    if not train_loader:
-        print("Not enough sentence data to train.")
-        return
+    num_classes = len(word_vocab)
+    print(f"Training synthetic sentence model. Vocab size (incl blank): {num_classes + 1}")
 
-    num_classes = len(word_vocab)  # ISL_Conformer automatically adds +1 internally
-    print(f"Training sentence model. Vocab size (incl blank): {num_classes + 1}")
-
-    # 3. Model & Loss (Switching to ISL_Sentence_Model for BiLSTM smoothing to combat overfitting)
-    # We set freeze_base=False to let it adapt to sentences, but use extreme penalties to stop overfitting.
+    # 2. Model & Loss
     model = ISL_Sentence_Model(num_classes=num_classes, d_model=256, lstm_layers=1, dropout=0.5, freeze_base=False).to(device)
     
-    # Load pre-trained synthetic or word-level weights to jumpstart the encoder
-    synthetic_weights_path = os.path.join(model_dir, "best_synthetic_model.pth")
+    # Load pre-trained word-level weights to jumpstart the encoder
     word_weights_path = os.path.join(model_dir, "best_word_model.pth")
-    
-    if os.path.exists(synthetic_weights_path):
-        print(f"Loading synthetic pre-trained weights from {synthetic_weights_path}...")
-        model.load_state_dict(torch.load(synthetic_weights_path, weights_only=True))
-    elif os.path.exists(word_weights_path):
-        print(f"Loading word pre-trained weights from {word_weights_path}...")
+    if os.path.exists(word_weights_path):
         model.load_base_weights(word_weights_path)
     else:
-        print(f"Warning: No pre-trained model found. Training from scratch.")
+        print(f"Warning: No pre-trained word model found at {word_weights_path}.")
 
     ctc_loss_fn = nn.CTCLoss(blank=0, zero_infinity=True)
-    # Increased weight decay to combat overfitting
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-2)
-    # LR Scheduler to aggressively penalize the learning rate if validation plateaus
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
 
     train_losses, val_losses, val_wers = [], [], []
     best_val_wer = float('inf')
 
-    # 4. Training Loop
+    # 3. Training Loop
     for epoch in range(epochs):
         model.train()
         total_loss = 0
@@ -88,9 +75,7 @@ def train_sentence_model(
             optimizer.zero_grad()
             log_probs, pooled_lens = model(batch_inputs, in_lens)
             
-            # log_probs is (B, T, C). CTCLoss expects (T, B, C)
             log_probs_t = log_probs.transpose(0, 1)
-            
             loss = ctc_loss_fn(log_probs_t, batch_targets, pooled_lens, tgt_lens)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
@@ -101,10 +86,12 @@ def train_sentence_model(
         avg_train_loss = total_loss / len(train_loader)
         train_losses.append(avg_train_loss)
 
-        # 5. Validation
+        # Clear garbage after train loop to prevent memory fragmentation
+        clear_garbage()
+
+        # 4. Validation
         val_wer, val_acc, examples = compute_sentence_metrics(model, val_loader, device)
         
-        # Compute val CTC loss as well
         model.eval()
         v_loss = 0
         with torch.no_grad():
@@ -121,46 +108,46 @@ def train_sentence_model(
         val_losses.append(avg_val_loss)
         val_wers.append(val_wer)
         
-        # Step the scheduler based on Validation Loss
         scheduler.step(avg_val_loss)
         
+        # Clear garbage after val loop to prevent memory fragmentation
+        clear_garbage()
+
         print(f"Epoch {epoch+1}/{epochs} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f} | WER: {val_wer:.4f} | Exact Match: {val_acc:.4f}")
-        if (epoch + 1) % 10 == 0 and examples:
+        if (epoch + 1) % 1 == 0 and examples:
             print(f"  Example Ref: {examples[0][0]}")
             print(f"  Example Hyp: {examples[0][1]}")
 
         if val_wer < best_val_wer:
             best_val_wer = val_wer
-            torch.save(model.state_dict(), os.path.join(model_dir, "best_sentence_model.pth"))
-            print(f"  -> Saved new best model (WER: {val_wer:.4f})")
+            torch.save(model.state_dict(), os.path.join(model_dir, "best_synthetic_model.pth"))
+            print(f"  -> Saved new best synthetic model (WER: {val_wer:.4f})")
 
-    # 6. Plot
+    # 5. Plot
     plt.figure(figsize=(12, 5))
     plt.subplot(1, 2, 1)
     plt.plot(train_losses, label='Train Loss')
     plt.plot(val_losses, label='Val Loss')
     plt.legend()
-    plt.title('CTC Loss')
+    plt.title('CTC Loss (Synthetic)')
 
     plt.subplot(1, 2, 2)
-    plt.plot(val_wers, label='Val WER (lower is better)', color='orange')
+    plt.plot(val_wers, label='Val WER', color='orange')
     plt.legend()
-    plt.title('Word Error Rate')
+    plt.title('Word Error Rate (Synthetic)')
 
-    plt.savefig(os.path.join(plot_dir, "sentence_training_metrics.png"))
+    plt.savefig(os.path.join(plot_dir, "synthetic_training_metrics.png"))
     plt.close()
     
-    print("Sentence-level training complete!")
+    print("Synthetic pre-training complete!")
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--train_sentence_dir", type=str, default="data/tensors_sentence_level_163_train")
-    parser.add_argument("--val_sentence_dir", type=str, default="data/tensors_sentence_level_163_val")
-    parser.add_argument("--gloss_csv_path", type=str, required=True)
-    parser.add_argument("--word_frames_dir", type=str, required=True)
-    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--word_train_dir", type=str, default="data/tensors_word_level_163_train")
+    parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--epoch_size", type=int, default=2000)
     args = parser.parse_args()
     
-    train_sentence_model(args.train_sentence_dir, args.val_sentence_dir, args.gloss_csv_path, args.word_frames_dir, epochs=args.epochs, batch_size=args.batch_size)
+    train_synthetic_model(args.word_train_dir, epochs=args.epochs, batch_size=args.batch_size, epoch_size=args.epoch_size)

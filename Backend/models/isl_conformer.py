@@ -200,7 +200,8 @@ class ISL_Conformer(nn.Module):
 
         self.classifier = nn.Linear(d_model, num_classes + 1)  # +1 for CTC blank
 
-    def forward(self, x, lengths):
+    def extract_features(self, x, lengths):
+        """Extracts dense features (x_fused) before the final classifier."""
         B, T, _ = x.shape
         pad_mask_bt = lengths_to_padding_mask(lengths, T)
         pad_mask_ct = pad_mask_bt.unsqueeze(1)
@@ -227,6 +228,10 @@ class ISL_Conformer(nn.Module):
             x_conf = layer(x_conf, pad_mask_bt_pooled, pad_mask_ct_pooled)
 
         x_fused = x_conf + mbconv_features
+        return x_fused, lengths_pooled, pad_mask_bt_pooled
+
+    def forward(self, x, lengths):
+        x_fused, lengths_pooled, pad_mask_bt_pooled = self.extract_features(x, lengths)
 
         out = self.classifier(x_fused)
         out = out.masked_fill(pad_mask_bt_pooled.unsqueeze(-1), 0.0)

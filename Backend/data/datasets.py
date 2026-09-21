@@ -92,20 +92,14 @@ def build_word_dataloaders(train_dir, val_dir, batch_size=32, num_workers=0):
 
     return train_loader, val_loader, class_to_idx
 
-def build_sentence_dataloaders(sentence_dir, sentence_to_words, class_to_idx, batch_size=8, num_workers=0):
+def build_sentence_dataloaders(train_dir, val_dir, sentence_to_words, class_to_idx, batch_size=8, num_workers=0):
     word_vocab = {w: i + 1 for w, i in class_to_idx.items()}  # +1: 0 reserved for CTC blank
     
-    all_sentence_files = glob.glob(f"{sentence_dir}/*/*.pt")
-    file_phrase_pairs = [(p, os.path.basename(os.path.dirname(p))) for p in all_sentence_files]
+    train_files = glob.glob(f"{train_dir}/*/*.pt")
+    val_files = glob.glob(f"{val_dir}/*/*.pt")
     
-    unique_phrases = sorted(set(phrase for _, phrase in file_phrase_pairs))
-    random.shuffle(unique_phrases)
-    split_point = max(1, int(0.8 * len(unique_phrases)))
-    train_phrases = set(unique_phrases[:split_point])
-    val_phrases = set(unique_phrases[split_point:])
-
-    train_pairs = [(p, ph) for p, ph in file_phrase_pairs if ph in train_phrases]
-    val_pairs = [(p, ph) for p, ph in file_phrase_pairs if ph in val_phrases]
+    train_pairs = [(p, os.path.basename(os.path.dirname(p))) for p in train_files]
+    val_pairs = [(p, os.path.basename(os.path.dirname(p))) for p in val_files]
 
     train_dataset = ISLSentenceLevelDataset(train_pairs, sentence_to_words, word_vocab)
     val_dataset = ISLSentenceLevelDataset(val_pairs, sentence_to_words, word_vocab)
