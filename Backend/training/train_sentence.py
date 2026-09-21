@@ -50,9 +50,9 @@ def train_sentence_model(
     num_classes = len(word_vocab)  # ISL_Conformer automatically adds +1 internally
     print(f"Training sentence model. Vocab size (incl blank): {num_classes + 1}")
 
-    # 3. Model & Loss (Switching to ISL_Sentence_Model for BiLSTM smoothing to combat overfitting)
-    # We set freeze_base=False to let it adapt to sentences, but use extreme penalties to stop overfitting.
-    model = ISL_Sentence_Model(num_classes=num_classes, d_model=256, lstm_layers=1, dropout=0.5, freeze_base=False).to(device)
+    # 3. Model & Loss (Switching to BiGRU, freezing the base Conformer)
+    # We set freeze_base=True to freeze the entire Conformer, only training the BiGRU + Classifier.
+    model = ISL_Sentence_Model(num_classes=num_classes, d_model=256, lstm_layers=1, dropout=0.5, freeze_base=True).to(device)
     
     # Load pre-trained synthetic or word-level weights to jumpstart the encoder
     synthetic_weights_path = os.path.join(model_dir, "best_synthetic_model.pth")
@@ -60,7 +60,7 @@ def train_sentence_model(
     
     if os.path.exists(synthetic_weights_path):
         print(f"Loading synthetic pre-trained weights from {synthetic_weights_path}...")
-        model.load_state_dict(torch.load(synthetic_weights_path, weights_only=True))
+        model.load_base_weights(synthetic_weights_path)
     elif os.path.exists(word_weights_path):
         print(f"Loading word pre-trained weights from {word_weights_path}...")
         model.load_base_weights(word_weights_path)

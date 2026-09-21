@@ -25,9 +25,9 @@ class ISL_Sentence_Model(nn.Module):
         # just in case we load strict weights, but we will ignore its final classifier.
         self.base_model = ISL_Conformer(num_classes=2000, d_model=d_model)
         
-        # 2. Temporal Smoothing Layer (BiLSTM)
+        # 2. Temporal Smoothing Layer (BiGRU)
         # We use d_model // 2 for hidden_size so the output is concatenated to exactly d_model.
-        self.bilstm = nn.LSTM(
+        self.bigru = nn.GRU(
             input_size=d_model,
             hidden_size=d_model // 2,
             num_layers=lstm_layers,
@@ -82,18 +82,18 @@ class ISL_Sentence_Model(nn.Module):
             enforce_sorted=False
         )
         
-        # 3. Pass through BiLSTM
-        packed_out, _ = self.bilstm(packed_x)
+        # 3. Pass through BiGRU
+        packed_out, _ = self.bigru(packed_x)
         
         # 4. Unpack sequence
-        out_bilstm, _ = nn.utils.rnn.pad_packed_sequence(
+        out_bigru, _ = nn.utils.rnn.pad_packed_sequence(
             packed_out, 
             batch_first=True, 
             total_length=x_fused.size(1)
         )
         
         # 5. Final Classification
-        logits = self.classifier(out_bilstm)
+        logits = self.classifier(out_bigru)
         
         # Apply padding mask to zero-out padding logits just in case
         logits = logits.masked_fill(pad_mask_bt_pooled.unsqueeze(-1), 0.0)
