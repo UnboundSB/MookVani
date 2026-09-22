@@ -3,6 +3,7 @@ import cv2
 import glob
 import random
 import shutil
+import re
 from collections import defaultdict
 
 def geometric_augment(img, max_shift_frac=0.06, max_rotation_deg=8, allow_flip=True):

@@ -17,6 +17,8 @@ ENV/
 Backend/data/isl_csltr_dataset/
 Backend/data/tensors_*
 Backend/data/tensors_video_163_backup.zip
+Backend/data/word_level_images_augmented/
+Backend/data/word_level_images_val_holdout/
 
 # IDEs and Editors
 .vscode/
