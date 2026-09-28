@@ -19,6 +19,10 @@ Backend/data/tensors_*
 Backend/data/tensors_video_163_backup.zip
 Backend/data/word_level_images_augmented/
 Backend/data/word_level_images_val_holdout/
+Backend/data/extracted_videos/
+Backend/data/isign_dataset/
+*.mp4
+*.tar
 
 # IDEs and Editors
 .vscode/

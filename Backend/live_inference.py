@@ -118,6 +118,9 @@ def run_live_inference():
             # If hands are visible, or we are within a short grace period, append to buffer
             if no_hand_counter < 15:
                 frame_buffer.append(feat_vector)
+                # Refresh mechanism: keep only the last 150 frames (~5 seconds) to prevent VRAM bloat
+                if len(frame_buffer) > 150:
+                    frame_buffer = frame_buffer[-150:]
             else:
                 # Idle for a while, clear buffer and prediction
                 if len(frame_buffer) > 0:
