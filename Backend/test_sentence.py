@@ -83,7 +83,7 @@ def test_model(input_path, model_path=None, vocab_path="models/word_class_to_idx
     
     final_sentence = decode_ctc(predicted_seq, idx_to_class, blank_id=0)
     print(f"\n======================================")
-    print(f"🗣️ PREDICTED SENTENCE: {final_sentence}")
+    print(f"PREDICTED SENTENCE: {final_sentence}")
     print(f"======================================\n")
 
 if __name__ == "__main__":

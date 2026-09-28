@@ -9,7 +9,7 @@ from data.datasets import build_word_dataloaders
 
 def train_word_model(
     train_dir,
-    val_dir,
+    val_dir=None,
     model_dir="models",
     plot_dir="models/plots",
     epochs=50,
@@ -43,10 +43,23 @@ def train_word_model(
     for epoch in range(epochs):
         model.train()
         total_loss = 0
-        for inputs, targets in train_loader:
-            inputs, targets = inputs.to(device), targets.to(device)
+        for inputs, targets, in_lens in train_loader:
+            inputs, targets, in_lens = inputs.to(device), targets.to(device), in_lens.to(device)
             optimizer.zero_grad()
-            outputs = model.forward_single_frame_logits(inputs)
+            
+            # Forward pass through Conformer
+            log_probs, lengths_pooled = model(inputs, in_lens) # (B, T, num_classes+1)
+            
+            # Mean pool across time dimension
+            # Create a mask so we only pool over valid time steps
+            max_t = log_probs.size(1)
+            mask = torch.arange(max_t, device=device).unsqueeze(0) < lengths_pooled.unsqueeze(1)
+            
+            # Zero out invalid timesteps
+            log_probs = log_probs * mask.unsqueeze(-1)
+            
+            # Sum and divide by actual lengths to get mean
+            outputs = log_probs.sum(dim=1) / lengths_pooled.unsqueeze(-1).clamp(min=1)
             
             loss = criterion(outputs, targets)
             loss.backward()
@@ -62,9 +75,15 @@ def train_word_model(
         correct = 0
         total = 0
         with torch.no_grad():
-            for inputs, targets in val_loader:
-                inputs, targets = inputs.to(device), targets.to(device)
-                outputs = model.forward_single_frame_logits(inputs)
+            for inputs, targets, in_lens in val_loader:
+                inputs, targets, in_lens = inputs.to(device), targets.to(device), in_lens.to(device)
+                
+                log_probs, lengths_pooled = model(inputs, in_lens)
+                
+                max_t = log_probs.size(1)
+                mask = torch.arange(max_t, device=device).unsqueeze(0) < lengths_pooled.unsqueeze(1)
+                log_probs = log_probs * mask.unsqueeze(-1)
+                outputs = log_probs.sum(dim=1) / lengths_pooled.unsqueeze(-1).clamp(min=1)
                 
                 loss = criterion(outputs, targets)
                 val_loss += loss.item()
@@ -107,7 +126,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--train_dir", type=str, required=True)
-    parser.add_argument("--val_dir", type=str, required=True)
+    parser.add_argument("--val_dir", type=str, default=None)
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch_size", type=int, default=32)
     args = parser.parse_args()

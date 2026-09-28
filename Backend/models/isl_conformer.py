@@ -213,7 +213,7 @@ class ISL_Conformer(nn.Module):
 
         if T > 1:
             x = self.pool(x)
-            lengths_pooled = lengths // 2
+            lengths_pooled = torch.clamp(lengths // 2, min=1)
         else:
             lengths_pooled = lengths.clone()
 

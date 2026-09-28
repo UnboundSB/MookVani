@@ -105,9 +105,9 @@ def load_sentence_to_words(gloss_csv_path, word_frames_dir):
             sentence_to_words[sentence] = resolved
             drop_log.extend(this_drops)
 
-        print(f"✅ Resolved gloss sequences for {len(sentence_to_words)}/{len(df)} sentences.")
+        print(f"Resolved gloss sequences for {len(sentence_to_words)}/{len(df)} sentences.")
         if skipped_sentences:
-            print(f"⚠️ Skipped {len(skipped_sentences)} sentences due to unresolved tokens.")
+            print(f"Skipped {len(skipped_sentences)} sentences due to unresolved tokens.")
             for sentence, gloss_str, unknown in skipped_sentences[:5]:
                 print(f"   '{sentence}' (gloss: '{gloss_str}') -> unknown: {unknown}")
     else:

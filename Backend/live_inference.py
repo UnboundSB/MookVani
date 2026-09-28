@@ -41,7 +41,7 @@ def decode_ctc(sequence, idx_to_class, blank_id=0):
 def run_live_inference():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     vocab_path = "models/word_class_to_idx.json"
-    model_path = "models/best_sentence_model.pth"
+    model_path = "models/best_sentence_model_e2e.pth"
 
     if not os.path.exists(vocab_path) or not os.path.exists(model_path):
         print("Error: Ensure best_sentence_model.pth and word_class_to_idx.json exist in models/")

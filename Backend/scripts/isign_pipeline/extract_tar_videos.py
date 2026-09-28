@@ -23,7 +23,7 @@ def clean_text(text):
     return text.lower().strip()
 
 def main():
-    part_file = r"D:\MookVani\iSign-videos_v1.1_part_aa"
+    part_file = r"D:\MookVani\iSign-videos_v1.1_part_ab"
     csv_path = r"E:\channel\mp\data\isign_dataset\iSign_v1.1.csv"
     vocab_path = r"D:\MookVani\Backend\models\word_class_to_idx.json"
     
@@ -80,7 +80,7 @@ def main():
     print("\n3. Extracting ONLY our target files (Saving huge amounts of disk space)...")
     subprocess.run(["tar", "-xf", part_file, "-T", list_file, "-C", out_dir])
     
-    print(f"\n✅ Extraction Complete! The files are saved in {out_dir}")
+    print(f"\nExtraction Complete! The files are saved in {out_dir}")
 
 if __name__ == "__main__":
     main()

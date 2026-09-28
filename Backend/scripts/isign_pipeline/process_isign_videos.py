@@ -109,7 +109,7 @@ def process_isign_videos(isign_video_dir):
                 if tensor_data is not None:
                     torch.save(tensor_data, out_file)
                     
-    print(f"\n✅ Processing complete! Successfully found and extracted {found_count} out of {len(target_uids)} videos.")
+    print(f"\nProcessing complete! Successfully found and extracted {found_count} out of {len(target_uids)} videos.")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

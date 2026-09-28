@@ -23,6 +23,7 @@ def train_sentence_model(
     epochs=100,
     batch_size=8,
     lr=1e-4,
+    finetune=False,
     device="cuda" if torch.cuda.is_available() else "cpu"
 ):
     os.makedirs(model_dir, exist_ok=True)
@@ -51,19 +52,24 @@ def train_sentence_model(
     print(f"Training sentence model. Vocab size (incl blank): {num_classes + 1}")
 
     # 3. Model & Loss (Switching to BiGRU, freezing the base Conformer)
-    # We set freeze_base=True to freeze the entire Conformer, only training the BiGRU + Classifier.
-    model = ISL_Sentence_Model(num_classes=num_classes, d_model=256, lstm_layers=1, dropout=0.5, freeze_base=True).to(device)
+    # If finetune is True, we unfreeze the base Conformer to train end-to-end
+    freeze_base = not finetune
+    model = ISL_Sentence_Model(num_classes=num_classes, d_model=256, lstm_layers=1, dropout=0.5, freeze_base=freeze_base).to(device)
     
     # Load pre-trained synthetic or word-level weights to jumpstart the encoder
     synthetic_weights_path = os.path.join(model_dir, "best_synthetic_model.pth")
     word_weights_path = os.path.join(model_dir, "best_word_model.pth")
+    sentence_weights_path = os.path.join(model_dir, "best_sentence_model.pth")
     
-    if os.path.exists(synthetic_weights_path):
-        print(f"Loading synthetic pre-trained weights from {synthetic_weights_path}...")
-        model.load_base_weights(synthetic_weights_path)
+    if finetune and os.path.exists(sentence_weights_path):
+        print(f"Loading sentence model weights for End-to-End Finetuning from {sentence_weights_path}...")
+        model.load_state_dict(torch.load(sentence_weights_path, weights_only=True))
     elif os.path.exists(word_weights_path):
         print(f"Loading word pre-trained weights from {word_weights_path}...")
         model.load_base_weights(word_weights_path)
+    elif os.path.exists(synthetic_weights_path):
+        print(f"Loading synthetic pre-trained weights from {synthetic_weights_path}...")
+        model.load_base_weights(synthetic_weights_path)
     else:
         print(f"Warning: No pre-trained model found. Training from scratch.")
 
@@ -131,7 +137,8 @@ def train_sentence_model(
 
         if val_wer < best_val_wer:
             best_val_wer = val_wer
-            torch.save(model.state_dict(), os.path.join(model_dir, "best_sentence_model.pth"))
+            save_name = "best_sentence_model_e2e.pth" if finetune else "best_sentence_model.pth"
+            torch.save(model.state_dict(), os.path.join(model_dir, save_name))
             print(f"  -> Saved new best model (WER: {val_wer:.4f})")
 
     # 6. Plot
@@ -161,6 +168,8 @@ if __name__ == "__main__":
     parser.add_argument("--word_frames_dir", type=str, required=True)
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--finetune", action="store_true", help="Unfreeze the Conformer and train end-to-end")
     args = parser.parse_args()
     
-    train_sentence_model(args.train_sentence_dir, args.val_sentence_dir, args.gloss_csv_path, args.word_frames_dir, epochs=args.epochs, batch_size=args.batch_size)
+    train_sentence_model(args.train_sentence_dir, args.val_sentence_dir, args.gloss_csv_path, args.word_frames_dir, epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, finetune=args.finetune)
