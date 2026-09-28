@@ -23,6 +23,7 @@ Backend/data/extracted_videos/
 Backend/data/isign_dataset/
 *.mp4
 *.tar
+*.crdownload
 
 # IDEs and Editors
 .vscode/
