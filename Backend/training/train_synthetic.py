@@ -18,6 +18,8 @@ def clear_garbage():
 
 def train_synthetic_model(
     word_train_dir,
+    word_val_dir,
+    csv_path,
     word_class_json="models/word_class_to_idx.json",
     model_dir="models",
     plot_dir="models/plots",
@@ -38,9 +40,9 @@ def train_synthetic_model(
         class_to_idx = json.load(f)
 
     # 1. Build loaders
-    print("Building Synthetic Sentence DataLoaders...")
+    print("Building Synthetic Sentence DataLoaders from CSV grammar...")
     train_loader, val_loader, word_vocab = build_synthetic_dataloaders(
-        word_train_dir, class_to_idx, batch_size=batch_size, epoch_size=epoch_size, max_words=10
+        word_train_dir, word_val_dir, class_to_idx, csv_path, batch_size=batch_size, epoch_size=epoch_size
     )
 
     num_classes = len(word_vocab)
@@ -64,11 +66,14 @@ def train_synthetic_model(
     best_val_wer = float('inf')
 
     # 3. Training Loop
+    from tqdm import tqdm
     for epoch in range(epochs):
+        print(f"\n--- Epoch {epoch+1}/{epochs} ---")
         model.train()
         total_loss = 0
 
-        for batch_inputs, batch_targets, in_lens, tgt_lens in train_loader:
+        pbar = tqdm(train_loader, desc="Training")
+        for batch_inputs, batch_targets, in_lens, tgt_lens in pbar:
             batch_inputs, batch_targets = batch_inputs.to(device), batch_targets.to(device)
             in_lens, tgt_lens = in_lens.to(device), tgt_lens.to(device)
             
@@ -82,6 +87,7 @@ def train_synthetic_model(
             optimizer.step()
             
             total_loss += loss.item()
+            pbar.set_postfix({'loss': f"{loss.item():.4f}"})
             
         avg_train_loss = total_loss / len(train_loader)
         train_losses.append(avg_train_loss)
@@ -145,9 +151,11 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--word_train_dir", type=str, default="data/tensors_word_level_163_train")
+    parser.add_argument("--word_val_dir", type=str, default="data/tensors_word_level_163_val")
+    parser.add_argument("--csv_path", type=str, default=r"E:\channel\mp\data\isl_csltr_dataset\ISL_CSLRT_Corpus\ISL_CSLRT_Corpus\corpus_csv_files\ISL Corpus sign glosses.csv")
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--epoch_size", type=int, default=2000)
     args = parser.parse_args()
     
-    train_synthetic_model(args.word_train_dir, epochs=args.epochs, batch_size=args.batch_size, epoch_size=args.epoch_size)
+    train_synthetic_model(args.word_train_dir, args.word_val_dir, args.csv_path, epochs=args.epochs, batch_size=args.batch_size, epoch_size=args.epoch_size)

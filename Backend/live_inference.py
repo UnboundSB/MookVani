@@ -34,14 +34,16 @@ def decode_ctc(sequence, idx_to_class, blank_id=0):
     last_tok = None
     for tok in sequence:
         if tok != blank_id and tok != last_tok:
-            decoded.append(idx_to_class.get(tok, f"<UNK:{tok}>"))
+            word = idx_to_class.get(tok, "")
+            if word and word != "NONE":
+                decoded.append(word)
         last_tok = tok
     return " ".join(decoded)
 
 def run_live_inference():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     vocab_path = "models/word_class_to_idx.json"
-    model_path = "models/best_sentence_model_e2e.pth"
+    model_path = "models/best_synthetic_model.pth"
 
     if not os.path.exists(vocab_path) or not os.path.exists(model_path):
         print("Error: Ensure best_sentence_model.pth and word_class_to_idx.json exist in models/")
@@ -81,7 +83,8 @@ def run_live_inference():
             ret, frame = cap.read()
             if not ret: break
 
-            frame = cv2.flip(frame, 1) # Mirror for user convenience
+            # DO NOT FLIP THE FRAME! Flipping inverts the X coordinates and breaks the 
+            # trained neural network's spatial mapping (it was trained on unmirrored video).
             f_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=f_rgb)
             
@@ -143,12 +146,34 @@ def run_live_inference():
                 predicted_seq = predicted_seq.cpu().numpy()
                 max_probs = max_probs.cpu().numpy()
                 
-                # Confidence Thresholding (ignore predictions < 60% confident)
+                # Confidence Thresholding
                 for i in range(len(predicted_seq)):
-                    if max_probs[i] < 0.6:
+                    if max_probs[i] < 0.2:
                         predicted_seq[i] = 0 # Force to CTC blank
                         
+                # Debug print raw sequence (ignoring blank but keeping NONE)
+                raw_debug = []
+                last_tok = None
+                for tok in predicted_seq:
+                    if tok != 0 and tok != last_tok:
+                        raw_debug.append(idx_to_class.get(tok, ""))
+                    last_tok = tok
+                print(f"DEBUG RAW CTC: {' '.join(raw_debug)} | Max Prob: {max_probs.max():.2f}")
+                
                 current_prediction = decode_ctc(predicted_seq, idx_to_class)
+
+            # Draw landmarks manually with OpenCV to avoid mediapipe solutions versioning issues
+            if hands and hands.hand_landmarks:
+                for idx, hand_landmarks in enumerate(hands.hand_landmarks):
+                    color = (255, 0, 0) if hands.handedness[idx][0].category_name == 'Left' else (0, 0, 255)
+                    for lm in hand_landmarks:
+                        cx, cy = int(lm.x * frame.shape[1]), int(lm.y * frame.shape[0])
+                        cv2.circle(frame, (cx, cy), 3, color, -1)
+            
+            if pose_lms:
+                for lm in pose_lms[0]:
+                    cx, cy = int(lm.x * frame.shape[1]), int(lm.y * frame.shape[0])
+                    cv2.circle(frame, (cx, cy), 2, (0, 255, 255), -1)
 
             # Enlarge frame for better visibility
             frame = cv2.resize(frame, (1280, 720))

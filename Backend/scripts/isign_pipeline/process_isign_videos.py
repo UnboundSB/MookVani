@@ -9,7 +9,7 @@ from tqdm import tqdm
 import sys
 sys.path.append(r"E:\channel\mp\data")
 sys.path.append(r"d:\MookVani\Backend")
-from extract_video import extract_video_features
+from data.extract_video import extract_video_features
 
 def create_word_mapping(vocab_path):
     with open(vocab_path, 'r') as f:
@@ -28,11 +28,11 @@ def clean_text(text):
     return text.lower().strip()
 
 def process_isign_videos(isign_video_dir):
-    vocab_path = "../models/word_class_to_idx.json"
+    vocab_path = r"D:\MookVani\Backend\models\word_class_to_idx.json"
     csv_path = r"E:\channel\mp\data\isign_dataset\iSign_v1.1.csv"
     
-    out_word_dir = "tensors_word_level_163_train"
-    out_sentence_dir = "tensors_sentence_level_163_train"
+    out_word_dir = r"D:\MookVani\Backend\data\tensors_word_level_163_train"
+    out_sentence_dir = r"D:\MookVani\Backend\data\tensors_sentence_level_163_train"
     
     if not os.path.exists(isign_video_dir):
         print(f"Error: Could not find video directory {isign_video_dir}")
