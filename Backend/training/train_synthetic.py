@@ -1,161 +1,115 @@
 import os
-import json
-import gc
+import glob
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import matplotlib.pyplot as plt
+from torch.utils.data import Dataset, DataLoader
+from torch.optim import Adam
+from sklearn.model_selection import train_test_split
+from tqdm import tqdm
 import sys
+
+# Ensure backend root is in python path to import models
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from models.isl_conformer import ISL_Conformer
-from models.isl_sentence_model import ISL_Sentence_Model
-from data.synthetic_dataset import build_synthetic_dataloaders
-from utils.metrics import compute_sentence_metrics
+from models.isl_conformer import WordCategorizerModel
 
-def clear_garbage():
-    gc.collect()
-    torch.cuda.empty_cache()
+class SyntheticPoseDataset(Dataset):
+    def __init__(self, file_paths, class_to_idx):
+        self.file_paths = file_paths
+        self.class_to_idx = class_to_idx
 
-def train_synthetic_model(
-    word_train_dir,
-    word_val_dir,
-    csv_path,
-    word_class_json="models/word_class_to_idx.json",
-    model_dir="models",
-    plot_dir="models/plots",
-    epochs=20,
-    batch_size=8,
-    lr=1e-4,
-    epoch_size=2000,
-    device="cuda" if torch.cuda.is_available() else "cpu"
-):
-    os.makedirs(model_dir, exist_ok=True)
-    os.makedirs(plot_dir, exist_ok=True)
+    def __len__(self):
+        return len(self.file_paths)
 
-    if not os.path.exists(word_class_json):
-        print(f"Error: {word_class_json} missing. Run train_word.py first.")
+    def __getitem__(self, idx):
+        path = self.file_paths[idx]
+        # shape is (1, 163)
+        tensor = torch.load(path)
+        # We need shape (1, 163) for the model which expects (B, T, D)
+        # So one sample is (1, 163) where T=1
+        
+        class_name = os.path.basename(os.path.dirname(path))
+        label = self.class_to_idx[class_name]
+        return tensor, label
+
+def train_model():
+    data_dir = "d:/MookVani/Backend/data/synthetic_poses_163"
+    all_files = glob.glob(f"{data_dir}/*/*.pt")
+    
+    if len(all_files) == 0:
+        print("No synthetic data found!")
         return
 
-    with open(word_class_json, "r") as f:
-        class_to_idx = json.load(f)
-
-    # 1. Build loaders
-    print("Building Synthetic Sentence DataLoaders from CSV grammar...")
-    train_loader, val_loader, word_vocab = build_synthetic_dataloaders(
-        word_train_dir, word_val_dir, class_to_idx, csv_path, batch_size=batch_size, epoch_size=epoch_size
-    )
-
-    num_classes = len(word_vocab)
-    print(f"Training synthetic sentence model. Vocab size (incl blank): {num_classes + 1}")
-
-    # 2. Model & Loss
-    model = ISL_Sentence_Model(num_classes=num_classes, d_model=256, lstm_layers=1, dropout=0.5, freeze_base=False).to(device)
+    # Create class mapping
+    class_dirs = sorted([d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))])
+    class_to_idx = {cls_name: i for i, cls_name in enumerate(class_dirs)}
+    num_classes = len(class_to_idx)
     
-    # Load pre-trained word-level weights to jumpstart the encoder
-    word_weights_path = os.path.join(model_dir, "best_word_model.pth")
-    if os.path.exists(word_weights_path):
-        model.load_base_weights(word_weights_path)
-    else:
-        print(f"Warning: No pre-trained word model found at {word_weights_path}.")
+    print(f"Found {len(all_files)} samples across {num_classes} classes.")
 
-    ctc_loss_fn = nn.CTCLoss(blank=0, zero_infinity=True)
-    optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-2)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
-
-    train_losses, val_losses, val_wers = [], [], []
-    best_val_wer = float('inf')
-
-    # 3. Training Loop
-    from tqdm import tqdm
-    for epoch in range(epochs):
-        print(f"\n--- Epoch {epoch+1}/{epochs} ---")
+    train_files, val_files = train_test_split(all_files, test_size=0.2, random_state=42)
+    
+    train_dataset = SyntheticPoseDataset(train_files, class_to_idx)
+    val_dataset = SyntheticPoseDataset(val_files, class_to_idx)
+    
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+    
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Training on {device}")
+    
+    model = WordCategorizerModel(num_classes=num_classes).to(device)
+    
+    criterion = nn.CrossEntropyLoss()
+    optimizer = Adam(model.parameters(), lr=1e-3)
+    
+    num_epochs = 10
+    best_val_acc = 0.0
+    
+    os.makedirs("d:/MookVani/Backend/models", exist_ok=True)
+    save_path = "d:/MookVani/Backend/models/best_synthetic_model.pth"
+    
+    for epoch in range(num_epochs):
         model.train()
-        total_loss = 0
-
-        pbar = tqdm(train_loader, desc="Training")
-        for batch_inputs, batch_targets, in_lens, tgt_lens in pbar:
-            batch_inputs, batch_targets = batch_inputs.to(device), batch_targets.to(device)
-            in_lens, tgt_lens = in_lens.to(device), tgt_lens.to(device)
+        train_loss = 0.0
+        train_correct = 0
+        
+        for inputs, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} [Train]"):
+            inputs, labels = inputs.to(device), labels.to(device)
             
             optimizer.zero_grad()
-            log_probs, pooled_lens = model(batch_inputs, in_lens)
-            
-            log_probs_t = log_probs.transpose(0, 1)
-            loss = ctc_loss_fn(log_probs_t, batch_targets, pooled_lens, tgt_lens)
+            # inputs is (B, 1, 163)
+            logits = model.forward_single_frame_logits(inputs)
+            loss = criterion(logits, labels)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
             
-            total_loss += loss.item()
-            pbar.set_postfix({'loss': f"{loss.item():.4f}"})
+            train_loss += loss.item() * inputs.size(0)
+            preds = torch.argmax(logits, dim=1)
+            train_correct += (preds == labels).sum().item()
             
-        avg_train_loss = total_loss / len(train_loader)
-        train_losses.append(avg_train_loss)
-
-        # Clear garbage after train loop to prevent memory fragmentation
-        clear_garbage()
-
-        # 4. Validation
-        val_wer, val_acc, examples = compute_sentence_metrics(model, val_loader, device)
+        train_acc = train_correct / len(train_files)
         
         model.eval()
-        v_loss = 0
+        val_loss = 0.0
+        val_correct = 0
         with torch.no_grad():
-            for batch_inputs, batch_targets, in_lens, tgt_lens in val_loader:
-                batch_inputs, batch_targets = batch_inputs.to(device), batch_targets.to(device)
-                in_lens, tgt_lens = in_lens.to(device), tgt_lens.to(device)
+            for inputs, labels in tqdm(val_loader, desc=f"Epoch {epoch+1}/{num_epochs} [Val]"):
+                inputs, labels = inputs.to(device), labels.to(device)
+                logits = model.forward_single_frame_logits(inputs)
+                loss = criterion(logits, labels)
                 
-                log_probs, pooled_lens = model(batch_inputs, in_lens)
-                log_probs_t = log_probs.transpose(0, 1)
-                loss = ctc_loss_fn(log_probs_t, batch_targets, pooled_lens, tgt_lens)
-                v_loss += loss.item()
+                val_loss += loss.item() * inputs.size(0)
+                preds = torch.argmax(logits, dim=1)
+                val_correct += (preds == labels).sum().item()
                 
-        avg_val_loss = v_loss / len(val_loader)
-        val_losses.append(avg_val_loss)
-        val_wers.append(val_wer)
+        val_acc = val_correct / len(val_files)
         
-        scheduler.step(avg_val_loss)
+        print(f"Epoch {epoch+1}: Train Loss: {train_loss/len(train_files):.4f}, Train Acc: {train_acc:.4f} | Val Loss: {val_loss/len(val_files):.4f}, Val Acc: {val_acc:.4f}")
         
-        # Clear garbage after val loop to prevent memory fragmentation
-        clear_garbage()
-
-        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f} | WER: {val_wer:.4f} | Exact Match: {val_acc:.4f}")
-        if (epoch + 1) % 1 == 0 and examples:
-            print(f"  Example Ref: {examples[0][0]}")
-            print(f"  Example Hyp: {examples[0][1]}")
-
-        if val_wer < best_val_wer:
-            best_val_wer = val_wer
-            torch.save(model.state_dict(), os.path.join(model_dir, "best_synthetic_model.pth"))
-            print(f"  -> Saved new best synthetic model (WER: {val_wer:.4f})")
-
-    # 5. Plot
-    plt.figure(figsize=(12, 5))
-    plt.subplot(1, 2, 1)
-    plt.plot(train_losses, label='Train Loss')
-    plt.plot(val_losses, label='Val Loss')
-    plt.legend()
-    plt.title('CTC Loss (Synthetic)')
-
-    plt.subplot(1, 2, 2)
-    plt.plot(val_wers, label='Val WER', color='orange')
-    plt.legend()
-    plt.title('Word Error Rate (Synthetic)')
-
-    plt.savefig(os.path.join(plot_dir, "synthetic_training_metrics.png"))
-    plt.close()
-    
-    print("Synthetic pre-training complete!")
-
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            torch.save(model.state_dict(), save_path)
+            print(f"--> Saved new best model to {save_path}")
+            
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--word_train_dir", type=str, default="data/tensors_word_level_163_train")
-    parser.add_argument("--word_val_dir", type=str, default="data/tensors_word_level_163_val")
-    parser.add_argument("--csv_path", type=str, default=r"E:\channel\mp\data\isl_csltr_dataset\ISL_CSLRT_Corpus\ISL_CSLRT_Corpus\corpus_csv_files\ISL Corpus sign glosses.csv")
-    parser.add_argument("--epochs", type=int, default=20)
-    parser.add_argument("--batch_size", type=int, default=8)
-    parser.add_argument("--epoch_size", type=int, default=2000)
-    args = parser.parse_args()
-    
-    train_synthetic_model(args.word_train_dir, args.word_val_dir, args.csv_path, epochs=args.epochs, batch_size=args.batch_size, epoch_size=args.epoch_size)
+    train_model()

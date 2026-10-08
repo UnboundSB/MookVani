@@ -174,7 +174,7 @@ class ConformerBlock(nn.Module):
 # ============================================================================
 # 5. THE MAIN ARCHITECTURE
 # ============================================================================
-class ISL_Conformer(nn.Module):
+class WordCategorizerModel(nn.Module):
     def __init__(
         self,
         input_dim=163,
