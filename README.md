@@ -5,21 +5,21 @@ MookVani is an end-to-end Continuous Indian Sign Language (ISL) Recognition and 
 ## Features
 
 - **Continuous Sentence Recognition:** Evaluates a live stream of keypoints and decodes continuous sign sequences without needing segmented words.
-- **ISL_Conformer Architecture:** Multi-stream self-attention encoder utilizing a 163-dimensional canonical skeleton (Hands, Pose, Face) optimized for MediaPipe landmarks.
-- **Synthetic Data Engine (`SyntheticSentenceDataset`):** 
-  - Dynamically synthesizes grammatically valid training sequences on the fly using the ISL CSLTR corpus grammar trees.
-  - Implements dynamic scaling, temporal warping, and 3D spatial noise for massive robustness, overcoming data scarcity by converting 20 base samples per class into infinite training variations.
-  - Generates robust `NONE` background noise handling to eliminate idle hallucination.
-- **Strict Validation Protocol:** Guarantees zero data leakage by evaluating strictly on unseen holdout signers.
+- **WordCategorizerModel Architecture:** Multi-stream self-attention encoder utilizing a 163-dimensional canonical skeleton (Hands, Pose, Face) optimized for MediaPipe landmarks.
+- **ISLSentenceReconformer Engine:** 
+  - An advanced wrapper mapping frame-level outputs to a Bidirectional LSTM block to temporally smooth predictions before classification.
+  - Dynamically synthesizes heavily augmented data in real-time within `ISLAugmentedWordDataset` (applying 3D spatial jitter, coordinate shifts, tilt scaling, and continuous temporal speed-up/slow-down interpolation) for infinite training variations.
+  - Initializes from completely non-randomized, perfect synthetic pre-trained weights to ensure hyper-robust transfer learning.
+- **Strict Validation Protocol:** Guarantees zero data leakage by evaluating strictly on unseen holdout signers and providing ultra-detailed F1, Precision, and Recall metrics.
 - **Real-time Live Inference:** Plugs straight into a webcam stream for instantaneous continuous translation output, powered by MediaPipe and CPU/GPU PyTorch execution.
 
 ## Repository Structure
 
 - `Backend/models/`: Neural Network architectures (`isl_conformer.py`, `isl_sentence_model.py`) and pre-trained weights (`.pth`).
 - `Backend/features/`: MediaPipe canonical keypoint extraction and normalizations (`extract_features.py`).
-- `Backend/data/`: Data loading pipelines and the dynamic synthetic generation engine (`synthetic_dataset.py`, `datasets.py`).
-- `Backend/training/`: Training modules for word-level initialization and end-to-end synthetic sentence training (`train_synthetic.py`).
-- `Backend/scripts/`: Various utility scripts for dataset processing, extraction, and visualizations.
+- `Backend/data/`: Tensors and dataset storage location (ignored in Git).
+- `Backend/training/`: Training modules for the `ISLSentenceReconformer` (`train_reconformer_word.py`) and plot generation routines.
+- `Backend/scripts/`: Heavy lifting utilities for parsing raw `.mp4` files into parallelized 163-dimensional `(T, 163)` coordinate tensors (`extract_word.py`).
 - `Backend/live_inference.py`: Live webcam inference script using MediaPipe Tasks API.
 
 ## Setup

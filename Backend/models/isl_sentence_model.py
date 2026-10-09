@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .isl_conformer import ISL_Conformer
+from .isl_conformer import WordCategorizerModel
 
-class ISL_Sentence_Model(nn.Module):
+class ISLSentenceReconformer(nn.Module):
     """
     A wrapper model for Sentence-level Sign Language Translation.
-    Uses a pre-trained ISL_Conformer as a feature extractor, and appends a 
+    Uses a pre-trained WordCategorizerModel as a feature extractor, and appends a 
     Bidirectional LSTM to temporally smooth/stack frame-level predictions before
     final classification and CTC alignment.
     """
@@ -23,7 +23,7 @@ class ISL_Sentence_Model(nn.Module):
         # 1. Base Feature Extractor (The Conformer)
         # Note: We initialize the base model with its original num_classes (2000 for words)
         # just in case we load strict weights, but we will ignore its final classifier.
-        self.base_model = ISL_Conformer(num_classes=2000, d_model=d_model)
+        self.base_model = WordCategorizerModel(num_classes=2000, d_model=d_model)
         
         # 2. Temporal Smoothing Layer (BiGRU)
         # We use d_model // 2 for hidden_size so the output is concatenated to exactly d_model.
