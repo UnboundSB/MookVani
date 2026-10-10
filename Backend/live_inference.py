@@ -12,7 +12,7 @@ from mediapipe.tasks.python import vision
 # Add current dir to sys.path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from models.isl_sentence_model import ISL_Sentence_Model
+from models.isl_sentence_model import ISLSentenceReconformer
 from features.extract_features import extract_frame_features_video_mode
 
 # --- Setup MediaPipe ---
@@ -29,34 +29,26 @@ face_options = vision.FaceLandmarkerOptions(
     base_options=BaseOptions(model_asset_path="../face_landmarker.task"),
     running_mode=VisionMode)
 
-def decode_ctc(sequence, idx_to_class, blank_id=0):
-    decoded = []
-    last_tok = None
-    for tok in sequence:
-        if tok != blank_id and tok != last_tok:
-            word = idx_to_class.get(tok, "")
-            if word and word != "NONE":
-                decoded.append(word)
-        last_tok = tok
-    return " ".join(decoded)
+# No CTC needed for word-level mean-pooled model
 
 def run_live_inference():
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    vocab_path = "models/word_class_to_idx.json"
-    model_path = "models/best_synthetic_model.pth"
+    model_path = r"d:\MookVani\Backend\models\isl_sentence_reconformer.pth"
+    DATA_DIR = r"d:\MookVani\Backend\data\tensors_include50_word_level"
 
-    if not os.path.exists(vocab_path) or not os.path.exists(model_path):
-        print("Error: Ensure best_sentence_model.pth and word_class_to_idx.json exist in models/")
+    if not os.path.exists(model_path):
+        print(f"Error: Ensure {model_path} exists!")
         return
 
-    with open(vocab_path, "r") as f:
-        class_to_idx = json.load(f)
-    
-    idx_to_class = {i + 1: c for c, i in class_to_idx.items()}
+    # Dynamically build classes exactly like training
+    classes = sorted([d for d in os.listdir(DATA_DIR) if os.path.isdir(os.path.join(DATA_DIR, d))])
+    classes.append("NONE")
+    class_to_idx = {cls: idx for idx, cls in enumerate(classes)}
+    idx_to_class = {i: c for c, i in class_to_idx.items()}
     num_classes = len(class_to_idx)
     
-    print("Loading model...")
-    model = ISL_Sentence_Model(num_classes=num_classes, d_model=256, lstm_layers=1, dropout=0.0).to(device)
+    print("Loading Reconformer model...")
+    model = ISLSentenceReconformer(num_classes=num_classes, d_model=128, lstm_layers=1, dropout=0.0, freeze_base=False).to(device)
     model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
     model.eval()
     
@@ -133,34 +125,27 @@ def run_live_inference():
                     last_lh, last_rh = np.zeros((21, 3)), np.zeros((21, 3))
                     last_arms, last_face = np.zeros((4, 3)), np.zeros((7, 3))
 
-            # Run inference periodically if we have enough frames
-            if len(frame_buffer) >= 10 and len(frame_buffer) % 5 == 0:
+            # Run inference periodically if we have enough frames (e.g. 60 frames = ~2 seconds of context)
+            if len(frame_buffer) >= 60 and len(frame_buffer) % 5 == 0:
                 tensor_data = torch.tensor(np.array(frame_buffer), dtype=torch.float32).unsqueeze(0).to(device)
                 lengths = torch.tensor([tensor_data.size(1)], dtype=torch.long).to(device)
                 
                 with torch.no_grad():
                     log_probs, _ = model(tensor_data, lengths)
+                    
+                # Mean pool temporal logits exactly like train_reconformer_word.py
+                log_probs_pooled = log_probs.mean(dim=1)
+                probs = torch.exp(log_probs_pooled).squeeze(0) # (C,)
                 
-                probs = torch.exp(log_probs).squeeze(0) # (T, C)
-                max_probs, predicted_seq = probs.max(dim=-1)
-                predicted_seq = predicted_seq.cpu().numpy()
-                max_probs = max_probs.cpu().numpy()
+                max_prob, predicted_idx = probs.max(dim=-1)
+                predicted_idx = predicted_idx.item()
+                max_prob = max_prob.item()
                 
-                # Confidence Thresholding
-                for i in range(len(predicted_seq)):
-                    if max_probs[i] < 0.2:
-                        predicted_seq[i] = 0 # Force to CTC blank
-                        
-                # Debug print raw sequence (ignoring blank but keeping NONE)
-                raw_debug = []
-                last_tok = None
-                for tok in predicted_seq:
-                    if tok != 0 and tok != last_tok:
-                        raw_debug.append(idx_to_class.get(tok, ""))
-                    last_tok = tok
-                print(f"DEBUG RAW CTC: {' '.join(raw_debug)} | Max Prob: {max_probs.max():.2f}")
+                word = idx_to_class.get(predicted_idx, "NONE")
+                print(f"DEBUG: Predicted [{word}] | Prob: {max_prob:.2f}")
                 
-                current_prediction = decode_ctc(predicted_seq, idx_to_class)
+                if max_prob > 0.3 and word != "NONE":
+                    current_prediction = word
 
             # Draw landmarks manually with OpenCV to avoid mediapipe solutions versioning issues
             if hands and hands.hand_landmarks:

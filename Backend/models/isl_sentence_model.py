@@ -1,33 +1,54 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .isl_conformer import WordCategorizerModel
+import math
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_len=5000):
+        super().__init__()
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe.unsqueeze(0)) 
+
+    def forward(self, x):
+        return x + self.pe[:, :x.size(1), :]
+
 
 class ISLSentenceReconformer(nn.Module):
     """
-    A wrapper model for Sentence-level Sign Language Translation.
-    Uses a pre-trained WordCategorizerModel as a feature extractor, and appends a 
-    Bidirectional LSTM to temporally smooth/stack frame-level predictions before
-    final classification and CTC alignment.
+    User-Designed Architecture: (Optional) RNN -> Transformer -> CNN
+    By setting use_rnn=False, we can pretrain the Transformer + CNN natively.
+    Then later, we can set use_rnn=True to slide the BiGRU in front and expand it!
     """
     def __init__(
-        self,
-        num_classes=100,
-        d_model=256,
-        lstm_layers=1,
-        dropout=0.5,
-        freeze_base=True
+        self, 
+        input_dim=163, 
+        num_classes=263, 
+        d_model=256, 
+        lstm_layers=2, 
+        trans_layers=4, 
+        num_heads=8, 
+        dropout=0.3,
+        use_rnn=False, # <-- The magic toggle!
+        freeze_base=False
     ):
         super().__init__()
         
-        # 1. Base Feature Extractor (The Conformer)
-        # Note: We initialize the base model with its original num_classes (2000 for words)
-        # just in case we load strict weights, but we will ignore its final classifier.
-        self.base_model = WordCategorizerModel(num_classes=2000, d_model=d_model)
+        self.use_rnn = use_rnn
+        self.freeze_base = freeze_base
         
-        # 2. Temporal Smoothing Layer (BiGRU)
-        # We use d_model // 2 for hidden_size so the output is concatenated to exactly d_model.
-        self.bigru = nn.GRU(
+        # Pre-Dense projection to expand raw frames to d_model
+        self.input_dense = nn.Sequential(
+            nn.Linear(input_dim, d_model),
+            nn.GELU(),
+            nn.Dropout(dropout)
+        )
+        
+        # 1. RNN ENCODER (Toggleable!)
+        self.rnn = nn.GRU(
             input_size=d_model,
             hidden_size=d_model // 2,
             num_layers=lstm_layers,
@@ -36,15 +57,36 @@ class ISLSentenceReconformer(nn.Module):
             dropout=dropout if lstm_layers > 1 else 0
         )
         
-        # 3. New Sentence-Level Classifier (+1 for CTC Blank)
-        self.classifier = nn.Linear(d_model, num_classes + 1)
+        # 2. TRANSFORMER (Global Attention)
+        self.pos_encoder = PositionalEncoding(d_model)
+        encoder_layers = nn.TransformerEncoderLayer(
+            d_model=d_model,
+            nhead=num_heads,
+            dim_feedforward=d_model * 4,
+            dropout=dropout,
+            batch_first=True,
+            activation="gelu"
+        )
+        self.transformer = nn.TransformerEncoder(encoder_layers, trans_layers)
         
-        self.freeze_base = freeze_base
+        # 3. CNN Classifier
+        self.cnn = nn.Sequential(
+            nn.Conv1d(d_model, d_model, kernel_size=5, padding=2),
+            nn.BatchNorm1d(d_model),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            
+            nn.Conv1d(d_model, d_model // 2, kernel_size=3, padding=1),
+            nn.BatchNorm1d(d_model // 2),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            
+            nn.Conv1d(d_model // 2, num_classes + 1, kernel_size=1)
+        )
 
     def load_base_weights(self, checkpoint_path):
-        """Loads pre-trained word-level weights into the base Conformer model."""
+        """Safely loads weights. Allows for dropping the RNN dynamically."""
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
-        # Handle DataParallel wrapped states
         if "model_state_dict" in checkpoint:
             state_dict = checkpoint["model_state_dict"]
         else:
@@ -53,49 +95,47 @@ class ISLSentenceReconformer(nn.Module):
         new_state_dict = {}
         for k, v in state_dict.items():
             name = k.replace("module.", "")
-            if "classifier" not in name:
-                new_state_dict[name] = v
             
-        # Load weights strictly into base_model (ignoring classifier mismatches if any)
-        self.base_model.load_state_dict(new_state_dict, strict=False)
-        print(f"Loaded base Conformer weights from {checkpoint_path}")
+            # STRIP THE HEAD: Prevent size mismatch crashes if pretraining on 500 classes and fine-tuning on 263!
+            if "cnn.8.weight" in name or "cnn.8.bias" in name:
+                continue
+                
+            new_state_dict[name] = v
+            
+        # strict=False allows us to dynamically add/remove the RNN and ignore the stripped head!
+        self.load_state_dict(new_state_dict, strict=False)
+        print(f"Loaded weights from {checkpoint_path}. (Head stripped successfully)")
         
         if self.freeze_base:
-            for param in self.base_model.parameters():
-                param.requires_grad = False
-            print("Frozen base Conformer weights (only training BiLSTM + Classifier).")
+            for name, param in self.named_parameters():
+                if "transformer" in name or "input_dense" in name:
+                    param.requires_grad = False
+            print("Frozen Transformer and Input Dense! Only training BiGRU + CNN.")
 
     def forward(self, x, lengths):
-        # 1. Extract dense features from Conformer
-        with torch.set_grad_enabled(not self.freeze_base):
-            x_fused, lengths_pooled, pad_mask_bt_pooled = self.base_model.extract_features(x, lengths)
+        B, T, _ = x.shape
+        arange = torch.arange(T, device=x.device).unsqueeze(0).expand(B, -1)
+        pad_mask = arange >= lengths.unsqueeze(1)
+        
+        # 0. Initial Dense Expansion
+        x = self.input_dense(x)
+        
+        # 1. (Optional) RNN Encoder
+        if self.use_rnn:
+            lengths_cpu = lengths.cpu()
+            packed_x = nn.utils.rnn.pack_padded_sequence(x, lengths_cpu, batch_first=True, enforce_sorted=False)
+            packed_out, _ = self.rnn(packed_x)
+            x, _ = nn.utils.rnn.pad_packed_sequence(packed_out, batch_first=True, total_length=T)
             
-        # x_fused is (B, T_pooled, d_model)
+        # 2. Transformer
+        out_trans = self.pos_encoder(x)
+        out_trans = self.transformer(out_trans, src_key_padding_mask=pad_mask)
         
-        # 2. Pack the sequence for the LSTM to ignore padding
-        # CPU conversion required for pack_padded_sequence lengths
-        lengths_cpu = lengths_pooled.cpu()
-        packed_x = nn.utils.rnn.pack_padded_sequence(
-            x_fused, 
-            lengths_cpu, 
-            batch_first=True, 
-            enforce_sorted=False
-        )
+        # 3. CNN Classifier
+        out_cnn = out_trans.transpose(1, 2)
+        logits = self.cnn(out_cnn)
+        logits = logits.transpose(1, 2)
         
-        # 3. Pass through BiGRU
-        packed_out, _ = self.bigru(packed_x)
+        logits = logits.masked_fill(pad_mask.unsqueeze(-1), 0.0)
         
-        # 4. Unpack sequence
-        out_bigru, _ = nn.utils.rnn.pad_packed_sequence(
-            packed_out, 
-            batch_first=True, 
-            total_length=x_fused.size(1)
-        )
-        
-        # 5. Final Classification
-        logits = self.classifier(out_bigru)
-        
-        # Apply padding mask to zero-out padding logits just in case
-        logits = logits.masked_fill(pad_mask_bt_pooled.unsqueeze(-1), 0.0)
-        
-        return F.log_softmax(logits, dim=-1), lengths_pooled
+        return F.log_softmax(logits, dim=-1), lengths

@@ -10,7 +10,7 @@ import sys
 
 # Ensure backend root is in python path to import models
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from models.isl_conformer import WordCategorizerModel
+from models.isl_sentence_model import ISLSentenceReconformer
 
 class SyntheticPoseDataset(Dataset):
     def __init__(self, file_paths, class_to_idx):
@@ -23,9 +23,7 @@ class SyntheticPoseDataset(Dataset):
     def __getitem__(self, idx):
         path = self.file_paths[idx]
         # shape is (1, 163)
-        tensor = torch.load(path)
-        # We need shape (1, 163) for the model which expects (B, T, D)
-        # So one sample is (1, 163) where T=1
+        tensor = torch.load(path, weights_only=True)
         
         class_name = os.path.basename(os.path.dirname(path))
         label = self.class_to_idx[class_name]
@@ -57,7 +55,8 @@ def train_model():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Training on {device}")
     
-    model = WordCategorizerModel(num_classes=num_classes).to(device)
+    # We set use_rnn=False to explicitly just pre-train the dense expansion, Transformer, and CNN on the physics data!
+    model = ISLSentenceReconformer(num_classes=num_classes, d_model=128, use_rnn=False, dropout=0.1).to(device)
     
     criterion = nn.CrossEntropyLoss()
     optimizer = Adam(model.parameters(), lr=1e-3)
@@ -75,10 +74,12 @@ def train_model():
         
         for inputs, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} [Train]"):
             inputs, labels = inputs.to(device), labels.to(device)
-            
             optimizer.zero_grad()
-            # inputs is (B, 1, 163)
-            logits = model.forward_single_frame_logits(inputs)
+            
+            lengths = torch.ones(inputs.size(0), dtype=torch.long, device=device)
+            logits, _ = model(inputs, lengths) # Returns (B, 1, C)
+            logits = logits.squeeze(1) # Squeeze the temporal dimension to (B, C)
+            
             loss = criterion(logits, labels)
             loss.backward()
             optimizer.step()
@@ -95,9 +96,11 @@ def train_model():
         with torch.no_grad():
             for inputs, labels in tqdm(val_loader, desc=f"Epoch {epoch+1}/{num_epochs} [Val]"):
                 inputs, labels = inputs.to(device), labels.to(device)
-                logits = model.forward_single_frame_logits(inputs)
-                loss = criterion(logits, labels)
+                lengths = torch.ones(inputs.size(0), dtype=torch.long, device=device)
+                logits, _ = model(inputs, lengths)
+                logits = logits.squeeze(1)
                 
+                loss = criterion(logits, labels)
                 val_loss += loss.item() * inputs.size(0)
                 preds = torch.argmax(logits, dim=1)
                 val_correct += (preds == labels).sum().item()
