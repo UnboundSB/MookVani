@@ -1,6 +1,8 @@
 import os
 import sys
 import glob
+import json
+import argparse
 import torch
 import numpy as np
 import torch.nn as nn
@@ -29,9 +31,7 @@ def compute_f1_prec_rec(ref, hyp):
     set_hyp = set(hyp)
     if len(set_hyp) == 0 and len(set_ref) == 0:
         return 1.0, 1.0, 1.0
-    if len(set_hyp) == 0:
-        return 0.0, 0.0, 0.0
-    if len(set_ref) == 0:
+    if len(set_hyp) == 0 or len(set_ref) == 0:
         return 0.0, 0.0, 0.0
         
     true_pos = len(set_ref.intersection(set_hyp))
@@ -46,23 +46,24 @@ def compute_f1_prec_rec(ref, hyp):
     return f1, precision, recall
 
 class SyntheticSentenceDataset(Dataset):
-    def __init__(self, data_dir, classes, max_words=10, is_train=True):
+    def __init__(self, data_dir, classes, samples_per_epoch=1000, max_words=10, is_train=True):
         self.data_dir = data_dir
         self.classes = classes
         self.class_to_idx = {cls: idx for idx, cls in enumerate(classes)}
+        self.samples_per_epoch = samples_per_epoch
+        self.max_words = max_words
+        self.is_train = is_train
         
         self.class_files = {}
         for cls in classes:
-            if cls == "NONE": continue
+            if cls == "NONE":
+                continue
             cls_dir = os.path.join(data_dir, cls)
             if os.path.isdir(cls_dir):
                 self.class_files[cls] = glob.glob(os.path.join(cls_dir, "*.pt"))
                 
-        self.max_words = max_words
-        self.is_train = is_train
-        
     def __len__(self):
-        return 2000 if self.is_train else 500
+        return self.samples_per_epoch
         
     def __getitem__(self, idx):
         num_words = np.random.randint(1, self.max_words + 1)
@@ -111,8 +112,6 @@ class SyntheticSentenceDataset(Dataset):
         full_tensor = torch.cat(tensors, dim=0)
         
         # Consistent Sentence-Level Spatial Shift
-        # Applies the EXACT same positional shift across all frames in the sentence
-        # so the relative poses remain perfectly aligned (prevents teleporting mid-sentence)
         if self.is_train and np.random.rand() > 0.5:
             sentence_shift = torch.randn(1, 163) * 0.03
             full_tensor += sentence_shift
@@ -159,44 +158,148 @@ def get_targets(targets, target_lengths):
         idx += l
     return true_seqs
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Stage-oriented CTC Training on Synthetic ISL Sentences")
+    parser.add_argument("--data_dir", type=str, default=r"d:\MookVani\Backend\data\tensors_include50_word_level", help="Path to pose tensor directory")
+    parser.add_argument("--pretrained_word_model", type=str, default=r"d:\MookVani\Backend\models\word_level\reconformer_word_model_final.pth", help="Pretrained word model checkpoint")
+    parser.add_argument("--output_dir", type=str, default=r"d:\MookVani\Backend\models\islsentence_synthetic", help="Output directory for model and checkpoints")
+    parser.add_argument("--epochs", type=int, default=20, help="Number of epochs for this training stage")
+    parser.add_argument("--samples_per_epoch", type=int, default=1000, help="Number of synthetic sentences generated per epoch")
+    parser.add_argument("--batch_size", type=int, default=4, help="Batch size (safe for thermal/memory)")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
+    parser.add_argument("--num_workers", type=int, default=2, help="Number of DataLoader workers")
+    parser.add_argument("--resume", action="store_true", help="Resume training from latest checkpoint in output_dir")
+    parser.add_argument("--checkpoint_path", type=str, default=None, help="Explicit path to a checkpoint to resume from")
+    return parser.parse_args()
+
+def save_plots(history, plots_dir):
+    os.makedirs(plots_dir, exist_ok=True)
+    num_epochs = len(history['train_loss'])
+    epochs = range(1, num_epochs + 1)
+    
+    # Comprehensive 4-panel metrics plot
+    fig, axs = plt.subplots(2, 2, figsize=(14, 9))
+    axs[0, 0].plot(epochs, history['train_loss'], label='CTC Loss', color='#1f77b4', lw=2)
+    axs[0, 0].set_title('CTC Loss (Lower is Better)')
+    axs[0, 0].set_xlabel('Epoch')
+    axs[0, 0].grid(True, linestyle='--', alpha=0.6)
+    axs[0, 0].legend()
+    
+    axs[0, 1].plot(epochs, history['wer'], label='Word Error Rate (WER)', color='#d62728', lw=2)
+    axs[0, 1].set_title('Word Error Rate (Lower is Better)')
+    axs[0, 1].set_xlabel('Epoch')
+    axs[0, 1].grid(True, linestyle='--', alpha=0.6)
+    axs[0, 1].legend()
+    
+    axs[1, 0].plot(epochs, history['acc'], label='Sentence Accuracy', color='#2ca02c', lw=2)
+    axs[1, 0].set_title('Exact Match Sentence Accuracy (Higher is Better)')
+    axs[1, 0].set_xlabel('Epoch')
+    axs[1, 0].grid(True, linestyle='--', alpha=0.6)
+    axs[1, 0].legend()
+    
+    axs[1, 1].plot(epochs, history['f1'], label='F1 Score', color='#9467bd', lw=2)
+    axs[1, 1].set_title('Sequence F1 Score (Higher is Better)')
+    axs[1, 1].set_xlabel('Epoch')
+    axs[1, 1].grid(True, linestyle='--', alpha=0.6)
+    axs[1, 1].legend()
+    
+    plt.tight_layout()
+    ctc_plot_path = os.path.join(plots_dir, 'ctc_metrics.png')
+    plt.savefig(ctc_plot_path, dpi=150)
+    plt.close()
+    
+    # Loss vs WER comparison plot
+    fig2, ax1 = plt.subplots(figsize=(10, 5))
+    ax1.plot(epochs, history['train_loss'], color='#1f77b4', label='Loss')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Loss', color='#1f77b4')
+    ax2 = ax1.twinx()
+    ax2.plot(epochs, history['wer'], color='#d62728', label='WER')
+    ax2.set_ylabel('WER', color='#d62728')
+    plt.title('Loss and WER Convergence Progression')
+    plt.tight_layout()
+    loss_wer_path = os.path.join(plots_dir, 'loss_and_wer.png')
+    plt.savefig(loss_wer_path, dpi=150)
+    plt.close()
+    print(f"Saved plots to {plots_dir}")
+
 def train_synthetic_sentences():
-    DATA_DIR = r"d:\MookVani\Backend\data\tensors_include50_word_level"
-    MODEL_PATH = r"d:\MookVani\Backend\models\word_level\reconformer_word_model_final.pth"
-    SAVE_PATH = r"d:\MookVani\Backend\models\sentence_level\reconformer_synthetic_sentence.pth"
-    PLOT_PATH = r"d:\MookVani\Backend\models\sentence_level\ctc_metrics.png"
+    args = parse_args()
+    
+    DATA_DIR = args.data_dir
+    OUTPUT_DIR = args.output_dir
+    PLOTS_DIR = os.path.join(OUTPUT_DIR, "plots")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(PLOTS_DIR, exist_ok=True)
+    
+    CHECKPOINT_FILE = os.path.join(OUTPUT_DIR, "reconformer_synthetic_sentence_checkpoint.pth")
+    BEST_MODEL_FILE = os.path.join(OUTPUT_DIR, "reconformer_synthetic_sentence_best.pth")
+    FINAL_MODEL_FILE = os.path.join(OUTPUT_DIR, "reconformer_synthetic_sentence_final.pth")
+    CLASSES_FILE = os.path.join(OUTPUT_DIR, "classes.json")
+    HISTORY_FILE = os.path.join(OUTPUT_DIR, "history.json")
     
     classes = sorted([d for d in os.listdir(DATA_DIR) if os.path.isdir(os.path.join(DATA_DIR, d))])
     classes.append("NONE")
     num_classes = len(classes)
     CTC_BLANK_ID = num_classes 
     
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Training CTC on {device} with {num_classes} classes (Blank ID = {CTC_BLANK_ID})")
+    with open(CLASSES_FILE, "w") as f:
+        json.dump({"classes": classes, "num_classes": num_classes, "ctc_blank_id": CTC_BLANK_ID}, f, indent=2)
     
-    # Instantiate with use_rnn=True to utilize the fully expanded BiGRU -> Transformer -> CNN stack!
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print("=" * 60)
+    print(f"ISL SENTENCE RECONFORMER - STAGE TRAINING")
+    print(f"Device: {device}")
+    print(f"Classes: {num_classes} (CTC Blank ID: {CTC_BLANK_ID})")
+    print(f"Target Directory: {OUTPUT_DIR}")
+    print(f"Plots Directory:  {PLOTS_DIR}")
+    print(f"Stage Epochs: {args.epochs} | Samples/Epoch: {args.samples_per_epoch} | Batch: {args.batch_size}")
+    print("=" * 60)
+    
     model = ISLSentenceReconformer(num_classes=num_classes, d_model=128, lstm_layers=1, dropout=0.5, use_rnn=True).to(device)
     
-    if os.path.exists(MODEL_PATH):
-        print("Loading pre-trained weights to jumpstart CTC training (strict=False to allow architecture shifts)...")
-        model.load_state_dict(torch.load(MODEL_PATH, map_location=device, weights_only=True), strict=False)
+    optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-2)
     
-    train_dataset = SyntheticSentenceDataset(DATA_DIR, classes, max_words=10, is_train=True)
-    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, collate_fn=collate_fn_sentence, num_workers=2)
-    
-    criterion = nn.CTCLoss(blank=CTC_BLANK_ID, zero_infinity=True)
-    optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
-    
-    num_epochs = 100
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
-    
+    start_epoch = 0
+    total_epochs = args.epochs
     best_loss = float('inf')
-    
     history = {'train_loss': [], 'wer': [], 'acc': [], 'f1': []}
     
-    for epoch in range(num_epochs):
+    # Determine checkpoint loading
+    resume_path = None
+    if args.checkpoint_path and os.path.exists(args.checkpoint_path):
+        resume_path = args.checkpoint_path
+    elif args.resume and os.path.exists(CHECKPOINT_FILE):
+        resume_path = CHECKPOINT_FILE
+        
+    if resume_path:
+        print(f"Resuming training from checkpoint: {resume_path}...")
+        ckpt = torch.load(resume_path, map_location=device, weights_only=False)
+        model.load_state_dict(ckpt['model_state_dict'])
+        if 'optimizer_state_dict' in ckpt:
+            optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = args.lr
+        start_epoch = ckpt.get('epoch', 0)
+        total_epochs = start_epoch + args.epochs
+        best_loss = ckpt.get('best_loss', float('inf'))
+        history = ckpt.get('history', history)
+        print(f"Resumed at epoch {start_epoch}. Running {args.epochs} stage epochs to epoch {total_epochs}.")
+    elif os.path.exists(args.pretrained_word_model):
+        print(f"Loading pretrained word weights from {args.pretrained_word_model} (strict=False)...")
+        model.load_state_dict(torch.load(args.pretrained_word_model, map_location=device, weights_only=True), strict=False)
+        
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
+    
+    train_dataset = SyntheticSentenceDataset(DATA_DIR, classes, samples_per_epoch=args.samples_per_epoch, max_words=10, is_train=True)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn_sentence, num_workers=args.num_workers)
+    
+    criterion = nn.CTCLoss(blank=CTC_BLANK_ID, zero_infinity=True)
+    
+    for epoch in range(start_epoch, total_epochs):
         model.train()
         train_loss, train_wer, train_acc, train_f1 = 0, 0, 0, 0
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} [Train]")
+        pbar = tqdm(train_loader, desc=f"Stage Epoch {epoch+1}/{total_epochs} [Train]")
         
         all_preds = []
         all_targets = []
@@ -220,7 +323,6 @@ def train_synthetic_sentences():
             
             train_loss += loss.item()
             
-            # Decode for metrics on the fly (no separate validation set)
             with torch.no_grad():
                 decoded = ctc_decode(log_probs, pooled_lengths, blank=CTC_BLANK_ID)
                 true_seqs = get_targets(targets, target_lengths)
@@ -231,7 +333,6 @@ def train_synthetic_sentences():
             
         train_loss /= len(train_loader)
         
-        # Calculate Metrics on training set
         for ref, hyp in zip(all_targets, all_preds):
             train_wer += compute_wer(ref, hyp)
             train_acc += 1.0 if ref == hyp else 0.0
@@ -250,36 +351,46 @@ def train_synthetic_sentences():
         
         scheduler.step()
         
-        print(f"Epoch {epoch+1}: Loss: {train_loss:.4f} | WER: {train_wer:.4f} | Acc: {train_acc:.4f} | F1: {train_f1:.4f}")
+        print(f"Epoch {epoch+1}/{total_epochs} Complete: Loss: {train_loss:.4f} | WER: {train_wer:.4f} | Acc: {train_acc:.4f} | F1: {train_f1:.4f}")
+        
+        # Save modular state checkpoint every single epoch (guarantees safe resumption)
+        checkpoint_data = {
+            'epoch': epoch + 1,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'best_loss': best_loss,
+            'history': history,
+            'classes': classes,
+            'num_classes': num_classes,
+            'ctc_blank_id': CTC_BLANK_ID,
+            'samples_per_epoch': args.samples_per_epoch
+        }
+        torch.save(checkpoint_data, CHECKPOINT_FILE)
         
         if train_loss < best_loss:
             best_loss = train_loss
-            torch.save(model.state_dict(), SAVE_PATH)
-            print("-> Saved best CTC model!")
+            checkpoint_data['best_loss'] = best_loss
+            torch.save(model.state_dict(), BEST_MODEL_FILE)
+            print(f"-> Saved new best model to {BEST_MODEL_FILE} (Loss: {best_loss:.4f})")
             
-    # Plotting Metrics
-    fig, axs = plt.subplots(2, 2, figsize=(15, 10))
-    epochs = range(1, num_epochs + 1)
-    
-    axs[0, 0].plot(epochs, history['train_loss'], label='Train Loss')
-    axs[0, 0].set_title('CTC Loss (Lower is Better)')
-    axs[0, 0].legend()
-    
-    axs[0, 1].plot(epochs, history['wer'], label='Train WER', color='red')
-    axs[0, 1].set_title('Word Error Rate (Lower is Better)')
-    axs[0, 1].legend()
-    
-    axs[1, 0].plot(epochs, history['acc'], label='Train Exact Match Accuracy', color='green')
-    axs[1, 0].set_title('Sentence Accuracy (Higher is Better)')
-    axs[1, 0].legend()
-    
-    axs[1, 1].plot(epochs, history['f1'], label='Train F1 Score')
-    axs[1, 1].set_title('F1 Metrics (Higher is Better)')
-    axs[1, 1].legend()
-    
-    plt.tight_layout()
-    plt.savefig(PLOT_PATH)
-    print(f"Saved comprehensive metrics plot to {PLOT_PATH}")
+        # Update history JSON and plots periodically
+        with open(HISTORY_FILE, "w") as f:
+            json.dump(history, f, indent=2)
+            
+        if (epoch + 1) % 2 == 0 or (epoch + 1) == total_epochs:
+            save_plots(history, PLOTS_DIR)
+            
+    # Save final stage model
+    torch.save(model.state_dict(), FINAL_MODEL_FILE)
+    save_plots(history, PLOTS_DIR)
+    print("\n" + "=" * 60)
+    print("STAGE TRAINING COMPLETE!")
+    print(f"Final Weights: {FINAL_MODEL_FILE}")
+    print(f"Best Weights:  {BEST_MODEL_FILE}")
+    print(f"Checkpoint:    {CHECKPOINT_FILE}")
+    print(f"Metrics Plots: {PLOTS_DIR}")
+    print("=" * 60)
 
 if __name__ == "__main__":
     train_synthetic_sentences()
