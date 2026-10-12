@@ -18,39 +18,44 @@ from features.extract_features import extract_frame_features_video_mode
 # --- Setup MediaPipe ---
 BaseOptions = mp.tasks.BaseOptions
 VisionMode = mp.tasks.vision.RunningMode.VIDEO
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HAND_TASK = os.path.join(ROOT_DIR, "hand_landmarker.task")
+POSE_TASK = os.path.join(ROOT_DIR, "pose_landmarker.task")
+FACE_TASK = os.path.join(ROOT_DIR, "face_landmarker.task")
 
 hand_options = vision.HandLandmarkerOptions(
-    base_options=BaseOptions(model_asset_path="../hand_landmarker.task"),
+    base_options=BaseOptions(model_asset_path=HAND_TASK),
     running_mode=VisionMode, num_hands=2)
 pose_options = vision.PoseLandmarkerOptions(
-    base_options=BaseOptions(model_asset_path="../pose_landmarker.task"),
+    base_options=BaseOptions(model_asset_path=POSE_TASK),
     running_mode=VisionMode)
 face_options = vision.FaceLandmarkerOptions(
-    base_options=BaseOptions(model_asset_path="../face_landmarker.task"),
+    base_options=BaseOptions(model_asset_path=FACE_TASK),
     running_mode=VisionMode)
 
-# No CTC needed for word-level mean-pooled model
+def load_mookvani_model(device):
+    MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "word_level", "reconformer_word_135_best.pth")
+    CLASSES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "word_level", "classes_135.json")
+
+    if not os.path.exists(MODEL_PATH) or not os.path.exists(CLASSES_PATH):
+        raise FileNotFoundError(f"Model or classes file missing! Looked for {MODEL_PATH} and {CLASSES_PATH}")
+
+    with open(CLASSES_PATH, "r") as f:
+        meta = json.load(f)
+    classes = meta["classes"]
+    num_classes = len(classes) - 1 # 135 gesture classes (+ 1 NONE = 136 outputs)
+    idx_to_class = {i: c for i, c in enumerate(classes)}
+
+    print(f"Loading Reconformer (135 classes + NONE) on {device}...")
+    model = ISLSentenceReconformer(num_classes=num_classes, d_model=128, lstm_layers=1, dropout=0.0, use_rnn=True).to(device)
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=device, weights_only=True))
+    model.eval()
+    print("Model loaded successfully!")
+    return model, classes, idx_to_class
 
 def run_live_inference():
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model_path = r"d:\MookVani\Backend\models\isl_sentence_reconformer.pth"
-    DATA_DIR = r"d:\MookVani\Backend\data\tensors_include50_word_level"
-
-    if not os.path.exists(model_path):
-        print(f"Error: Ensure {model_path} exists!")
-        return
-
-    # Dynamically build classes exactly like training
-    classes = sorted([d for d in os.listdir(DATA_DIR) if os.path.isdir(os.path.join(DATA_DIR, d))])
-    classes.append("NONE")
-    class_to_idx = {cls: idx for idx, cls in enumerate(classes)}
-    idx_to_class = {i: c for c, i in class_to_idx.items()}
-    num_classes = len(class_to_idx)
-    
-    print("Loading Reconformer model...")
-    model = ISLSentenceReconformer(num_classes=num_classes, d_model=128, lstm_layers=1, dropout=0.0, freeze_base=False).to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
-    model.eval()
+    model, classes, idx_to_class = load_mookvani_model(device)
     
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
@@ -185,5 +190,85 @@ def run_live_inference():
     cap.release()
     cv2.destroyAllWindows()
 
+def run_simulated_inference():
+    """
+    Demonstrates live streaming inference using real gesture pose landmark files,
+    streaming frames through the buffer with real-time sliding window inference.
+    """
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model, classes, idx_to_class = load_mookvani_model(device)
+    
+    DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "tensors_include50_word_level")
+    
+    test_words = ["brother", "priest", "hospital", "time", "boat", "mother"]
+    available_words = [w for w in test_words if os.path.isdir(os.path.join(DATA_DIR, w))]
+    if not available_words:
+        available_words = [d for d in os.listdir(DATA_DIR) if os.path.isdir(os.path.join(DATA_DIR, d)) and d != "NONE"][:5]
+        
+    print("\n" + "=" * 75)
+    print("MOOKVANI LIVE INFERENCE SIMULATION (REAL-TIME SLIDING WINDOW)")
+    print(f"Testing Words: {', '.join(available_words)}")
+    print("=" * 75)
+    
+    for word_target in available_words:
+        word_dir = os.path.join(DATA_DIR, word_target)
+        files = [os.path.join(word_dir, f) for f in os.listdir(word_dir) if f.endswith(".pt")]
+        if not files:
+            continue
+            
+        test_file = files[0]
+        video_tensor = torch.load(test_file, weights_only=True) # [T, 163]
+        total_frames = video_tensor.shape[0]
+        
+        print(f"\n>>> SIGNING GESTURE: [{word_target.upper()}] ({total_frames} frames from {os.path.basename(test_file)})")
+        print(f"{'FRAME':<8} | {'BUFFER':<8} | {'CONFIDENCE':<12} | {'PREDICTION':<20} | {'STATUS':<15}")
+        print("-" * 75)
+        
+        frame_buffer = []
+        last_prediction = ""
+        detected = False
+        
+        for f_idx in range(total_frames):
+            frame_feat = video_tensor[f_idx].numpy()
+            frame_buffer.append(frame_feat)
+            if len(frame_buffer) > 150:
+                frame_buffer = frame_buffer[-150:]
+                
+            # Run sliding window inference every 5 frames if buffer has at least 20 frames
+            if len(frame_buffer) >= 20 and len(frame_buffer) % 5 == 0:
+                tensor_data = torch.tensor(np.array(frame_buffer), dtype=torch.float32).unsqueeze(0).to(device)
+                lengths = torch.tensor([tensor_data.size(1)], dtype=torch.long).to(device)
+                
+                with torch.no_grad():
+                    log_probs, _ = model(tensor_data, lengths)
+                    
+                log_probs_pooled = log_probs.mean(dim=1)
+                probs = torch.exp(log_probs_pooled).squeeze(0)
+                max_prob, pred_idx = probs.max(dim=-1)
+                pred_idx = pred_idx.item()
+                max_prob = max_prob.item()
+                pred_word = idx_to_class.get(pred_idx, "NONE")
+                
+                status = ""
+                if pred_word == word_target:
+                    status = "[MATCH!]"
+                    detected = True
+                elif pred_word != "NONE":
+                    status = "Active"
+                else:
+                    status = "Rest/Transition"
+                    
+                print(f"{f_idx+1:<8} | {len(frame_buffer):<8} | {max_prob*100:>5.1f}%       | {pred_word:<20} | {status}")
+                
+        print(f"Result for [{word_target}]: {'SUCCESSFULLY DETECTED' if detected else 'Completed'}")
+        
+    print("\n" + "=" * 75)
+    print("LIVE SIMULATION COMPLETE!")
+    print("=" * 75 + "\n")
+
 if __name__ == "__main__":
-    run_live_inference()
+    if len(sys.argv) > 1 and sys.argv[1] in ["--test", "--simulate", "-t"]:
+        run_simulated_inference()
+    else:
+        run_live_inference()
+
