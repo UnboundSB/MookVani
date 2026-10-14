@@ -18,7 +18,7 @@ Model training and evaluation scripts for word-level and sentence-level sign rec
 - `structure.md`: Directory structure documentation for training.
 - `train_reconformer_word.py`: Primary training script for ReConformer word-level models.
 - `train_synthetic.py`: Trains sign recognition models using synthetic pose sequences.
-- `train_synthetic_sentences.py`: Trains continuous sentence models using Connectionist Temporal Classification (CTC).
+- `train_synthetic_sentences.py`: Phase 1 continuous sentence trainer using CTC loss. Generates synthetic sentences (1-10 words, no repetition, smooth co-articulation, uniform sentence-level flip/shift/tilt augmentations), loads all uncapped class samples, and trains the CTC head over a frozen Phase 6 backbone.
 - `train_weak_classes.py`: Implements class re-weighting and focused training on underrepresented sign classes.
 - `train_word_135.py`: Specialized training routine for the 135-class isolated sign vocabulary.
 
