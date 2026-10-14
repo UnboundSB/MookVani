@@ -69,7 +69,13 @@ def run_live_inference():
     
     frame_buffer = []
     no_hand_counter = 0
+    still_counter = 0
+    cooldown_counter = 0
+    display_hold_counter = 0
     current_prediction = ""
+    top3_info = []
+    prev_lh_wrist = np.zeros(2)
+    prev_rh_wrist = np.zeros(2)
     start_time_ms = int(time.time() * 1000)
 
     with vision.HandLandmarker.create_from_options(hand_options) as hand_lm, \
@@ -95,7 +101,6 @@ def run_live_inference():
             lh_flag, rh_flag = False, False
 
             if hands and hands.hand_landmarks:
-                no_hand_counter = 0
                 for idx, handedness in enumerate(hands.handedness):
                     label = handedness[0].category_name
                     pts = np.array([[lm.x, lm.y, lm.z] for lm in hands.hand_landmarks[idx]])
@@ -103,8 +108,6 @@ def run_live_inference():
                         hands_lh = pts; lh_flag = True
                     else:
                         hands_rh = pts; rh_flag = True
-            else:
-                no_hand_counter += 1
 
             pose_lms = pose.pose_landmarks if pose and pose.pose_landmarks else None
             face_lms = face.face_landmarks if face and face.face_landmarks else None
@@ -115,42 +118,89 @@ def run_live_inference():
                 last_lh, last_rh, last_arms, last_face
             )
 
-            # If hands are visible, or we are within a short grace period, append to buffer
-            if no_hand_counter < 15:
-                frame_buffer.append(feat_vector)
-                # Refresh mechanism: keep only the last 150 frames (~5 seconds) to prevent VRAM bloat
-                if len(frame_buffer) > 150:
-                    frame_buffer = frame_buffer[-150:]
-            else:
-                # Idle for a while, clear buffer and prediction
-                if len(frame_buffer) > 0:
+            # Measure wrist velocity to detect active signing vs stationary idle hands
+            lh_speed = np.linalg.norm(hands_lh[0, :2] - prev_lh_wrist) if (lh_flag and np.any(prev_lh_wrist != 0)) else 0.0
+            rh_speed = np.linalg.norm(hands_rh[0, :2] - prev_rh_wrist) if (rh_flag and np.any(prev_rh_wrist != 0)) else 0.0
+            hand_speed = max(lh_speed, rh_speed)
+            if lh_flag: prev_lh_wrist = hands_lh[0, :2].copy()
+            if rh_flag: prev_rh_wrist = hands_rh[0, :2].copy()
+
+            # Countdown timers for display hold and post-detection cooldown
+            if cooldown_counter > 0:
+                cooldown_counter -= 1
+            if display_hold_counter > 0:
+                display_hold_counter -= 1
+            elif display_hold_counter == 0 and current_prediction and not current_prediction.startswith("["):
+                current_prediction = ""
+
+            # Buffer accumulation with motion gating
+            if hands and (lh_flag or rh_flag):
+                no_hand_counter = 0
+                if hand_speed < 0.008:
+                    still_counter += 1
+                else:
+                    still_counter = 0
+
+                # Append frame only during active signing (outside of post-emission cooldown)
+                if cooldown_counter == 0:
+                    frame_buffer.append(feat_vector)
+                    if len(frame_buffer) > 75:
+                        frame_buffer = frame_buffer[-75:]
+
+                # If hands remain stationary/still for > 18 frames (~0.6s), flush buffer
+                # (Prevents resting static hand positions from accumulating as fake signs like 'tall'/'wide')
+                if still_counter > 18 and len(frame_buffer) > 0:
                     frame_buffer.clear()
-                    current_prediction = ""
-                    # Reset last states
+                    top3_info = []
+            else:
+                no_hand_counter += 1
+                still_counter = 0
+                # Hands lowered or left frame: flush buffer and reset tracking state
+                if no_hand_counter >= 12:
+                    if len(frame_buffer) > 0:
+                        frame_buffer.clear()
+                        top3_info = []
+                    prev_lh_wrist = np.zeros(2)
+                    prev_rh_wrist = np.zeros(2)
                     last_lh, last_rh = np.zeros((21, 3)), np.zeros((21, 3))
                     last_arms, last_face = np.zeros((4, 3)), np.zeros((7, 3))
 
-            # Run inference periodically if we have enough frames (e.g. 60 frames = ~2 seconds of context)
-            if len(frame_buffer) >= 60 and len(frame_buffer) % 5 == 0:
+            # Trigger inference at sign completion:
+            # (a) Hand just slowed down / stroke ended (still_counter >= 2 with at least 25 frames)
+            # OR (b) Buffer reached 55 frames of continuous active motion
+            stroke_ended = (still_counter >= 2 and len(frame_buffer) >= 25)
+            buffer_ripe = (len(frame_buffer) >= 55 and len(frame_buffer) % 4 == 0)
+
+            if cooldown_counter == 0 and (stroke_ended or buffer_ripe):
                 tensor_data = torch.tensor(np.array(frame_buffer), dtype=torch.float32).unsqueeze(0).to(device)
                 lengths = torch.tensor([tensor_data.size(1)], dtype=torch.long).to(device)
                 
                 with torch.no_grad():
                     log_probs, _ = model(tensor_data, lengths)
                     
-                # Mean pool temporal logits exactly like train_reconformer_word.py
-                log_probs_pooled = log_probs.mean(dim=1)
-                probs = torch.exp(log_probs_pooled).squeeze(0) # (C,)
+                # Correct probability pooling: average probabilities directly (sums to 1.0)
+                probs = torch.exp(log_probs).mean(dim=1).squeeze(0) # (C,)
                 
-                max_prob, predicted_idx = probs.max(dim=-1)
-                predicted_idx = predicted_idx.item()
-                max_prob = max_prob.item()
+                top_probs, top_indices = torch.topk(probs, 3)
+                top3_info = [(idx_to_class.get(idx.item(), "NONE"), p.item()) for idx, p in zip(top_indices, top_probs)]
                 
+                max_prob = top_probs[0].item()
+                predicted_idx = top_indices[0].item()
                 word = idx_to_class.get(predicted_idx, "NONE")
-                print(f"DEBUG: Predicted [{word}] | Prob: {max_prob:.2f}")
                 
-                if max_prob > 0.3 and word != "NONE":
-                    current_prediction = word
+                print(f"DEBUG: Predicted [{word}] | Prob: {max_prob:.2f} | Buffer: {len(frame_buffer)} | Speed: {hand_speed:.3f}")
+                
+                # Active gesture detection threshold
+                if max_prob >= 0.38 and word != "NONE":
+                    current_prediction = f"{word.upper()} ({max_prob*100:.0f}%)"
+                    display_hold_counter = 75  # Hold visible for ~2.5s
+                    cooldown_counter = 18       # 0.6s cooldown before accepting next sign
+                    # FLUSH BUFFER: Completely clear buffer so this gesture cannot re-trigger
+                    frame_buffer.clear()
+                    print(f">>> [DETECTED & BUFFER FLUSHED] -> {current_prediction}")
+                elif stroke_ended and len(frame_buffer) > 0:
+                    # Stroke finished but confidence didn't reach threshold: flush to avoid stale re-prediction
+                    frame_buffer.clear()
 
             # Draw landmarks manually with OpenCV to avoid mediapipe solutions versioning issues
             if hands and hands.hand_landmarks:
@@ -168,19 +218,34 @@ def run_live_inference():
             # Enlarge frame for better visibility
             frame = cv2.resize(frame, (1280, 720))
 
-            # Display logic
+            # Semi-transparent HUD overlay on top-left
+            overlay = frame.copy()
+            cv2.rectangle(overlay, (10, 10), (450, 170), (20, 20, 20), -1)
+            cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+
+            # Tracking status indicator
             status_color = (0, 255, 0) if no_hand_counter < 15 else (0, 0, 255)
-            cv2.circle(frame, (30, 30), 10, status_color, -1)
+            status_text = "Hands Active" if no_hand_counter < 15 else "Hands Idle"
+            cv2.circle(frame, (30, 35), 8, status_color, -1)
+            cv2.putText(frame, f"MOOKVANI ISL: {status_text} (Buf: {len(frame_buffer)})", (48, 40), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (220, 220, 220), 1, cv2.LINE_AA)
             
-            # Show prediction (Black outline)
-            cv2.putText(frame, current_prediction, (15, 80), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 6, cv2.LINE_AA)
-            # Show prediction (Deep Blue fill in BGR: 255, 130, 0)
-            cv2.putText(frame, current_prediction, (15, 80), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 130, 0), 3, cv2.LINE_AA)
+            # Show prediction
+            pred_color = (0, 230, 255) if current_prediction and "NONE" not in current_prediction else (180, 180, 180)
+            cv2.putText(frame, current_prediction if current_prediction else "[Awaiting gesture...]", (25, 80), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.1, pred_color, 2, cv2.LINE_AA)
                         
-            cv2.putText(frame, f"Frames: {len(frame_buffer)}", (15, 120), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (200, 200, 200), 2, cv2.LINE_AA)
+            # Show top 3 candidate predictions
+            if top3_info:
+                cand_str = " | ".join([f"{w}: {p*100:.0f}%" for w, p in top3_info])
+                cv2.putText(frame, f"Top Candidates: {cand_str}", (25, 120), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1, cv2.LINE_AA)
+            else:
+                cv2.putText(frame, "Start signing in front of the camera...", (25, 120), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (160, 160, 160), 1, cv2.LINE_AA)
+
+            cv2.putText(frame, "Press 'q' to quit", (25, 155), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (130, 130, 130), 1, cv2.LINE_AA)
 
             cv2.imshow("MookVani Live ISL Translation", frame)
             
@@ -231,19 +296,20 @@ def run_simulated_inference():
         for f_idx in range(total_frames):
             frame_feat = video_tensor[f_idx].numpy()
             frame_buffer.append(frame_feat)
-            if len(frame_buffer) > 150:
-                frame_buffer = frame_buffer[-150:]
+            if len(frame_buffer) > 100:
+                frame_buffer = frame_buffer[-100:]
                 
             # Run sliding window inference every 5 frames if buffer has at least 20 frames
             if len(frame_buffer) >= 20 and len(frame_buffer) % 5 == 0:
-                tensor_data = torch.tensor(np.array(frame_buffer), dtype=torch.float32).unsqueeze(0).to(device)
+                active_window = frame_buffer[-70:]
+                tensor_data = torch.tensor(np.array(active_window), dtype=torch.float32).unsqueeze(0).to(device)
                 lengths = torch.tensor([tensor_data.size(1)], dtype=torch.long).to(device)
                 
                 with torch.no_grad():
                     log_probs, _ = model(tensor_data, lengths)
                     
-                log_probs_pooled = log_probs.mean(dim=1)
-                probs = torch.exp(log_probs_pooled).squeeze(0)
+                # Correct probability pooling: average probabilities directly (sums to 1.0)
+                probs = torch.exp(log_probs).mean(dim=1).squeeze(0)
                 max_prob, pred_idx = probs.max(dim=-1)
                 pred_idx = pred_idx.item()
                 max_prob = max_prob.item()
@@ -258,7 +324,7 @@ def run_simulated_inference():
                 else:
                     status = "Rest/Transition"
                     
-                print(f"{f_idx+1:<8} | {len(frame_buffer):<8} | {max_prob*100:>5.1f}%       | {pred_word:<20} | {status}")
+                print(f"{f_idx+1:<8} | {len(active_window):<8} | {max_prob*100:>5.1f}%       | {pred_word:<20} | {status}")
                 
         print(f"Result for [{word_target}]: {'SUCCESSFULLY DETECTED' if detected else 'Completed'}")
         

@@ -29,7 +29,7 @@ def main():
     print(" Co-articulation:   Smooth 3-5 frame motion blending between consecutive words")
     print(" Stage Epochs:      10 epochs (Optimal Early Stopping before gradient drift)")
     print(" Differential LR:   2.0e-4 (RNN) / 2.0e-5 (Backbone)")
-    print(" Emission Penalty:  0.50 (Strict Anti-Blank Penalty for active emissions)")
+    print(" Emission Penalty:  0.0 (Standard unpenalized CTC blank dynamics)")
     print(" Batch Size:        4 (with periodic gc.collect and cuda cache clear)")
     print("=" * 70 + "\n")
     
@@ -40,7 +40,7 @@ def main():
         '--min_words', '1',
         '--max_words', '3',
         '--lr', '2.0e-4',
-        '--emission_penalty', '0.50',
+        '--emission_penalty', '0.0',
         '--batch_size', '4'
     ]
     

@@ -1,0 +1,7 @@
+tensors_include50_word_level — Frame / Duration Analysis
+Tensors : 4273   Classes : 262   Source FPS : 25.0
+
+Frame Count:  min=33  median=62  mean=64.4  max=276  std=15.4
+Duration (s): min=1.32  median=2.48  mean=2.57  max=11.04  std=0.62
+P25/P75 frames: 54 / 72
+P95 frames: 93

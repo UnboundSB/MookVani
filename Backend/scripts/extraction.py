@@ -140,3 +140,15 @@ def extract_frame_features_video_mode(hands_lh, hands_rh, hands_lh_flag, hands_r
     ]).astype(np.float32)
 
     return frame_data, lh, rh, arms, face_pts
+
+
+def clean_word(w):
+    """Normalize sign glosses and folder names to clean identifiers."""
+    import re
+    if w is None:
+        return ""
+    w = str(w).strip().lower()
+    w = re.sub(r'^\d+\.\s*', '', w)
+    w = re.sub(r'[^\w\s]', '', w)
+    return w.strip()
+

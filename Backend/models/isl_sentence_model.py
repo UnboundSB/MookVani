@@ -32,7 +32,7 @@ class ISLSentenceReconformer(nn.Module):
         trans_layers=4, 
         num_heads=8, 
         dropout=0.3,
-        use_rnn=False, # <-- The magic toggle!
+        use_rnn=True, # Default to True: Data enters RNN -> Transformer -> TCNN
         freeze_base=False
     ):
         super().__init__()
@@ -47,7 +47,7 @@ class ISLSentenceReconformer(nn.Module):
             nn.Dropout(dropout)
         )
         
-        # 1. RNN ENCODER (Toggleable!)
+        # 1. RNN ENCODER: Bi-directional GRU
         self.rnn = nn.GRU(
             input_size=d_model,
             hidden_size=d_model // 2,
@@ -56,6 +56,7 @@ class ISLSentenceReconformer(nn.Module):
             bidirectional=True,
             dropout=dropout if lstm_layers > 1 else 0
         )
+        self.rnn_norm = nn.LayerNorm(d_model)
         
         # 2. TRANSFORMER (Global Attention)
         self.pos_encoder = PositionalEncoding(d_model)
@@ -69,7 +70,7 @@ class ISLSentenceReconformer(nn.Module):
         )
         self.transformer = nn.TransformerEncoder(encoder_layers, trans_layers)
         
-        # 3. CNN Classifier
+        # 3. TCNN Classifier (Temporal CNN)
         self.cnn = nn.Sequential(
             nn.Conv1d(d_model, d_model, kernel_size=5, padding=2),
             nn.BatchNorm1d(d_model),
@@ -120,18 +121,19 @@ class ISLSentenceReconformer(nn.Module):
         # 0. Initial Dense Expansion
         x = self.input_dense(x)
         
-        # 1. (Optional) RNN Encoder
+        # 1. RNN Encoder: Bi-directional temporal context
         if self.use_rnn:
             lengths_cpu = lengths.cpu()
             packed_x = nn.utils.rnn.pack_padded_sequence(x, lengths_cpu, batch_first=True, enforce_sorted=False)
             packed_out, _ = self.rnn(packed_x)
-            x, _ = nn.utils.rnn.pad_packed_sequence(packed_out, batch_first=True, total_length=T)
+            rnn_out, _ = nn.utils.rnn.pad_packed_sequence(packed_out, batch_first=True, total_length=T)
+            x = self.rnn_norm(x + rnn_out)
             
-        # 2. Transformer
+        # 2. Transformer: Global cross-frame attention
         out_trans = self.pos_encoder(x)
         out_trans = self.transformer(out_trans, src_key_padding_mask=pad_mask)
         
-        # 3. CNN Classifier
+        # 3. TCNN Classifier: Local multi-scale feature refinement
         out_cnn = out_trans.transpose(1, 2)
         logits = self.cnn(out_cnn)
         logits = logits.transpose(1, 2)
@@ -139,3 +141,51 @@ class ISLSentenceReconformer(nn.Module):
         logits = logits.masked_fill(pad_mask.unsqueeze(-1), 0.0)
         
         return F.log_softmax(logits, dim=-1), lengths
+
+    def forward_word_logits(self, x, lengths):
+        """
+        Extracts temporal frames through RNN -> Transformer -> TCNN and applies
+        masked temporal average pooling in logit space.
+        Returns:
+            logits_pooled: (B, num_classes + 1) un-normalized pooled logits
+        """
+        B, T, _ = x.shape
+        arange = torch.arange(T, device=x.device).unsqueeze(0).expand(B, -1)
+        pad_mask = arange >= lengths.unsqueeze(1)
+        
+        # 0. Initial Dense Expansion
+        x = self.input_dense(x)
+        
+        # 1. RNN Encoder: Bi-directional temporal context
+        if self.use_rnn:
+            lengths_cpu = lengths.cpu()
+            packed_x = nn.utils.rnn.pack_padded_sequence(x, lengths_cpu, batch_first=True, enforce_sorted=False)
+            packed_out, _ = self.rnn(packed_x)
+            rnn_out, _ = nn.utils.rnn.pad_packed_sequence(packed_out, batch_first=True, total_length=T)
+            x = self.rnn_norm(x + rnn_out)
+            
+        # 2. Transformer: Global cross-frame attention
+        out_trans = self.pos_encoder(x)
+        out_trans = self.transformer(out_trans, src_key_padding_mask=pad_mask)
+        
+        # 3. TCNN Classifier: Local multi-scale feature refinement
+        out_cnn = out_trans.transpose(1, 2)
+        logits = self.cnn(out_cnn).transpose(1, 2) # (B, T, num_classes + 1)
+        
+        # Mask out padding frames and average across valid frames
+        valid_mask = (~pad_mask).unsqueeze(-1).float()
+        logits_masked = logits * valid_mask
+        logits_pooled = logits_masked.sum(dim=1) / lengths.unsqueeze(1).clamp(min=1).float()
+        return logits_pooled
+
+    def predict_word_probs(self, x, lengths):
+        """
+        Length-normalized probability pooling across sequence frames.
+        Returns:
+            probs_pooled: (B, num_classes + 1) normalized probabilities summing to 1.0
+            log_probs_pooled: (B, num_classes + 1) log-probabilities for loss computation
+        """
+        logits_pooled = self.forward_word_logits(x, lengths)
+        probs_pooled = F.softmax(logits_pooled, dim=-1)
+        log_probs_pooled = F.log_softmax(logits_pooled, dim=-1)
+        return probs_pooled, log_probs_pooled

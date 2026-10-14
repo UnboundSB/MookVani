@@ -22,6 +22,10 @@ Backend/data/word_level_images_augmented/
 Backend/data/word_level_images_val_holdout/
 Backend/data/extracted_videos/
 Backend/data/isign_dataset/
+ISL_CSLRT_Corpus/
+*ISL_CSLRT*
+*isl_csltr*
+data/
 *.mp4
 *.tar
 *.crdownload

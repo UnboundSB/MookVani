@@ -193,7 +193,7 @@ def get_targets(targets, target_lengths):
 def parse_args():
     parser = argparse.ArgumentParser(description="Stage-oriented CTC Training on Synthetic ISL Sentences")
     parser.add_argument("--data_dir", type=str, default=r"d:\MookVani\Backend\data\tensors_include50_word_level", help="Path to pose tensor directory")
-    parser.add_argument("--pretrained_word_model", type=str, default=r"d:\MookVani\Backend\models\word_level\reconformer_word_135_best.pth", help="Pretrained word model checkpoint")
+    parser.add_argument("--pretrained_word_model", type=str, default=r"d:\MookVani\Backend\models\word_level\reconformer_word_model.pth", help="Pretrained word model checkpoint")
     parser.add_argument("--output_dir", type=str, default=r"d:\MookVani\Backend\models\islsentence_synthetic", help="Output directory for model and checkpoints")
     parser.add_argument("--epochs", type=int, default=12, help="Number of epochs for this training stage")
     parser.add_argument("--samples_per_epoch", type=int, default=1000, help="Number of synthetic sentences generated per epoch")
@@ -201,7 +201,7 @@ def parse_args():
     parser.add_argument("--max_words", type=int, default=4, help="Maximum number of words per synthetic sentence")
     parser.add_argument("--batch_size", type=int, default=4, help="Batch size (safe for thermal/memory)")
     parser.add_argument("--lr", type=float, default=1.0e-4, help="Learning rate")
-    parser.add_argument("--emission_penalty", type=float, default=0.20, help="Anti-blank penalty factor during gesture frames")
+    parser.add_argument("--emission_penalty", type=float, default=0.0, help="Anti-blank penalty factor during gesture frames (0.0 for pure CTC)")
     parser.add_argument("--num_workers", type=int, default=0, help="Number of DataLoader workers (0 for Windows stability)")
     parser.add_argument("--resume", action="store_true", help="Resume training from latest checkpoint in output_dir")
     parser.add_argument("--checkpoint_path", type=str, default=None, help="Explicit path to a checkpoint to resume from")
@@ -272,8 +272,8 @@ def train_synthetic_sentences():
     HISTORY_FILE = os.path.join(OUTPUT_DIR, "history.json")
     
     all_classes = sorted([d for d in os.listdir(DATA_DIR) if os.path.isdir(os.path.join(DATA_DIR, d))])
-    # Filter in memory to classes having >= 15 samples (135 classes) without modifying or deleting any files on disk
-    classes = sorted([c for c in all_classes if len(glob.glob(os.path.join(DATA_DIR, c, "*.pt"))) >= 15])
+    # Filter in memory to all balanced classes having >= 14 samples (228 classes) without modifying or deleting any files on disk
+    classes = sorted([c for c in all_classes if len(glob.glob(os.path.join(DATA_DIR, c, "*.pt"))) >= 14])
     classes.append("NONE")
     num_classes = len(classes)
     CTC_BLANK_ID = num_classes 
@@ -413,7 +413,7 @@ def train_synthetic_sentences():
             silence_penalty = silence_penalty / max(1, x.size(0))
             emission_penalty = emission_penalty / max(1, x.size(0))
             
-            loss = ctc_loss + 1.0 * silence_penalty + args.emission_penalty * emission_penalty
+            loss = ctc_loss + 0.1 * silence_penalty + args.emission_penalty * emission_penalty
             loss.backward()
             optimizer.step()
             
