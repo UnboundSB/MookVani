@@ -142,11 +142,11 @@ def flip_pose(seq):
     ra = coords[:, [43, 45], :].clone()
     coords[:, [42, 44], :] = ra
     coords[:, [43, 45], :] = la
-    # Swap face landmarks
-    lf = coords[:, [46, 49], :].clone()
-    rf = coords[:, [47, 50], :].clone()
-    coords[:, [46, 49], :] = rf
-    coords[:, [47, 50], :] = lf
+    # Swap face landmarks (eyes 46/47, cheeks 49/50, mouth corners 51/52)
+    lf = coords[:, [46, 49, 51], :].clone()
+    rf = coords[:, [47, 50, 52], :].clone()
+    coords[:, [46, 49, 51], :] = rf
+    coords[:, [47, 50, 52], :] = lf
     # Swap presence indicators
     l2 = seq[:, 159].clone()
     r2 = seq[:, 160].clone()
@@ -196,6 +196,14 @@ def shift_pose(seq, shift_x_max=SHIFT_X_MAX, shift_y_max=SHIFT_Y_MAX):
     coords[:, :, 0] += dx
     if dy != 0.0:
         coords[:, :, 1] += dy
+
+    # Re-clamp resting sentinel coordinates for missing hands
+    for t in range(T):
+        if seq[t, 159] == 0:
+            coords[t, 0:21, :] = torch.tensor([-1.5, 3.0, 0.0], device=seq.device)
+        if seq[t, 160] == 0:
+            coords[t, 21:42, :] = torch.tensor([1.5, 3.0, 0.0], device=seq.device)
+
     seq[:, :159] = coords.view(T, 159)
     return seq
 
@@ -338,6 +346,7 @@ class Phase6Model(nn.Module):
         return list(self.head.parameters())
 
     def forward(self, x):
+        self.gru.flatten_parameters()
         h = self.proj(x)
         g, _ = self.gru(h)
         h = self.gnorm(h + g)
