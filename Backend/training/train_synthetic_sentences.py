@@ -534,11 +534,15 @@ def parse_args():
     parser.add_argument("--data_dir", type=str, default=DATA_DIR_DEFAULT, help="Path to word tensors directory")
     parser.add_argument("--phase6_ckpt", type=str, default=PHASE6_CKPT_DEFAULT, help="Phase 6 best model checkpoint")
     parser.add_argument("--output_dir", type=str, default=OUTPUT_DIR_DEFAULT, help="Directory to save sentence model artifacts")
-    parser.add_argument("--epochs", type=int, default=10, help="Number of training epochs")
+    parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs to run")
     parser.add_argument("--train_samples", type=int, default=1200, help="Synthetic sentences per train epoch")
     parser.add_argument("--val_samples", type=int, default=200, help="Synthetic sentences per val epoch")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch size")
     parser.add_argument("--lr", type=float, default=1.0e-3, help="Learning rate for trainable CTC head")
+    parser.add_argument("--backbone_lr", type=float, default=1.0e-5, help="Learning rate for backbone when unfrozen")
+    parser.add_argument("--unfreeze_backbone", action="store_true", help="Unfreeze all backbone parameters for end-to-end training")
+    parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint in output_dir")
+    parser.add_argument("--checkpoint_path", type=str, default=None, help="Explicit checkpoint to resume from")
     parser.add_argument("--num_workers", type=int, default=0, help="DataLoader workers (0 for Windows)")
     return parser.parse_args()
 
@@ -570,20 +574,72 @@ def train_phase1_sentence():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("=" * 65)
     print("PHASE 1 SENTENCE TRAINER - SYNTHETIC ISL SENTENCES (CTC)")
-    print(f"Device:           {device}")
-    print(f"Word Classes:     {num_classes} (CTC Blank ID: {CTC_BLANK_ID})")
-    print(f"Pretrained Model: {args.phase6_ckpt}")
-    print(f"Output Directory: {args.output_dir}")
-    print(f"Sentence Range:   1 to 10 words (No repetition within sentence)")
-    print(f"Total Epochs:     {args.epochs} | Train Samples: {args.train_samples} | Val: {args.val_samples} | Batch: {args.batch_size}")
+    print(f"Device:            {device}")
+    print(f"Word Classes:      {num_classes} (CTC Blank ID: {CTC_BLANK_ID})")
+    print(f"Pretrained Model:  {args.phase6_ckpt}")
+    print(f"Output Directory:  {args.output_dir}")
+    print(f"Backbone Status:   {'UNFROZEN (End-to-End Fine-Tuning)' if args.unfreeze_backbone else 'FROZEN (Training CTC Head Only)'}")
+    print(f"Sentence Range:    1 to 10 words (No repetition within sentence)")
+    print(f"Stage Epochs:      {args.epochs} | Train Samples: {args.train_samples} | Val: {args.val_samples} | Batch: {args.batch_size}")
     print("=" * 65)
 
-    # Initialize Model & Load Phase 6 Weights
+    # Initialize Model
     model = Phase1SentenceModel(num_classes=num_classes, d=128, gru_layers=2, n_head=4, n_trans=2, drop=0.15).to(device)
-    if os.path.exists(args.phase6_ckpt):
+
+    start_epoch = 0
+    best_wer = float("inf")
+    best_loss = float("inf")
+    history = {"train_loss": [], "val_loss": [], "wer": [], "acc": [], "f1": []}
+
+    resume_path = None
+    if args.checkpoint_path and os.path.exists(args.checkpoint_path):
+        resume_path = args.checkpoint_path
+    elif args.resume and os.path.exists(CHECKPOINT_FILE):
+        resume_path = CHECKPOINT_FILE
+
+    if resume_path:
+        print(f"[RESUME] Loading weights from checkpoint: {resume_path}")
+        ckpt = torch.load(resume_path, map_location=device, weights_only=False)
+        if "model_state_dict" in ckpt:
+            model.load_state_dict(ckpt["model_state_dict"])
+            start_epoch = ckpt.get("epoch", 0)
+            best_wer = ckpt.get("val_wer", float("inf"))
+            best_loss = ckpt.get("val_loss", float("inf"))
+            history = ckpt.get("history", history)
+            print(f"[RESUME] Resuming from Epoch {start_epoch} (Best WER: {best_wer*100:.2f}%)")
+        else:
+            model.load_state_dict(ckpt)
+            print(f"[RESUME] Loaded model weights from {resume_path}")
+    elif os.path.exists(args.phase6_ckpt):
         model.load_phase6_backbone(args.phase6_ckpt)
     else:
         print(f"[WARNING] Pretrained Phase 6 checkpoint not found at {args.phase6_ckpt}! Starting CTC head with random backbone.")
+
+    # Configure Freezing vs Unfreezing
+    if args.unfreeze_backbone:
+        for p in model.parameters():
+            p.requires_grad = True
+        backbone_params = [p for n, p in model.named_parameters() if not n.startswith("ctc_head.")]
+        head_params = [p for n, p in model.named_parameters() if n.startswith("ctc_head.")]
+        optimizer = optim.AdamW([
+            {"params": backbone_params, "lr": args.backbone_lr, "weight_decay": 1e-4},
+            {"params": head_params, "lr": args.lr, "weight_decay": 1e-3}
+        ])
+        print(f"[UNFREEZE] All layers trainable:")
+        print(f"           - Backbone Parameters: {sum(p.numel() for p in backbone_params):,} (LR: {args.backbone_lr})")
+        print(f"           - CTC Head Parameters: {sum(p.numel() for p in head_params):,} (LR: {args.lr})")
+    else:
+        for name, param in model.named_parameters():
+            if "ctc_head" in name:
+                param.requires_grad = True
+            else:
+                param.requires_grad = False
+        optimizer = optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=args.lr, weight_decay=1e-3)
+        print(f"[FREEZE] Backbone frozen. Training only CTC Head (LR: {args.lr}).")
+
+    total_epochs = start_epoch + args.epochs
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
+    criterion = nn.CTCLoss(blank=CTC_BLANK_ID, zero_infinity=True)
 
     # Datasets & DataLoaders
     train_ds = SyntheticSentenceDataset(args.data_dir, classes, samples_per_epoch=args.train_samples, is_train=True)
@@ -594,30 +650,22 @@ def train_phase1_sentence():
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False,
                             collate_fn=collate_fn_sentence, num_workers=args.num_workers, pin_memory=False)
 
-    # Train only the CTC sentence head
-    optimizer = optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=args.lr, weight_decay=1e-3)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-5)
-    criterion = nn.CTCLoss(blank=CTC_BLANK_ID, zero_infinity=True)
-
-    best_wer = float("inf")
-    best_loss = float("inf")
-    history = {"train_loss": [], "val_loss": [], "wer": [], "acc": [], "f1": []}
-
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, total_epochs):
         # Training Phase
         model.train()
-        # Keep frozen backbone submodules in eval mode to prevent running stat drift
-        model.proj.eval()
-        model.gru.eval()
-        model.gnorm.eval()
-        model.trans.eval()
-        model.tnorm.eval()
-        model.t1.eval()
-        model.t2.eval()
+        if not args.unfreeze_backbone:
+            # Keep frozen backbone submodules in eval mode to prevent running stat drift
+            model.proj.eval()
+            model.gru.eval()
+            model.gnorm.eval()
+            model.trans.eval()
+            model.tnorm.eval()
+            model.t1.eval()
+            model.t2.eval()
         model.ctc_head.train()
 
         total_train_loss = 0.0
-        pbar = tqdm(train_loader, desc=f"Ep {epoch+1:02d}/{args.epochs:02d} [Train Sentences]")
+        pbar = tqdm(train_loader, desc=f"Ep {epoch+1:02d}/{total_epochs:02d} [Train Sentences]")
 
         for x, lengths, targets, target_lengths in pbar:
             x, lengths = x.to(device), lengths.to(device)
@@ -644,7 +692,7 @@ def train_phase1_sentence():
         all_targets = []
 
         with torch.no_grad():
-            for x, lengths, targets, target_lengths in tqdm(val_loader, desc=f"Ep {epoch+1:02d}/{args.epochs:02d} [Val Decode]"):
+            for x, lengths, targets, target_lengths in tqdm(val_loader, desc=f"Ep {epoch+1:02d}/{total_epochs:02d} [Val Decode]"):
                 x, lengths = x.to(device), lengths.to(device)
                 targets_dev, target_lengths_dev = targets.to(device), target_lengths.to(device)
 
@@ -684,7 +732,7 @@ def train_phase1_sentence():
 
         scheduler.step()
 
-        print(f"\n[EPOCH {epoch+1:02d}/{args.epochs:02d} SUMMARY]")
+        print(f"\n[EPOCH {epoch+1:02d}/{total_epochs:02d} SUMMARY]")
         print(f"  Train CTC Loss: {train_loss:.4f} | Val CTC Loss: {val_loss:.4f}")
         print(f"  Word Error Rate (WER): {val_wer * 100:.2f}% | Exact Sentence Acc: {val_acc * 100:.2f}% | F1: {val_f1:.4f}")
 

@@ -8,10 +8,13 @@ Utility and processing scripts for data extraction, augmentation, dataset loader
 - `augment.py`: Spatial and temporal augmentation methods for sign keypoints and videos.
 - `augment_extract_sentence.py`: Augmentation and feature extraction pipeline for sentence sequences.
 - `check_ckpt.py`: Diagnostic utility to inspect PyTorch checkpoint keys and weights.
+- `check_collapse.py`: Diagnostic utility auditing CTC blank collapse, burst durations, and emission health.
+- `check_real_sentence_collapse.py`: Audits real continuous human sign video predictions, burst length, and blank ratios.
 - `check_sizes.py`: Quick verification script for checking tensor shape and sequence lengths.
 - `dataset.py`: PyTorch Dataset and DataLoader classes for sign language sequences.
 - `debug_augmentation.py`: Debug script for validating keypoint augmentation correctness.
 - `extract_images.py`: Feature extraction pipeline for image frame sequences (e.g., ISL_CSLRT Frames_Word_Level).
+- `extract_real_sentences.py`: Extracts real continuous sentence videos into canonical 163-dim MediaPipe tensors with selective in-scope relabeling and multi-core parallel processing.
 - `extract_video.py`: Unified video feature extraction pipeline for isolated word and continuous sentence recordings.
 - `extraction.py`: Canonical 163-dim MediaPipe landmark feature extraction, skeleton normalization, and sanitization.
 - `generate_labeled_confusion_matrix.py`: Generates labeled confusion matrix plots with class names.
@@ -19,9 +22,12 @@ Utility and processing scripts for data extraction, augmentation, dataset loader
 - `live_progress.py`: Terminal progress monitor for long-running batch extraction jobs.
 - `organize_directories.py`: Reorganizes model checkpoints, metrics, and plots into designated folders.
 - `plot_confusion_matrix.py`: Script to plot and save confusion matrix figures.
+- `plotter.py`: Sentence dataset vocabulary coverage and distribution plotter analyzing ISL-CSLRT and iSign datasets.
 - `structure.md`: Directory structure documentation for scripts.
 - `tensor_augmentation.py`: Direct tensor augmentations including temporal jitter and keypoint dropout.
 - `test_eval.py`: Evaluation script testing model inferences against validation sets.
+- `test_phase6_word_model.py`: Diagnostic audit script verifying Phase 6 word model classification accuracy on raw tensors without blanks.
+- `track_extraction_progress.py`: Real-time progress monitor displaying extraction percentage, dataset breakdown, and storage metrics.
 - `utils.py`: Shared utilities for path handling, file I/O, and data conversions.
 
 ## Immediate Subdirectories

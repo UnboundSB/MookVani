@@ -16,9 +16,12 @@ Model training and evaluation scripts for word-level and sentence-level sign rec
 - `phase6_trainer.py`: Phase 6 high-precision squeeze trainer reusing exact Phase 4/5 split. Lookahead wrapping decoupled AdamW, Annealed LR combined with ReduceLROnPlateau, Model EMA, SpecAugment temporal frame masking, and gentle mixup. Saves to `models/phase6_word_model/`.
 - `pretrainer.py`: Transformer + Temporal CNN (TCNN) pretraining script training on MediaPipe pose sequences with median length normalization and geometric augmentations.
 - `structure.md`: Directory structure documentation for training.
+- `train_conformer_ctc.py`: Next-generation continuous sentence trainer with ISL Conformer-CTC (MHA + Depthwise Conv, no global pooling), 4-stage curriculum (single-word, 2-word, N-word progressive, unfrozen polish), and Blank Connectivity Regularization.
+- `train_real_sentences.py`: Real continuous human sign sentence fine-tuner training Conformer-CTC on real continuous video streams with selective in-scope relabeling.
 - `train_reconformer_word.py`: Primary training script for ReConformer word-level models.
 - `train_synthetic.py`: Trains sign recognition models using synthetic pose sequences.
 - `train_synthetic_sentences.py`: Phase 1 continuous sentence trainer using CTC loss. Generates synthetic sentences (1-10 words, no repetition, smooth co-articulation, uniform sentence-level flip/shift/tilt augmentations), loads all uncapped class samples, and trains the CTC head over a frozen Phase 6 backbone.
+- `train_synthetic_sentences_phase2.py`: Phase 2+ unfrozen sentence trainer with dynamic phase auto-detection and cycling (automatically detects latest Phase K, initializes from its weights, and trains Phase K+1 into `islsentence_synthetic_phase{K+1}/`). Implements discriminative learning rates, Model EMA, Cosine Annealing, and regularized CTC loss.
 - `train_weak_classes.py`: Implements class re-weighting and focused training on underrepresented sign classes.
 - `train_word_135.py`: Specialized training routine for the 135-class isolated sign vocabulary.
 

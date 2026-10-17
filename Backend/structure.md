@@ -3,7 +3,7 @@
 Core backend engine containing ML models, feature extractors, training loops, and inference services.
 
 ## Files
-- `live_inference.py`: Real-time webcam and video inference script for live sign language translation.
+- `live_inference.py`: Real-time webcam sentence recognition using the Phase 1 CTC sentence model (Phase1SentenceModel with frozen Phase 6 backbone). Greedily decodes continuous ISL sign sequences into sentences. Supports `--simulate` mode for streaming saved .pt tensor files through the CTC decoder.
 - `merge_isign_to_dataset.py`: Merges and aligns iSign dataset annotations into main dataset directories.
 - `requirements.txt`: Python package dependencies required for backend execution and training.
 - `run_pipeline.py`: Pipeline orchestration script to trigger feature extraction and model training.
