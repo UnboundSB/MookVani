@@ -50,51 +50,101 @@ else:
     SOURCE_CONFORMER = STAGE1_BEST
 CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "phase6_word_model", "classes.json")
 
+class BalancedFocalCTCLoss(nn.Module):
+    """
+    Carefully Balanced Focal CTC Loss for Continuous Sign Recognition:
+    - Focuses gradient updates on hard/confused gesture sequences while
+      down-weighting easy, already-confident samples: L_focal = (1 - P(seq))^gamma * L_ctc.
+    - gamma=1.0 keeps it smoothly balanced and prevents gradient explosions.
+    - Duration deficit penalty ensures signs sustain across adequate frames.
+    - No artificial blank sentences: blank token operates naturally as CTC spacer.
+    """
+    def __init__(self, blank_id, gamma=1.0, alpha=1.0, deficit_w=1.2, min_frames_per_word=5.0):
+        super().__init__()
+        self.blank_id = blank_id
+        self.gamma = gamma
+        self.alpha = alpha
+        self.deficit_w = deficit_w
+        self.min_frames_per_word = min_frames_per_word
+
+    def forward(self, log_probs_t, targets, input_lengths, target_lengths):
+        # Per-sample unreduced CTC loss
+        ctc_losses = F.ctc_loss(
+            log_probs_t, targets, input_lengths, target_lengths,
+            blank=self.blank_id, zero_infinity=True, reduction="none"
+        )  # (B,)
+
+        # Balanced Focal Modulating Factor
+        p_seq = torch.exp(-ctc_losses.clamp(max=12.0))
+        focal_weight = torch.pow(1.0 - p_seq, self.gamma)
+        total_loss = self.alpha * (focal_weight * ctc_losses).mean()
+
+        # Deficit constraint: only applies on in-scope target words
+        if self.deficit_w > 0.0:
+            lp = log_probs_t.transpose(0, 1)  # (B, T, C)
+            B = lp.shape[0]
+            blank_lp = lp[:, :, self.blank_id]
+            non_blank_p = 1.0 - torch.exp(blank_lp)
+
+            target_mass = target_lengths.float() * self.min_frames_per_word
+            actual_mass = []
+            for b in range(B):
+                valid_t = input_lengths[b].item()
+                actual_mass.append(non_blank_p[b, :valid_t].sum())
+            actual_mass = torch.stack(actual_mass)
+            deficit = F.relu(target_mass - actual_mass)
+            total_loss = total_loss + self.deficit_w * deficit.mean()
+
+        return total_loss
+
 class RealSentenceDataset(Dataset):
-    def __init__(self, index_file, is_train=True, blank_injection_p=0.05):
+    def __init__(self, index_file, is_train=True, val_split=0.10):
         with open(index_file, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        # Filter valid items
-        self.items = [item for item in data if os.path.exists(item.get("tensor_path", "")) and len(item.get("in_scope_indices", [])) > 0]
-        self.is_train = is_train
-        self.blank_p = blank_injection_p if is_train else 0.0
+        # Filter valid items that have in-scope vocabulary words
+        all_items = [item for item in data if os.path.exists(item.get("tensor_path", "")) and len(item.get("in_scope_indices", [])) > 0]
 
-        # Collect rest frame segments for blank injection
-        self.rest_segments = []
-        for it in self.items[:30]:
-            try:
-                t = torch.load(it["tensor_path"], weights_only=True)
-                if t.shape[0] >= 12:
-                    self.rest_segments.append(t[:6].float())
-                    self.rest_segments.append(t[-6:].float())
-            except Exception:
-                pass
+        # Deterministic zero-leakage sentence-level grouping (prevents takes of same sentence leaking into val)
+        sentence_groups = {}
+        for it in all_items:
+            s_key = it.get("sentence", "").strip().lower()
+            if s_key not in sentence_groups:
+                sentence_groups[s_key] = []
+            sentence_groups[s_key].append(it)
+
+        unique_sentences = sorted(list(sentence_groups.keys()))
+        random.seed(42)
+        random.shuffle(unique_sentences)
+        random.seed()
+
+        split_idx = int(len(unique_sentences) * (1 - val_split))
+        train_keys = set(unique_sentences[:split_idx])
+        val_keys = set(unique_sentences[split_idx:])
+
+        if is_train:
+            self.items = [it for k in train_keys for it in sentence_groups[k]]
+        else:
+            self.items = [it for k in val_keys for it in sentence_groups[k]]
+        self.is_train = is_train
 
     def __len__(self):
         return len(self.items)
 
     def __getitem__(self, idx):
-        # 1. Blank sentence injection: idle resting frames with target = []
-        if self.is_train and random.random() < self.blank_p and self.rest_segments:
-            seg = random.choice(self.rest_segments)
-            noise = torch.randn_like(seg[:, :159]) * 0.005
-            seg = seg.clone()
-            seg[:, :159] += noise
-            return _reclamp(seg), seg.shape[0], torch.tensor([], dtype=torch.long)
-
         item = self.items[idx]
         seq = torch.load(item["tensor_path"], weights_only=True).float()
-        labels = item["in_scope_indices"]
+        # Only penalize on the in-scope trained classes (cap to 18 words)
+        labels = item["in_scope_indices"][:18]
 
-        # Temporal sub-sampling to prevent quadratic attention OOM on long sentences
-        max_len = 160
+        # Smooth length capping using linear interpolation (prevents skipping key gesture frames)
+        max_len = 220
         if seq.shape[0] > max_len:
-            step = int(math.ceil(seq.shape[0] / max_len))
-            seq = seq[::step][:max_len]
+            seq = F.interpolate(seq.T.unsqueeze(0), size=max_len, mode="linear", align_corners=True).squeeze(0).T
 
         if self.is_train:
-            seq = augment(seq, strength=0.5)
+            # Canonical pose augmentation: pure horizontal flip (upright, X-only), tilt, shift, speed
+            seq = augment(seq, strength=0.75)
 
         return seq, seq.shape[0], torch.tensor(labels, dtype=torch.long)
 
@@ -110,7 +160,7 @@ def collate_real(batch):
             targets,
             torch.tensor([len(l) for l in labels], dtype=torch.long))
 
-def train_real_sentences(epochs=20, batch_size=4, lr_backbone=8e-6, lr_head=5e-5, data_dir=DEFAULT_DATA_DIR, out_dir=DEFAULT_OUT_DIR):
+def train_real_sentences(epochs=25, batch_size=4, lr_backbone=8e-6, lr_head=5e-5, data_dir=DEFAULT_DATA_DIR, out_dir=DEFAULT_OUT_DIR, fresh=False):
     os.makedirs(out_dir, exist_ok=True)
     plots_dir = os.path.join(out_dir, "plots")
     os.makedirs(plots_dir, exist_ok=True)
@@ -123,12 +173,19 @@ def train_real_sentences(epochs=20, batch_size=4, lr_backbone=8e-6, lr_head=5e-5
 
     model = ISLHybridConformerCTC(num_classes).to(device)
 
+    # Resolve warm-start weights
+    if fresh:
+        source_weights = STAGE3_BEST if os.path.exists(STAGE3_BEST) else STAGE1_BEST
+        print(f"[FRESH START] Explicitly resetting from {os.path.basename(source_weights)}")
+    else:
+        source_weights = SOURCE_CONFORMER
+
     # Load pretrained Conformer-CTC weights
-    if os.path.exists(SOURCE_CONFORMER):
-        raw = torch.load(SOURCE_CONFORMER, map_location=device, weights_only=False)
+    if os.path.exists(source_weights):
+        raw = torch.load(source_weights, map_location=device, weights_only=False)
         sd = raw["model_state_dict"] if isinstance(raw, dict) and "model_state_dict" in raw else raw
         model.load_state_dict(sd, strict=False)
-        print(f"[WARM-START] Loaded Conformer-CTC weights from {os.path.basename(SOURCE_CONFORMER)}")
+        print(f"[WARM-START] Loaded Conformer-CTC weights from {os.path.basename(source_weights)}")
     else:
         model.load_phase6_backbone()
 
@@ -142,12 +199,19 @@ def train_real_sentences(epochs=20, batch_size=4, lr_backbone=8e-6, lr_head=5e-5
     train_ld = DataLoader(ds, batch_size=batch_size, shuffle=True, collate_fn=collate_real)
     val_ld = DataLoader(val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate_real)
 
+    freeze_epochs = 4
+    # Initial frozen backbone for transfer learning warm-up
+    for p in model.backbone.parameters():
+        p.requires_grad = False
+    print(f"[TRANSFER LEARNING] Backbone FROZEN for first {freeze_epochs} epochs to protect pretrained weights.")
+
     param_groups = [
-        {"params": model.backbone.parameters(), "lr": lr_backbone, "weight_decay": 1e-4},
+        {"params": [p for p in model.backbone.parameters() if p.requires_grad], "lr": lr_backbone, "weight_decay": 1e-4},
         {"params": list(model.conformer.parameters()) + list(model.ctc_proj.parameters()), "lr": lr_head, "weight_decay": 1e-4}
     ]
 
-    criterion = ConformityCTCLoss(blank_id, connectivity_w=0.10, deficit_w=0.2, min_frames_per_word=6.0)
+    # Carefully balanced Focal CTC Loss: gamma=1.0, alpha=1.0, deficit_w=1.2
+    criterion = BalancedFocalCTCLoss(blank_id, gamma=1.0, alpha=1.0, deficit_w=1.2, min_frames_per_word=5.0)
     optimizer = optim.AdamW(param_groups, betas=(0.9, 0.98))
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-6)
     ema = ModelEMA(model, decay=0.999)
@@ -158,12 +222,25 @@ def train_real_sentences(epochs=20, batch_size=4, lr_backbone=8e-6, lr_head=5e-5
     print("=" * 72)
     print("STARTING REAL SENTENCE TRAINING")
     print(f"Device: {device} | Total Sentences: {len(ds)} | Epochs: {epochs} | Batch: {batch_size} (Accum: {accum_steps})")
+    print(f"Loss: Balanced Focal CTC (gamma=1.0) | Warm-up Freeze: {freeze_epochs} eps | No artificial blanks")
     print("=" * 72)
 
     best_wer = float("inf")
     history = {"train_loss":[], "val_loss":[], "wer":[], "wer_ema":[]}
 
     for ep in range(epochs):
+        # Unfreeze backbone after warmup epochs with differential LR
+        if ep == freeze_epochs:
+            print(f"\n[UNFREEZE] Unfreezing Backbone at epoch {ep+1} for discriminative fine-tuning.")
+            for p in model.backbone.parameters():
+                p.requires_grad = True
+            param_groups = [
+                {"params": model.backbone.parameters(), "lr": lr_backbone, "weight_decay": 1e-4},
+                {"params": list(model.conformer.parameters()) + list(model.ctc_proj.parameters()), "lr": lr_head, "weight_decay": 1e-4}
+            ]
+            optimizer = optim.AdamW(param_groups, betas=(0.9, 0.98))
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, epochs - freeze_epochs), eta_min=1e-6)
+
         model.train()
         t_loss = 0.0
         optimizer.zero_grad()
@@ -173,7 +250,7 @@ def train_real_sentences(epochs=20, batch_size=4, lr_backbone=8e-6, lr_head=5e-5
             targets, target_lengths = targets.to(device), target_lengths.to(device)
 
             with torch.amp.autocast("cuda", enabled=use_cuda):
-                lp = model(xs, lengths)
+                lp = model(xs, lengths)  # (B, T, C)
                 loss = criterion(lp.transpose(0, 1), targets, lengths, target_lengths)
                 loss = loss / accum_steps
 
@@ -277,7 +354,8 @@ def train_real_sentences(epochs=20, batch_size=4, lr_backbone=8e-6, lr_head=5e-5
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", type=int, default=20)
-    parser.add_argument("--batch_size", type=int, default=2)
+    parser.add_argument("--epochs", type=int, default=25)
+    parser.add_argument("--batch_size", type=int, default=4)
+    parser.add_argument("--fresh", action="store_true", help="Start fresh from stage3_best.pth (ignores old real_sentence checkpoints)")
     args = parser.parse_args()
-    train_real_sentences(epochs=args.epochs, batch_size=args.batch_size)
+    train_real_sentences(epochs=args.epochs, batch_size=args.batch_size, fresh=args.fresh)

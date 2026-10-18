@@ -1,0 +1,1402 @@
+{
+  "total_classes": 262,
+  "total_sentences": 1579,
+  "active_classes_count": 181,
+  "zero_count_classes_count": 81,
+  "total_word_occurrences": 2359,
+  "all_262_classes_ranked": [
+    {
+      "rank": 1,
+      "word": "i",
+      "count": 490
+    },
+    {
+      "rank": 2,
+      "word": "you",
+      "count": 381
+    },
+    {
+      "rank": 3,
+      "word": "he",
+      "count": 245
+    },
+    {
+      "rank": 4,
+      "word": "she",
+      "count": 204
+    },
+    {
+      "rank": 5,
+      "word": "we",
+      "count": 110
+    },
+    {
+      "rank": 6,
+      "word": "they",
+      "count": 78
+    },
+    {
+      "rank": 7,
+      "word": "new",
+      "count": 32
+    },
+    {
+      "rank": 8,
+      "word": "good",
+      "count": 29
+    },
+    {
+      "rank": 9,
+      "word": "bad",
+      "count": 27
+    },
+    {
+      "rank": 10,
+      "word": "time",
+      "count": 22
+    },
+    {
+      "rank": 11,
+      "word": "today",
+      "count": 21
+    },
+    {
+      "rank": 12,
+      "word": "old",
+      "count": 21
+    },
+    {
+      "rank": 13,
+      "word": "nice",
+      "count": 18
+    },
+    {
+      "rank": 14,
+      "word": "job",
+      "count": 18
+    },
+    {
+      "rank": 15,
+      "word": "car",
+      "count": 18
+    },
+    {
+      "rank": 16,
+      "word": "train",
+      "count": 17
+    },
+    {
+      "rank": 17,
+      "word": "thank you",
+      "count": 17
+    },
+    {
+      "rank": 18,
+      "word": "house",
+      "count": 16
+    },
+    {
+      "rank": 19,
+      "word": "police",
+      "count": 15
+    },
+    {
+      "rank": 20,
+      "word": "light",
+      "count": 15
+    },
+    {
+      "rank": 21,
+      "word": "mother",
+      "count": 14
+    },
+    {
+      "rank": 22,
+      "word": "money",
+      "count": 14
+    },
+    {
+      "rank": 23,
+      "word": "cold",
+      "count": 14
+    },
+    {
+      "rank": 24,
+      "word": "child",
+      "count": 14
+    },
+    {
+      "rank": 25,
+      "word": "year",
+      "count": 12
+    },
+    {
+      "rank": 26,
+      "word": "school",
+      "count": 12
+    },
+    {
+      "rank": 27,
+      "word": "city",
+      "count": 11
+    },
+    {
+      "rank": 28,
+      "word": "week",
+      "count": 10
+    },
+    {
+      "rank": 29,
+      "word": "night",
+      "count": 9
+    },
+    {
+      "rank": 30,
+      "word": "man",
+      "count": 9
+    },
+    {
+      "rank": 31,
+      "word": "friend",
+      "count": 9
+    },
+    {
+      "rank": 32,
+      "word": "father",
+      "count": 9
+    },
+    {
+      "rank": 33,
+      "word": "beautiful",
+      "count": 9
+    },
+    {
+      "rank": 34,
+      "word": "sister",
+      "count": 8
+    },
+    {
+      "rank": 35,
+      "word": "shirt",
+      "count": 8
+    },
+    {
+      "rank": 36,
+      "word": "president",
+      "count": 8
+    },
+    {
+      "rank": 37,
+      "word": "mean",
+      "count": 8
+    },
+    {
+      "rank": 38,
+      "word": "bed",
+      "count": 8
+    },
+    {
+      "rank": 39,
+      "word": "young",
+      "count": 7
+    },
+    {
+      "rank": 40,
+      "word": "office",
+      "count": 7
+    },
+    {
+      "rank": 41,
+      "word": "medicine",
+      "count": 7
+    },
+    {
+      "rank": 42,
+      "word": "happy",
+      "count": 7
+    },
+    {
+      "rank": 43,
+      "word": "team",
+      "count": 6
+    },
+    {
+      "rank": 44,
+      "word": "teacher",
+      "count": 6
+    },
+    {
+      "rank": 45,
+      "word": "month",
+      "count": 6
+    },
+    {
+      "rank": 46,
+      "word": "market",
+      "count": 6
+    },
+    {
+      "rank": 47,
+      "word": "long",
+      "count": 6
+    },
+    {
+      "rank": 48,
+      "word": "family",
+      "count": 6
+    },
+    {
+      "rank": 49,
+      "word": "doctor",
+      "count": 6
+    },
+    {
+      "rank": 50,
+      "word": "brother",
+      "count": 6
+    },
+    {
+      "rank": 51,
+      "word": "book",
+      "count": 6
+    },
+    {
+      "rank": 52,
+      "word": "woman",
+      "count": 5
+    },
+    {
+      "rank": 53,
+      "word": "war",
+      "count": 5
+    },
+    {
+      "rank": 54,
+      "word": "son",
+      "count": 5
+    },
+    {
+      "rank": 55,
+      "word": "morning",
+      "count": 5
+    },
+    {
+      "rank": 56,
+      "word": "letter",
+      "count": 5
+    },
+    {
+      "rank": 57,
+      "word": "india",
+      "count": 5
+    },
+    {
+      "rank": 58,
+      "word": "husband",
+      "count": 5
+    },
+    {
+      "rank": 59,
+      "word": "door",
+      "count": 5
+    },
+    {
+      "rank": 60,
+      "word": "bus",
+      "count": 5
+    },
+    {
+      "rank": 61,
+      "word": "boy",
+      "count": 5
+    },
+    {
+      "rank": 62,
+      "word": "window",
+      "count": 4
+    },
+    {
+      "rank": 63,
+      "word": "wife",
+      "count": 4
+    },
+    {
+      "rank": 64,
+      "word": "table",
+      "count": 4
+    },
+    {
+      "rank": 65,
+      "word": "strong",
+      "count": 4
+    },
+    {
+      "rank": 66,
+      "word": "soft",
+      "count": 4
+    },
+    {
+      "rank": 67,
+      "word": "red",
+      "count": 4
+    },
+    {
+      "rank": 68,
+      "word": "paper",
+      "count": 4
+    },
+    {
+      "rank": 69,
+      "word": "newspaper",
+      "count": 4
+    },
+    {
+      "rank": 70,
+      "word": "manager",
+      "count": 4
+    },
+    {
+      "rank": 71,
+      "word": "kitchen",
+      "count": 4
+    },
+    {
+      "rank": 72,
+      "word": "heavy",
+      "count": 4
+    },
+    {
+      "rank": 73,
+      "word": "hard",
+      "count": 4
+    },
+    {
+      "rank": 74,
+      "word": "fall",
+      "count": 4
+    },
+    {
+      "rank": 75,
+      "word": "exercise",
+      "count": 4
+    },
+    {
+      "rank": 76,
+      "word": "evening",
+      "count": 4
+    },
+    {
+      "rank": 77,
+      "word": "election",
+      "count": 4
+    },
+    {
+      "rank": 78,
+      "word": "death",
+      "count": 4
+    },
+    {
+      "rank": 79,
+      "word": "boat",
+      "count": 4
+    },
+    {
+      "rank": 80,
+      "word": "yesterday",
+      "count": 3
+    },
+    {
+      "rank": 81,
+      "word": "university",
+      "count": 3
+    },
+    {
+      "rank": 82,
+      "word": "tomorrow",
+      "count": 3
+    },
+    {
+      "rank": 83,
+      "word": "summer",
+      "count": 3
+    },
+    {
+      "rank": 84,
+      "word": "student",
+      "count": 3
+    },
+    {
+      "rank": 85,
+      "word": "soldier",
+      "count": 3
+    },
+    {
+      "rank": 86,
+      "word": "slow",
+      "count": 3
+    },
+    {
+      "rank": 87,
+      "word": "shoes",
+      "count": 3
+    },
+    {
+      "rank": 88,
+      "word": "restaurant",
+      "count": 3
+    },
+    {
+      "rank": 89,
+      "word": "price",
+      "count": 3
+    },
+    {
+      "rank": 90,
+      "word": "poor",
+      "count": 3
+    },
+    {
+      "rank": 91,
+      "word": "library",
+      "count": 3
+    },
+    {
+      "rank": 92,
+      "word": "hospital",
+      "count": 3
+    },
+    {
+      "rank": 93,
+      "word": "green",
+      "count": 3
+    },
+    {
+      "rank": 94,
+      "word": "grandfather",
+      "count": 3
+    },
+    {
+      "rank": 95,
+      "word": "expensive",
+      "count": 3
+    },
+    {
+      "rank": 96,
+      "word": "deep",
+      "count": 3
+    },
+    {
+      "rank": 97,
+      "word": "court",
+      "count": 3
+    },
+    {
+      "rank": 98,
+      "word": "computer",
+      "count": 3
+    },
+    {
+      "rank": 99,
+      "word": "bill",
+      "count": 3
+    },
+    {
+      "rank": 100,
+      "word": "bedroom",
+      "count": 3
+    },
+    {
+      "rank": 101,
+      "word": "baby",
+      "count": 3
+    },
+    {
+      "rank": 102,
+      "word": "white",
+      "count": 2
+    },
+    {
+      "rank": 103,
+      "word": "wednesday",
+      "count": 2
+    },
+    {
+      "rank": 104,
+      "word": "warm",
+      "count": 2
+    },
+    {
+      "rank": 105,
+      "word": "waiter",
+      "count": 2
+    },
+    {
+      "rank": 106,
+      "word": "television",
+      "count": 2
+    },
+    {
+      "rank": 107,
+      "word": "sunday",
+      "count": 2
+    },
+    {
+      "rank": 108,
+      "word": "suit",
+      "count": 2
+    },
+    {
+      "rank": 109,
+      "word": "sick",
+      "count": 2
+    },
+    {
+      "rank": 110,
+      "word": "short",
+      "count": 2
+    },
+    {
+      "rank": 111,
+      "word": "pleased",
+      "count": 2
+    },
+    {
+      "rank": 112,
+      "word": "plane",
+      "count": 2
+    },
+    {
+      "rank": 113,
+      "word": "monday",
+      "count": 2
+    },
+    {
+      "rank": 114,
+      "word": "high",
+      "count": 2
+    },
+    {
+      "rank": 115,
+      "word": "hat",
+      "count": 2
+    },
+    {
+      "rank": 116,
+      "word": "grandmother",
+      "count": 2
+    },
+    {
+      "rank": 117,
+      "word": "girl",
+      "count": 2
+    },
+    {
+      "rank": 118,
+      "word": "friday",
+      "count": 2
+    },
+    {
+      "rank": 119,
+      "word": "famous",
+      "count": 2
+    },
+    {
+      "rank": 120,
+      "word": "dress",
+      "count": 2
+    },
+    {
+      "rank": 121,
+      "word": "dog",
+      "count": 2
+    },
+    {
+      "rank": 122,
+      "word": "daughter",
+      "count": 2
+    },
+    {
+      "rank": 123,
+      "word": "crowd",
+      "count": 2
+    },
+    {
+      "rank": 124,
+      "word": "clock",
+      "count": 2
+    },
+    {
+      "rank": 125,
+      "word": "cat",
+      "count": 2
+    },
+    {
+      "rank": 126,
+      "word": "bathroom",
+      "count": 2
+    },
+    {
+      "rank": 127,
+      "word": "bank",
+      "count": 2
+    },
+    {
+      "rank": 128,
+      "word": "ball",
+      "count": 2
+    },
+    {
+      "rank": 129,
+      "word": "author",
+      "count": 2
+    },
+    {
+      "rank": 130,
+      "word": "afternoon",
+      "count": 2
+    },
+    {
+      "rank": 131,
+      "word": "yellow",
+      "count": 1
+    },
+    {
+      "rank": 132,
+      "word": "wide",
+      "count": 1
+    },
+    {
+      "rank": 133,
+      "word": "wet",
+      "count": 1
+    },
+    {
+      "rank": 134,
+      "word": "truck",
+      "count": 1
+    },
+    {
+      "rank": 135,
+      "word": "spring",
+      "count": 1
+    },
+    {
+      "rank": 136,
+      "word": "sport",
+      "count": 1
+    },
+    {
+      "rank": 137,
+      "word": "skirt",
+      "count": 1
+    },
+    {
+      "rank": 138,
+      "word": "sign",
+      "count": 1
+    },
+    {
+      "rank": 139,
+      "word": "second",
+      "count": 1
+    },
+    {
+      "rank": 140,
+      "word": "season",
+      "count": 1
+    },
+    {
+      "rank": 141,
+      "word": "science",
+      "count": 1
+    },
+    {
+      "rank": 142,
+      "word": "saturday",
+      "count": 1
+    },
+    {
+      "rank": 143,
+      "word": "religion",
+      "count": 1
+    },
+    {
+      "rank": 144,
+      "word": "radio",
+      "count": 1
+    },
+    {
+      "rank": 145,
+      "word": "quiet",
+      "count": 1
+    },
+    {
+      "rank": 146,
+      "word": "queen",
+      "count": 1
+    },
+    {
+      "rank": 147,
+      "word": "priest",
+      "count": 1
+    },
+    {
+      "rank": 148,
+      "word": "pen",
+      "count": 1
+    },
+    {
+      "rank": 149,
+      "word": "parent",
+      "count": 1
+    },
+    {
+      "rank": 150,
+      "word": "paint",
+      "count": 1
+    },
+    {
+      "rank": 151,
+      "word": "orange",
+      "count": 1
+    },
+    {
+      "rank": 152,
+      "word": "minute",
+      "count": 1
+    },
+    {
+      "rank": 153,
+      "word": "marriage",
+      "count": 1
+    },
+    {
+      "rank": 154,
+      "word": "low",
+      "count": 1
+    },
+    {
+      "rank": 155,
+      "word": "lock",
+      "count": 1
+    },
+    {
+      "rank": 156,
+      "word": "lawyer",
+      "count": 1
+    },
+    {
+      "rank": 157,
+      "word": "laptop",
+      "count": 1
+    },
+    {
+      "rank": 158,
+      "word": "key",
+      "count": 1
+    },
+    {
+      "rank": 159,
+      "word": "hot",
+      "count": 1
+    },
+    {
+      "rank": 160,
+      "word": "hello",
+      "count": 1
+    },
+    {
+      "rank": 161,
+      "word": "healthy",
+      "count": 1
+    },
+    {
+      "rank": 162,
+      "word": "gun",
+      "count": 1
+    },
+    {
+      "rank": 163,
+      "word": "fish",
+      "count": 1
+    },
+    {
+      "rank": 164,
+      "word": "fast",
+      "count": 1
+    },
+    {
+      "rank": 165,
+      "word": "fan",
+      "count": 1
+    },
+    {
+      "rank": 166,
+      "word": "energy",
+      "count": 1
+    },
+    {
+      "rank": 167,
+      "word": "dream",
+      "count": 1
+    },
+    {
+      "rank": 168,
+      "word": "colour",
+      "count": 1
+    },
+    {
+      "rank": 169,
+      "word": "clothing",
+      "count": 1
+    },
+    {
+      "rank": 170,
+      "word": "cheap",
+      "count": 1
+    },
+    {
+      "rank": 171,
+      "word": "chair",
+      "count": 1
+    },
+    {
+      "rank": 172,
+      "word": "cell phone",
+      "count": 1
+    },
+    {
+      "rank": 173,
+      "word": "box",
+      "count": 1
+    },
+    {
+      "rank": 174,
+      "word": "blind",
+      "count": 1
+    },
+    {
+      "rank": 175,
+      "word": "black",
+      "count": 1
+    },
+    {
+      "rank": 176,
+      "word": "bird",
+      "count": 1
+    },
+    {
+      "rank": 177,
+      "word": "bag",
+      "count": 1
+    },
+    {
+      "rank": 178,
+      "word": "attack",
+      "count": 1
+    },
+    {
+      "rank": 179,
+      "word": "artist",
+      "count": 1
+    },
+    {
+      "rank": 180,
+      "word": "animal",
+      "count": 1
+    },
+    {
+      "rank": 181,
+      "word": "actor",
+      "count": 1
+    },
+    {
+      "rank": 182,
+      "word": "you plural",
+      "count": 0
+    },
+    {
+      "rank": 183,
+      "word": "winter",
+      "count": 0
+    },
+    {
+      "rank": 184,
+      "word": "weak",
+      "count": 0
+    },
+    {
+      "rank": 185,
+      "word": "ugly",
+      "count": 0
+    },
+    {
+      "rank": 186,
+      "word": "tuesday",
+      "count": 0
+    },
+    {
+      "rank": 187,
+      "word": "tshirt",
+      "count": 0
+    },
+    {
+      "rank": 188,
+      "word": "transportation",
+      "count": 0
+    },
+    {
+      "rank": 189,
+      "word": "train ticket",
+      "count": 0
+    },
+    {
+      "rank": 190,
+      "word": "train station",
+      "count": 0
+    },
+    {
+      "rank": 191,
+      "word": "tool",
+      "count": 0
+    },
+    {
+      "rank": 192,
+      "word": "tight",
+      "count": 0
+    },
+    {
+      "rank": 193,
+      "word": "thursday",
+      "count": 0
+    },
+    {
+      "rank": 194,
+      "word": "thin",
+      "count": 0
+    },
+    {
+      "rank": 195,
+      "word": "thick",
+      "count": 0
+    },
+    {
+      "rank": 196,
+      "word": "temple",
+      "count": 0
+    },
+    {
+      "rank": 197,
+      "word": "telephone",
+      "count": 0
+    },
+    {
+      "rank": 198,
+      "word": "technology",
+      "count": 0
+    },
+    {
+      "rank": 199,
+      "word": "tall",
+      "count": 0
+    },
+    {
+      "rank": 200,
+      "word": "street or road",
+      "count": 0
+    },
+    {
+      "rank": 201,
+      "word": "store or shop",
+      "count": 0
+    },
+    {
+      "rank": 202,
+      "word": "soap",
+      "count": 0
+    },
+    {
+      "rank": 203,
+      "word": "small little",
+      "count": 0
+    },
+    {
+      "rank": 204,
+      "word": "shallow",
+      "count": 0
+    },
+    {
+      "rank": 205,
+      "word": "secretary",
+      "count": 0
+    },
+    {
+      "rank": 206,
+      "word": "screen",
+      "count": 0
+    },
+    {
+      "rank": 207,
+      "word": "sad",
+      "count": 0
+    },
+    {
+      "rank": 208,
+      "word": "ring",
+      "count": 0
+    },
+    {
+      "rank": 209,
+      "word": "rich",
+      "count": 0
+    },
+    {
+      "rank": 210,
+      "word": "reporter",
+      "count": 0
+    },
+    {
+      "rank": 211,
+      "word": "race ethnicity",
+      "count": 0
+    },
+    {
+      "rank": 212,
+      "word": "pocket",
+      "count": 0
+    },
+    {
+      "rank": 213,
+      "word": "player",
+      "count": 0
+    },
+    {
+      "rank": 214,
+      "word": "pink",
+      "count": 0
+    },
+    {
+      "rank": 215,
+      "word": "photograph",
+      "count": 0
+    },
+    {
+      "rank": 216,
+      "word": "pencil",
+      "count": 0
+    },
+    {
+      "rank": 217,
+      "word": "peace",
+      "count": 0
+    },
+    {
+      "rank": 218,
+      "word": "patient",
+      "count": 0
+    },
+    {
+      "rank": 219,
+      "word": "park",
+      "count": 0
+    },
+    {
+      "rank": 220,
+      "word": "pant",
+      "count": 0
+    },
+    {
+      "rank": 221,
+      "word": "page",
+      "count": 0
+    },
+    {
+      "rank": 222,
+      "word": "neighbour",
+      "count": 0
+    },
+    {
+      "rank": 223,
+      "word": "narrow",
+      "count": 0
+    },
+    {
+      "rank": 224,
+      "word": "mouse",
+      "count": 0
+    },
+    {
+      "rank": 225,
+      "word": "male",
+      "count": 0
+    },
+    {
+      "rank": 226,
+      "word": "loud",
+      "count": 0
+    },
+    {
+      "rank": 227,
+      "word": "loose",
+      "count": 0
+    },
+    {
+      "rank": 228,
+      "word": "location",
+      "count": 0
+    },
+    {
+      "rank": 229,
+      "word": "lamp",
+      "count": 0
+    },
+    {
+      "rank": 230,
+      "word": "king",
+      "count": 0
+    },
+    {
+      "rank": 231,
+      "word": "it",
+      "count": 0
+    },
+    {
+      "rank": 232,
+      "word": "how are you",
+      "count": 0
+    },
+    {
+      "rank": 233,
+      "word": "hour",
+      "count": 0
+    },
+    {
+      "rank": 234,
+      "word": "horse",
+      "count": 0
+    },
+    {
+      "rank": 235,
+      "word": "ground",
+      "count": 0
+    },
+    {
+      "rank": 236,
+      "word": "grey",
+      "count": 0
+    },
+    {
+      "rank": 237,
+      "word": "good night",
+      "count": 0
+    },
+    {
+      "rank": 238,
+      "word": "good morning",
+      "count": 0
+    },
+    {
+      "rank": 239,
+      "word": "good evening",
+      "count": 0
+    },
+    {
+      "rank": 240,
+      "word": "good afternoon",
+      "count": 0
+    },
+    {
+      "rank": 241,
+      "word": "god",
+      "count": 0
+    },
+    {
+      "rank": 242,
+      "word": "gift",
+      "count": 0
+    },
+    {
+      "rank": 243,
+      "word": "flat",
+      "count": 0
+    },
+    {
+      "rank": 244,
+      "word": "female",
+      "count": 0
+    },
+    {
+      "rank": 245,
+      "word": "ex monsoon",
+      "count": 0
+    },
+    {
+      "rank": 246,
+      "word": "dry",
+      "count": 0
+    },
+    {
+      "rank": 247,
+      "word": "dirty",
+      "count": 0
+    },
+    {
+      "rank": 248,
+      "word": "deaf",
+      "count": 0
+    },
+    {
+      "rank": 249,
+      "word": "dead",
+      "count": 0
+    },
+    {
+      "rank": 250,
+      "word": "curved",
+      "count": 0
+    },
+    {
+      "rank": 251,
+      "word": "cow",
+      "count": 0
+    },
+    {
+      "rank": 252,
+      "word": "cool",
+      "count": 0
+    },
+    {
+      "rank": 253,
+      "word": "clean",
+      "count": 0
+    },
+    {
+      "rank": 254,
+      "word": "card",
+      "count": 0
+    },
+    {
+      "rank": 255,
+      "word": "camera",
+      "count": 0
+    },
+    {
+      "rank": 256,
+      "word": "brown",
+      "count": 0
+    },
+    {
+      "rank": 257,
+      "word": "blue",
+      "count": 0
+    },
+    {
+      "rank": 258,
+      "word": "big large",
+      "count": 0
+    },
+    {
+      "rank": 259,
+      "word": "bicycle",
+      "count": 0
+    },
+    {
+      "rank": 260,
+      "word": "alright",
+      "count": 0
+    },
+    {
+      "rank": 261,
+      "word": "alive",
+      "count": 0
+    },
+    {
+      "rank": 262,
+      "word": "adult",
+      "count": 0
+    }
+  ],
+  "zero_count_classes": [
+    "you plural",
+    "winter",
+    "weak",
+    "ugly",
+    "tuesday",
+    "tshirt",
+    "transportation",
+    "train ticket",
+    "train station",
+    "tool",
+    "tight",
+    "thursday",
+    "thin",
+    "thick",
+    "temple",
+    "telephone",
+    "technology",
+    "tall",
+    "street or road",
+    "store or shop",
+    "soap",
+    "small little",
+    "shallow",
+    "secretary",
+    "screen",
+    "sad",
+    "ring",
+    "rich",
+    "reporter",
+    "race ethnicity",
+    "pocket",
+    "player",
+    "pink",
+    "photograph",
+    "pencil",
+    "peace",
+    "patient",
+    "park",
+    "pant",
+    "page",
+    "neighbour",
+    "narrow",
+    "mouse",
+    "male",
+    "loud",
+    "loose",
+    "location",
+    "lamp",
+    "king",
+    "it",
+    "how are you",
+    "hour",
+    "horse",
+    "ground",
+    "grey",
+    "good night",
+    "good morning",
+    "good evening",
+    "good afternoon",
+    "god",
+    "gift",
+    "flat",
+    "female",
+    "ex monsoon",
+    "dry",
+    "dirty",
+    "deaf",
+    "dead",
+    "curved",
+    "cow",
+    "cool",
+    "clean",
+    "card",
+    "camera",
+    "brown",
+    "blue",
+    "big large",
+    "bicycle",
+    "alright",
+    "alive",
+    "adult"
+  ]
+}

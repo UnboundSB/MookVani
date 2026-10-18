@@ -65,11 +65,24 @@ def _reclamp(seq):
 def aug_flip(seq):
     seq = seq.clone(); T = seq.shape[0]
     c = seq[:, :159].view(T, 53, 3).clone()
-    c[:, :, 0] *= -1
+    # 1. Flip X-coordinate horizontally only (Y and Z stay upright)
+    c[:, :, 0] *= -1.0
+
+    # 2. Swap Hands: Left Hand (0:21) <-> Right Hand (21:42)
     c[:, 0:21], c[:, 21:42] = c[:, 21:42].clone(), c[:, 0:21].clone()
-    c[:, 42:47], c[:, 47:52] = c[:, 47:52].clone(), c[:, 42:47].clone()
-    c[:, 51], c[:, 52] = c[:, 52].clone(), c[:, 51].clone()
+
+    # 3. Swap Arms: Left Shoulder (42) <-> Right Shoulder (43), Left Elbow (44) <-> Right Elbow (45)
+    c[:, 42], c[:, 43] = c[:, 43].clone(), c[:, 42].clone()
+    c[:, 44], c[:, 45] = c[:, 45].clone(), c[:, 44].clone()
+
+    # 4. Swap Face: Eyes (46 <-> 47), Cheeks (49 <-> 50), Mouth Corners (51 <-> 52)
+    c[:, 46], c[:, 47] = c[:, 47].clone(), c[:, 46].clone()  # Left Eye <-> Right Eye
+    c[:, 49], c[:, 50] = c[:, 50].clone(), c[:, 49].clone()  # Left Cheek <-> Right Cheek
+    c[:, 51], c[:, 52] = c[:, 52].clone(), c[:, 51].clone()  # Left Mouth <-> Right Mouth
+    # Nose (48) is centerline, stays at 48
+
     seq[:, :159] = c.view(T, 159)
+    # Swap presence flags for Left Hand (159) and Right Hand (160)
     seq[:, 159], seq[:, 160] = seq[:, 160].clone(), seq[:, 159].clone()
     return _reclamp(seq)
 
@@ -90,7 +103,8 @@ def aug_tilt(seq, deg=10.0):
     seq[:, :159] = c.view(T, 159)
     return _reclamp(seq)
 
-def aug_speed(seq, lo=0.85, hi=1.15):
+def aug_speed(seq, lo=0.80, hi=1.25):
+    """Speed up (lo < 1.0) or slow down (hi > 1.0) sign execution smoothly."""
     T, D = seq.shape
     factor = random.uniform(lo, hi)
     new_T = max(8, int(round(T * factor)))
@@ -106,10 +120,12 @@ def aug_temporal_mask(seq, max_mask=4, n_masks=2):
     return seq
 
 def augment(seq, strength=1.0):
+    # Pure horizontal mirror (X inverted + hands swapped, Y and Z preserved upright)
     if random.random() < 0.40 * strength: seq = aug_flip(seq)
     if random.random() < 0.50 * strength: seq = aug_tilt(seq, 10.0 * strength)
     if random.random() < 0.50 * strength: seq = aug_shift(seq, 0.05 * strength, 0.02 * strength)
-    if random.random() < 0.35 * strength: seq = aug_speed(seq, 0.88, 1.12)
+    # Slow down or speed up frames (0.80x - 1.25x)
+    if random.random() < 0.50 * strength: seq = aug_speed(seq, 0.80, 1.25)
     if random.random() < 0.30 * strength: seq = aug_temporal_mask(seq, 3, 2)
     return seq
 
@@ -124,7 +140,7 @@ class SyntheticSentenceDataset(Dataset):
     3. Suffix rest frames with random coordinate noise & idle hand drift.
     """
     def __init__(self, data_dir, classes, samples_per_epoch=1600,
-                 is_train=True, max_words=10, min_words=1, aug_strength=1.0):
+                 is_train=True, max_words=18, min_words=1, aug_strength=1.0):
         self.data_dir       = data_dir
         self.classes        = classes
         self.class_to_idx   = {c: i for i, c in enumerate(classes)}

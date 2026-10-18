@@ -17,11 +17,14 @@ if BACKEND_DIR not in sys.path: sys.path.insert(0, BACKEND_DIR)
 
 from training.train_conformer_ctc import ISLHybridConformerCTC, greedy_decode, compute_wer
 
-DEFAULT_CKPT = os.path.join(BACKEND_DIR, "models", "isl_real_sentences", "real_sentence_best.pth")
+REAL_DIR = os.path.join(BACKEND_DIR, "models", "isl_real_sentences")
+DEFAULT_CKPT = os.path.join(REAL_DIR, "real_sentence_checkpoint.pth")
+if not os.path.exists(DEFAULT_CKPT):
+    DEFAULT_CKPT = os.path.join(REAL_DIR, "real_sentence_best.pth")
 DEFAULT_DATA_DIR = os.path.join(BACKEND_DIR, "data", "tensors_sentence_level")
 CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "phase6_word_model", "classes.json")
 
-def audit_real_model(ckpt_path=DEFAULT_CKPT, data_dir=DEFAULT_DATA_DIR, n_samples=20):
+def audit_real_model(ckpt_path=DEFAULT_CKPT, data_dir=DEFAULT_DATA_DIR, n_samples=20, random_sample=True, seed=None):
     if not os.path.exists(ckpt_path):
         print("=" * 72)
         print("REAL SENTENCE VIDEO CTC COLLAPSE AUDIT")
@@ -51,13 +54,33 @@ def audit_real_model(ckpt_path=DEFAULT_CKPT, data_dir=DEFAULT_DATA_DIR, n_sample
     with open(index_path, "r", encoding="utf-8") as f: items = json.load(f)
     items = [it for it in items if os.path.exists(it.get("tensor_path", "")) and len(it.get("in_scope_indices", [])) > 0]
 
+    # Group by distinct sentence to avoid picking the same sentence repeated times
+    unique_by_sentence = {}
+    for it in items:
+        s_key = it.get("sentence", "").strip().lower()
+        if s_key not in unique_by_sentence:
+            unique_by_sentence[s_key] = []
+        unique_by_sentence[s_key].append(it)
+
+    distinct_candidates = [vids[0] for vids in unique_by_sentence.values()]
+
+    if seed is not None:
+        import random
+        random.seed(seed)
+
+    if random_sample:
+        import random
+        pool = distinct_candidates if len(distinct_candidates) >= n_samples else items
+        sampled = random.sample(pool, min(n_samples, len(pool)))
+    else:
+        sampled = distinct_candidates[:n_samples]
+
     print("=" * 72)
     print("REAL SENTENCE VIDEO CTC COLLAPSE AUDIT")
     print(f"Checkpoint: {os.path.basename(ckpt_path)}")
-    print(f"Available Real Videos: {len(items):,}")
+    print(f"Available Real Videos: {len(items):,} ({len(distinct_candidates)} distinct sentences)")
+    print(f"Sampling Mode: {'Random Distinct' if random_sample else 'First Distinct'} ({len(sampled)} sentences)")
     print("=" * 72)
-
-    sampled = items[:n_samples]
     total_frames = 0
     blank_frames = 0
     burst_lengths = []
@@ -136,5 +159,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt", type=str, default=DEFAULT_CKPT)
     parser.add_argument("--samples", type=int, default=15)
+    parser.add_argument("--no_random", action="store_true", help="Disable random sampling (pick first distinct sentences)")
+    parser.add_argument("--seed", type=int, default=None, help="Random seed for deterministic sampling")
     args = parser.parse_args()
-    audit_real_model(ckpt_path=args.ckpt, n_samples=args.samples)
+    audit_real_model(ckpt_path=args.ckpt, n_samples=args.samples, random_sample=(not args.no_random), seed=args.seed)
