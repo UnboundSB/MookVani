@@ -18,6 +18,8 @@ Model training and evaluation scripts for word-level and sentence-level sign rec
 - `structure.md`: Directory structure documentation for training.
 - `train_conformer_ctc.py`: Next-generation continuous sentence trainer with ISL Conformer-CTC (MHA + Depthwise Conv, no global pooling), 4-stage curriculum (single-word, 2-word, N-word progressive, unfrozen polish), and Blank Connectivity Regularization.
 - `train_real_sentences.py`: Real continuous human sign sentence fine-tuner training Conformer-CTC on real continuous video streams with selective in-scope relabeling.
+- `train_real_sentences_phase2.py`: Phase 2 continuous sentence fine-tuner incorporating CosineAnnealingWarmRestarts, SpecAugment temporal cutout, and class-balanced focal CTC loss to escape the 77% local minimum. Saves to `models/isl_real_sentences_phase2/`.
+- `train_real_final.py`: Master regularized continuous trainer warm-starting from Phase 2 real-sentence weights with calibrated CTC duration deficit, SpecAugment temporal cutout, and zero-leakage prompt splits. Saves to `models/isl_real_final/`.
 - `train_reconformer_word.py`: Primary training script for ReConformer word-level models.
 - `train_synthetic.py`: Trains sign recognition models using synthetic pose sequences.
 - `train_synthetic_sentences.py`: Phase 1 continuous sentence trainer using CTC loss. Generates synthetic sentences (1-10 words, no repetition, smooth co-articulation, uniform sentence-level flip/shift/tilt augmentations), loads all uncapped class samples, and trains the CTC head over a frozen Phase 6 backbone.

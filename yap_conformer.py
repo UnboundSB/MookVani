@@ -372,7 +372,11 @@ class YAPConfig:
     hold_quality: float = 0.2     # frames with quality below this reuse the last good feature
     entity_dim: int = 256
 
-    # --- segmentation (SegmentTracker) ---------------------------------------
+    # -
+    # 
+    # 
+    # 
+    # -- segmentation (SegmentTracker) ---------------------------------------
     on_thr: float = 0.6           # presence >= on_thr (and something tracked) to start
     off_thr: float = 0.4          # presence < off_thr to count as "low"
     on_hold_s: float = 0.06       # presence must stay high this long to start

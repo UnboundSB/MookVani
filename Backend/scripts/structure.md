@@ -10,6 +10,7 @@ Utility and processing scripts for data extraction, augmentation, dataset loader
 - `check_ckpt.py`: Diagnostic utility to inspect PyTorch checkpoint keys and weights.
 - `check_collapse.py`: Diagnostic utility auditing CTC blank collapse, burst durations, and emission health.
 - `check_real_sentence_collapse.py`: Audits real continuous human sign video predictions, burst length, and blank ratios.
+- `check_real_sentence_phase2.py`: Zero-leakage Phase 2 audit script evaluating continuous checkpoints strictly on the hold-out validation partition.
 - `check_sizes.py`: Quick verification script for checking tensor shape and sequence lengths.
 - `dataset.py`: PyTorch Dataset and DataLoader classes for sign language sequences.
 - `debug_augmentation.py`: Debug script for validating keypoint augmentation correctness.
