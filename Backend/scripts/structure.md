@@ -9,7 +9,7 @@ Utility and processing scripts for data extraction, augmentation, dataset loader
 - `augment_extract_sentence.py`: Augmentation and feature extraction pipeline for sentence sequences.
 - `check_ckpt.py`: Diagnostic utility to inspect PyTorch checkpoint keys and weights.
 - `check_collapse.py`: Diagnostic utility auditing CTC blank collapse, burst durations, and emission health.
-- `check_real_sentence_collapse.py`: Audits real continuous human sign video predictions, burst length, and blank ratios.
+- `check_real_sentence_collapse.py`: Audits real continuous human sign video predictions, burst length, and blank ratios. Applies the same feature pipeline as the training (`harmonize_features` + `_reclamp`), because the three tensor corpora use three different anchors and a harmonisation-trained model otherwise looks collapsed on raw tensors.
 - `check_real_sentence_phase2.py`: Zero-leakage Phase 2 audit script evaluating continuous checkpoints strictly on the hold-out validation partition.
 - `check_sizes.py`: Quick verification script for checking tensor shape and sequence lengths.
 - `dataset.py`: PyTorch Dataset and DataLoader classes for sign language sequences.
@@ -23,7 +23,7 @@ Utility and processing scripts for data extraction, augmentation, dataset loader
 - `live_progress.py`: Terminal progress monitor for long-running batch extraction jobs.
 - `organize_directories.py`: Reorganizes model checkpoints, metrics, and plots into designated folders.
 - `plot_confusion_matrix.py`: Script to plot and save confusion matrix figures.
-- `plotter.py`: Sentence dataset vocabulary coverage and distribution plotter analyzing ISL-CSLRT and iSign datasets.
+- `plotter.py`: Sentence dataset vocabulary coverage and distribution plotter analyzing ISL-CSLRT and iSign datasets. `match_sentence_tokens()` returns the in-scope words in SIGNING ORDER — multi-word glosses are matched in place (the previous version pushed every compound phrase to the front, which mis-ordered the CTC target of 18 of the 1579 extracted clips).
 - `structure.md`: Directory structure documentation for scripts.
 - `tensor_augmentation.py`: Direct tensor augmentations including temporal jitter and keypoint dropout.
 - `test_eval.py`: Evaluation script testing model inferences against validation sets.

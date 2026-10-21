@@ -6,6 +6,12 @@ Evaluates checkpoints trained on real human sign videos:
 - Duration bursts (checks if signs sustain across >= 5 frames).
 - Prints Ground Truth In-Scope Words vs Model Hypothesis.
 - Emits explicit [HEALTHY] vs [COLLAPSED] verdict.
+
+The tensors are put through the SAME feature pipeline as the training
+(`harmonize_features` + `_reclamp` from training/train_conformer_ctc.py).  Skipping
+that step makes the model look collapsed even when it is not: the three corpora in
+Backend/data use three different anchors, so a model trained on the harmonised frames
+emits nothing on the raw ones.
 """
 
 import os, sys, glob, json, argparse
@@ -15,7 +21,9 @@ import torch
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BACKEND_DIR not in sys.path: sys.path.insert(0, BACKEND_DIR)
 
-from training.train_conformer_ctc import ISLHybridConformerCTC, greedy_decode, compute_wer
+from training.train_conformer_ctc import (
+    ISLHybridConformerCTC, greedy_decode, compute_wer, harmonize_features, _reclamp
+)
 
 REAL_DIR = os.path.join(BACKEND_DIR, "models", "isl_real_sentences")
 DEFAULT_CKPT = os.path.join(REAL_DIR, "real_sentence_checkpoint.pth")
@@ -90,6 +98,8 @@ def audit_real_model(ckpt_path=DEFAULT_CKPT, data_dir=DEFAULT_DATA_DIR, n_sample
     with torch.no_grad():
         for it in sampled:
             seq = torch.load(it["tensor_path"], weights_only=True).float().to(device)
+            # Same feature pipeline as the training (see the module docstring).
+            seq = _reclamp(harmonize_features(seq).contiguous())
             T = seq.shape[0]
             total_frames += T
 

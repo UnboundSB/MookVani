@@ -15,5 +15,7 @@ Core backend engine containing ML models, feature extractors, training loops, an
 - `features/`: Feature extraction logic and MediaPipe holistic landmark processing.
 - `models/`: Neural network architectures (Conformer, ISL models) and saved checkpoint weights.
 - `scripts/`: Data augmentation, extraction pipelines, directory management, and evaluation utilities.
+- `segmentor/`: YAP (You Adapt Progressively) gesture segmentor workspace. Contains `yap_conformer.py` (the full YAP + YAPpingConformer implementation), noise augmentation, and the two-stage training pipeline (noise filtration + synthetic sentence segmentation).
 - `training/`: Model training routines, fine-tuning scripts, and validation evaluation scripts.
 - `utils/`: Reusable utilities for gloss mapping, metric calculations, and formatting.
+

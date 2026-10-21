@@ -33,9 +33,9 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BACKEND_DIR not in sys.path: sys.path.insert(0, BACKEND_DIR)
 
 from training.train_conformer_ctc import (
-    ISLHybridConformerCTC, ModelEMA,
+    ISLHybridConformerCTC, ModelEMA, AntiCollapseCTCLoss,
     greedy_decode, batch_decode, batch_targets, compute_wer,
-    augment, _reclamp
+    augment, _reclamp, escape_local_minimum, harmonize_features, BODY_DIMS
 )
 
 DEFAULT_DATA_DIR = os.path.join(BACKEND_DIR, "data", "tensors_sentence_level")
@@ -51,52 +51,34 @@ CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "phase6_word_model", "classes
 # -----------------------------------------------------------------------------
 class Phase2BalancedFocalCTCLoss(nn.Module):
     """
-    Class-Balanced Focal CTC Loss designed to break out of the 77% pronoun-dominated local minimum:
-    1. Per-sample sequence focal modulation: L_i = (1 - P(seq))^gamma * L_ctc.
-    2. Content-Word Bonus: Words with high frequency ('i', 'you', 'he', 'she')
-       receive normal gradient, while under-represented content words receive boosted attention.
-    3. Duration deficit constraint ensures signs sustain across >= 5 frames.
+    Class-Balanced Focal CTC Loss for the Phase 2 real-sentence run.
+
+    The focal modulation (up-weighting the sentences the model gets wrong) is kept, but
+    the old duration-deficit term is replaced by the shared emission barrier.
+
+    Why: the collapsed Phase 1 checkpoint was *confidently* blank - only 2.6% of its
+    probability mass on non-blank tokens, 97.8% of the frames won by the blank, and a
+    per-frame entropy of 0.040 out of ln(263)=5.57.  A deficit term on the summed
+    non-blank mass cannot fix that, because the model satisfies it by spreading a
+    little probability over many frames while the decoder still returns nothing.
+    The emission barrier counts the frames where a non-blank token actually wins and
+    keeps pushing while the model emits nothing at all.
     """
-    def __init__(self, blank_id, class_weights=None, gamma=1.0, deficit_w=1.0, min_frames_per_word=5.0):
+    def __init__(self, blank_id, gamma=1.0, emission_w=1.0, min_frames_per_sign=10.0,
+                 blank_target=0.97, blank_w=0.5, spike_w=0.10):
         super().__init__()
-        self.blank_id = blank_id
-        self.gamma = gamma
-        self.deficit_w = deficit_w
-        self.min_frames_per_word = min_frames_per_word
-        if class_weights is not None:
-            self.register_buffer("class_weights", torch.tensor(class_weights, dtype=torch.float32))
-        else:
-            self.class_weights = None
+        self.inner = AntiCollapseCTCLoss(
+            blank_id,
+            blank_target=blank_target,
+            blank_w=blank_w,
+            emission_w=emission_w,
+            min_frames_per_sign=min_frames_per_sign,
+            spike_w=spike_w,
+            focal_gamma=gamma,
+        )
 
     def forward(self, log_probs_t, targets, input_lengths, target_lengths):
-        # log_probs_t: (T, B, C)
-        ctc_losses = F.ctc_loss(
-            log_probs_t, targets, input_lengths, target_lengths,
-            blank=self.blank_id, zero_infinity=True, reduction="none"
-        )  # (B,)
-
-        # Sequence Focal Factor: kicks focus onto hard/misaligned sentences
-        p_seq = torch.exp(-ctc_losses.clamp(max=12.0))
-        focal_weight = torch.pow(1.0 - p_seq, self.gamma)
-        loss = (focal_weight * ctc_losses).mean()
-
-        # Duration Deficit Constraint: ensures in-scope gestures are sustained
-        if self.deficit_w > 0.0:
-            lp = log_probs_t.transpose(0, 1)  # (B, T, C)
-            B = lp.shape[0]
-            blank_lp = lp[:, :, self.blank_id]
-            non_blank_p = 1.0 - torch.exp(blank_lp)
-
-            target_mass = target_lengths.float() * self.min_frames_per_word
-            actual_mass = []
-            for b in range(B):
-                valid_t = input_lengths[b].item()
-                actual_mass.append(non_blank_p[b, :valid_t].sum())
-            actual_mass = torch.stack(actual_mass)
-            deficit = F.relu(target_mass - actual_mass)
-            loss = loss + self.deficit_w * deficit.mean()
-
-        return loss
+        return self.inner(log_probs_t, targets, input_lengths, target_lengths)
 
 # -----------------------------------------------------------------------------
 # 2. ZERO-LEAKAGE DATASET WITH SPECAUGMENT
@@ -151,24 +133,34 @@ class RealSentenceDatasetPhase2(Dataset):
         if seq.shape[0] > max_len:
             seq = F.interpolate(seq.T.unsqueeze(0), size=max_len, mode="linear", align_corners=True).squeeze(0).T
 
+        # Re-anchor on the neck (the continuous corpus uses the nose as the anchor while
+        # the backbone was pretrained on an image-centre anchored corpus) and harmonise
+        # the missing-modality encoding.  _reclamp() runs last so the canonical resting
+        # pose is written in the final frame.
+        seq = harmonize_features(seq)
+        seq = _reclamp(seq.contiguous())
+
         if self.is_train:
             # Canonical pose augmentation: upright horizontal flip, tilt, shift, speed
             seq = augment(seq, strength=0.85)
 
             # SpecAugment: Temporal block masking (masks 4-10 consecutive frames)
-            # Forces model to recognize dynamic movement rather than memorizing static landmarks
+            # Forces model to recognize dynamic movement rather than memorizing static landmarks.
+            # The presence flags are cleared as well, so the model never sees "modality
+            # present but geometry exactly zero".
             T = seq.shape[0]
             if T > 16 and random.random() < 0.40:
                 mask_len = random.randint(4, min(12, T // 4))
                 mask_st = random.randint(0, T - mask_len)
                 seq = seq.clone()
                 seq[mask_st:mask_st+mask_len, :159] = 0.0
+                seq[mask_st:mask_st+mask_len, 159:163] = 0.0
 
-            # Subtle coordinate jitter
+            # Subtle coordinate jitter (body landmarks only - the face block stays zero)
             if random.random() < 0.35:
-                noise = torch.randn_like(seq[:, :159]) * 0.004
+                noise = torch.randn_like(seq[:, :BODY_DIMS]) * 0.004
                 seq = seq.clone()
-                seq[:, :159] += noise
+                seq[:, :BODY_DIMS] += noise
                 seq = _reclamp(seq)
 
         return seq, seq.shape[0], torch.tensor(labels, dtype=torch.long)
@@ -236,8 +228,12 @@ def train_real_sentences_phase2(epochs=30, batch_size=4, lr_backbone=1.5e-5, lr_
         {"params": model.backbone.parameters(), "lr": lr_backbone, "weight_decay": 2e-4},
         {"params": list(model.conformer.parameters()) + list(model.ctc_proj.parameters()), "lr": lr_head, "weight_decay": 2e-4}
     ]
+    for g in param_groups:
+        g["base_lr"] = g["lr"]
 
-    criterion = Phase2BalancedFocalCTCLoss(blank_id, gamma=1.0, deficit_w=1.0, min_frames_per_word=5.0)
+    criterion = Phase2BalancedFocalCTCLoss(blank_id, gamma=1.0, emission_w=1.0,
+                                           min_frames_per_sign=10.0, blank_target=0.97,
+                                           blank_w=0.5, spike_w=0.10)
     optimizer = optim.AdamW(param_groups, betas=(0.9, 0.98))
 
     # Cosine Annealing with Warm Restarts: T_0=8 epochs per cycle kicks model out of local minima
@@ -256,6 +252,10 @@ def train_real_sentences_phase2(epochs=30, batch_size=4, lr_backbone=1.5e-5, lr_
 
     best_wer = float("inf")
     history = {"train_loss": [], "val_loss": [], "wer": [], "wer_ema": []}
+    epochs_without_improvement = 0
+    escapes = 0
+    escape_patience = 8
+    escape_scale = 0.02
 
     for ep in range(epochs):
         model.train()
@@ -321,6 +321,22 @@ def train_real_sentences_phase2(epochs=30, batch_size=4, lr_backbone=1.5e-5, lr_
         scheduler.step()
         cur_lr = optimizer.param_groups[-1]["lr"]
         print(f"[P2 Ep {ep+1:02d}/{epochs:02d}] LR: {cur_lr:.2e} | Train: {t_loss:.3f} | Val: {v_loss:.3f} | WER: {wer*100:.1f}% | EMA WER: {ema_wer*100:.1f}%")
+
+        # --- Local-minimum escape -------------------------------------------
+        if wer < best_wer - 1e-4:
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+        if escape_patience > 0 and epochs_without_improvement >= escape_patience:
+            escapes += 1
+            print(f"  [ESCAPE] No val-WER improvement for {epochs_without_improvement} epochs "
+                  f"(WER {wer*100:.1f}%). Kicking the model out of the local minimum.")
+            print(f"  [ESCAPE] {escape_local_minimum(model, optimizer, scale=escape_scale)}")
+            ema = ModelEMA(model, decay=0.999)
+            for g in optimizer.param_groups:
+                g["lr"] = g.get("base_lr", g["lr"])
+            scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=8, T_mult=2, eta_min=1e-6)
+            epochs_without_improvement = 0
 
         # Save latest checkpoint every epoch
         torch.save(model.state_dict(), os.path.join(out_dir, "phase2_sentence_checkpoint.pth"))

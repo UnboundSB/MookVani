@@ -54,27 +54,56 @@ def clean_text(text):
     return " ".join(text.split())
 
 def match_sentence_tokens(text, vocab_set, compound_classes):
-    norm_text = clean_text(text)
-    matched_in_scope = []
-    
+    """Tokenise a sentence gloss into (in_scope, out_of_scope) words.
+
+    The in-scope words are returned in SIGNING ORDER.  Multi-word glosses
+    ("thank you", "how are you", ...) are matched IN PLACE, so "i am fine. thank you
+    sir" yields ['i', 'thank you'] and not ['thank you', 'i'].
+
+    The previous implementation appended every compound phrase first and the single
+    words afterwards, so the target sequence was out of order for every sentence that
+    contains a multi-word gloss - 18 of the 1579 extracted clips, which for a CTC model
+    is a wrong alignment target and not just a wrong label.
+    """
+    if not isinstance(text, str):
+        return [], []
+    norm_text = text.lower()
+    norm_text = re.sub(r"[^\w\s]", " ", norm_text)   # keep the character positions intact
+
+    # 1. Locate the compound phrases: one occurrence per class, longest match wins.
+    spans = []
     for comp in compound_classes:
-        pattern = r'\b' + re.escape(comp) + r'\b'
-        if re.search(pattern, norm_text):
-            matched_in_scope.append(comp)
-            norm_text = re.sub(pattern, " ", norm_text)
+        m = re.search(r'\b' + re.escape(comp) + r'\b', norm_text)
+        if m:
+            spans.append((m.start(), m.end(), comp))
+    spans.sort(key=lambda x: (x[0], -(x[1] - x[0])))
+    chosen, last_end = [], -1
+    for s, e, c in spans:
+        if s >= last_end:
+            chosen.append((s, e, c))
+            last_end = e
 
-    words = [w for w in norm_text.split() if w]
-    out_of_scope = []
-
-    for w in words:
+    # 2. The single words that are not part of a compound phrase.
+    covered = [False] * len(norm_text)
+    for s, e, _ in chosen:
+        for i in range(s, e):
+            covered[i] = True
+    words = []
+    for m in re.finditer(r'\S+', norm_text):
+        if covered[m.start()]:
+            continue
+        w = m.group(0)
         if w in NON_ISL_STOPWORDS:
             continue
-        if w in vocab_set:
-            matched_in_scope.append(w)
-        else:
-            out_of_scope.append(w)
+        words.append((m.start(), w))
 
-    return matched_in_scope, out_of_scope
+    # 3. Merge by position -> the true signing order.
+    tokens = [(s, c) for s, e, c in chosen] + words
+    tokens.sort(key=lambda x: x[0])
+
+    in_scope = [t for _, t in tokens if t in vocab_set]
+    out_of_scope = [t for _, t in tokens if t not in vocab_set]
+    return in_scope, out_of_scope
 
 def run_analysis(output_dir=None):
     if output_dir is None: output_dir = EDA_PLOTS_DIR

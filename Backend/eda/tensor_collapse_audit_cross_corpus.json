@@ -1,0 +1,82 @@
+{
+  "modalities": {
+    "word": {
+      "lh": 93.57,
+      "rh": 98.37,
+      "arms": 100.0,
+      "face": 0.45
+    },
+    "word_cslrt": {
+      "lh": 51.58,
+      "rh": 84.16,
+      "arms": 100.0,
+      "face": 33.37
+    },
+    "sentence": {
+      "lh": 88.94,
+      "rh": 93.07,
+      "arms": 99.99,
+      "face": 89.33
+    }
+  },
+  "missing_modality_encoding": {
+    "word": {
+      "raw_zero_blocks": 294007,
+      "resting_placeholder_blocks": 0
+    },
+    "word_cslrt": {
+      "raw_zero_blocks": 660,
+      "resting_placeholder_blocks": 723
+    },
+    "sentence": {
+      "raw_zero_blocks": 19457,
+      "resting_placeholder_blocks": 39344
+    }
+  },
+  "flags": [
+    "MODALITY SHIFT on 'lh': word=93.6%, word_cslrt=51.6%, sentence=88.9%.",
+    "MODALITY SHIFT on 'face': word=0.5%, word_cslrt=33.4%, sentence=89.3%.  FACE is effectively DEAD in ['word'] but alive in ['word_cslrt', 'sentence'], so those dimensions change their meaning between the two corpora.",
+    "MIXED ENCODING in word_cslrt: 660 missing-modality blocks stored as raw zeros and 723 as the canonical resting pose. The same physical state has two different numeric encodings.",
+    "MIXED ENCODING in sentence: 19,457 missing-modality blocks stored as raw zeros and 39,344 as the canonical resting pose. The same physical state has two different numeric encodings.",
+    "GEOMETRIC FRAME SHIFT: the neck sits at [0.0, 0.0, 0.0] in word_cslrt but at [3.588, 2.721, -1.198] in word - a displacement of 4.66 shoulder widths. A backbone pretrained on one frame and fine-tuned on the other sees a completely different skeleton. Training-side fix: harmonize_features() in Backend/training/train_conformer_ctc.py.",
+    "GEOMETRIC FRAME SHIFT: the neck sits at [0.011, 0.607, -0.513] in sentence but at [3.588, 2.721, -1.198] in word - a displacement of 4.21 shoulder widths. A backbone pretrained on one frame and fine-tuned on the other sees a completely different skeleton. Training-side fix: harmonize_features() in Backend/training/train_conformer_ctc.py."
+  ],
+  "geometric_frame": {
+    "word": {
+      "neck_median": [
+        3.588,
+        2.721,
+        -1.198
+      ],
+      "neck_offset_from_origin": 4.66,
+      "neck_per_clip_p10_p90": [
+        4.122,
+        5.291
+      ]
+    },
+    "word_cslrt": {
+      "neck_median": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "neck_offset_from_origin": 0.0,
+      "neck_per_clip_p10_p90": [
+        0.0,
+        0.544
+      ]
+    },
+    "sentence": {
+      "neck_median": [
+        0.011,
+        0.607,
+        -0.513
+      ],
+      "neck_offset_from_origin": 0.794,
+      "neck_per_clip_p10_p90": [
+        0.497,
+        1.194
+      ]
+    }
+  }
+}

@@ -6,9 +6,19 @@ and break out of blank-suppression on unseen validation videos.
 
 Key Fixes:
 1. Anti-Overfitting: Dropout (0.25), Weight Decay (5e-4), SpecAugment Temporal Cutout.
-2. Deficit Enforcement (deficit_w=2.5): Forces model to maintain non-blank sign bursts.
-3. Blank Prior Penalty: Lowers blank dominance on unannotated 200+ frame sequences.
-4. Zero-Leakage Sentence-Level Split: Clean hold-out validation.
+2. Emission Barrier (emission_w): the collapsed checkpoint this trainer was supposed to
+   fix was *confidently* blank, so the old duration-deficit term could not help - it was
+   satisfiable by spreading a little probability over many frames.  The shared
+   AntiCollapseCTCLoss counts the frames where a non-blank token actually wins and
+   applies a log barrier.
+3. Blank Cap: an upper bound on the mean blank probability, so the model cannot simply
+   spam non-blank tokens to satisfy the emission barrier.
+4. Feature Harmonisation: the continuous corpus is re-anchored into the geometric frame
+   the backbone was pretrained in (harmonize_features), and the missing-modality
+   encoding is normalised (_reclamp).
+5. Zero-Leakage Sentence-Level Split: Clean hold-out validation.
+6. Local-Minimum Escape: after a plateau the run perturbs the head weights, resets the
+   trainable BatchNorm statistics, rebalances the CTC head and restarts the LR schedule.
 """
 
 import os, sys, json, math, random, argparse, copy
@@ -27,9 +37,9 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BACKEND_DIR not in sys.path: sys.path.insert(0, BACKEND_DIR)
 
 from training.train_conformer_ctc import (
-    ISLHybridConformerCTC, ModelEMA,
+    ISLHybridConformerCTC, ModelEMA, AntiCollapseCTCLoss,
     greedy_decode, batch_decode, batch_targets, compute_wer,
-    augment, _reclamp
+    augment, _reclamp, escape_local_minimum, harmonize_features, BODY_DIMS
 )
 
 DEFAULT_DATA_DIR = os.path.join(BACKEND_DIR, "data", "tensors_sentence_level")
@@ -39,34 +49,35 @@ PHASE2_BEST = os.path.join(BACKEND_DIR, "models", "isl_real_sentences_phase2", "
 PHASE1_BEST = os.path.join(BACKEND_DIR, "models", "isl_real_sentences", "real_sentence_best.pth")
 
 class FinalBalancedCTCLoss(nn.Module):
-    def __init__(self, blank_id, deficit_w=0.5, min_frames_per_word=4.0):
-        super().__init__()
-        self.blank_id = blank_id
-        self.deficit_w = deficit_w
-        self.min_frames_per_word = min_frames_per_word
+    """
+    CTC loss for the master real-sentence run.
 
-    def forward(self, log_probs_t, targets, input_lengths, target_lengths):
-        ctc_loss = F.ctc_loss(
-            log_probs_t, targets, input_lengths, target_lengths,
-            blank=self.blank_id, zero_infinity=True
+    The old duration-deficit term is replaced by the shared emission barrier.  The
+    collapsed checkpoint this trainer was supposed to fix was *confidently* blank
+    (2.6% non-blank mass, 97.8% of the frames won by the blank, per-frame entropy
+    0.040 out of ln(263)=5.57), and a constraint on the summed non-blank mass cannot
+    fix that: the model satisfies it by spreading a little probability over many
+    frames while the greedy decoder still returns nothing.
+
+    The emission barrier counts the frames where a non-blank token is at least as
+    likely as the blank - exactly the comparison the decoder makes - and applies a log
+    barrier so the gradient survives in the fully collapsed regime.  A separate upper
+    bound on the mean blank probability stops the model from spamming non-blank tokens.
+    """
+    def __init__(self, blank_id, emission_w=1.0, min_frames_per_sign=10.0,
+                 blank_target=0.97, blank_w=0.5, spike_w=0.10):
+        super().__init__()
+        self.inner = AntiCollapseCTCLoss(
+            blank_id,
+            blank_target=blank_target,
+            blank_w=blank_w,
+            emission_w=emission_w,
+            min_frames_per_sign=min_frames_per_sign,
+            spike_w=spike_w,
         )
 
-        if self.deficit_w > 0.0:
-            lp = log_probs_t.transpose(0, 1)  # (B, T, C)
-            B = lp.shape[0]
-            blank_p = torch.exp(lp[:, :, self.blank_id])
-            non_blank_p = 1.0 - blank_p
-
-            target_mass = target_lengths.float() * self.min_frames_per_word
-            actual_mass = []
-            for b in range(B):
-                valid_t = input_lengths[b].item()
-                actual_mass.append(non_blank_p[b, :valid_t].sum())
-            actual_mass = torch.stack(actual_mass)
-            deficit = F.relu(target_mass - actual_mass)
-            return ctc_loss + self.deficit_w * deficit.mean()
-
-        return ctc_loss
+    def forward(self, log_probs_t, targets, input_lengths, target_lengths):
+        return self.inner(log_probs_t, targets, input_lengths, target_lengths)
 
 class RealSentenceDatasetFinal(Dataset):
     def __init__(self, index_file, is_train=True, val_split=0.10):
@@ -104,22 +115,32 @@ class RealSentenceDatasetFinal(Dataset):
         if seq.shape[0] > max_len:
             seq = F.interpolate(seq.T.unsqueeze(0), size=max_len, mode="linear", align_corners=True).squeeze(0).T
 
+        # Re-anchor on the neck (the continuous corpus uses the nose as the anchor while
+        # the backbone was pretrained on an image-centre anchored corpus) and harmonise
+        # the missing-modality encoding.  _reclamp() runs last so the canonical resting
+        # pose is written in the final frame.
+        seq = harmonize_features(seq)
+        seq = _reclamp(seq.contiguous())
+
         if self.is_train:
             # Canonical pose augmentation
             seq = augment(seq, strength=0.85)
 
-            # SpecAugment temporal cutout (masks 4-12 frames)
+            # SpecAugment temporal cutout (masks 4-12 frames).  The presence flags are
+            # cleared as well, so the model never sees "modality present but geometry
+            # exactly zero" - a state that does not occur in the extracted data.
             T = seq.shape[0]
             if T > 16 and random.random() < 0.45:
                 ml = random.randint(4, min(12, T // 4))
                 st = random.randint(0, T - ml)
                 seq = seq.clone()
                 seq[st:st+ml, :159] = 0.0
+                seq[st:st+ml, 159:163] = 0.0
 
-            # Coordinate jitter
+            # Coordinate jitter (body landmarks only - the face block stays exactly zero)
             if random.random() < 0.35:
                 seq = seq.clone()
-                seq[:, :159] += torch.randn_like(seq[:, :159]) * 0.005
+                seq[:, :BODY_DIMS] += torch.randn_like(seq[:, :BODY_DIMS]) * 0.005
                 seq = _reclamp(seq)
 
         return seq, seq.shape[0], torch.tensor(labels, dtype=torch.long)
@@ -169,8 +190,11 @@ def train_final(epochs=25, batch_size=4, lr_backbone=8e-6, lr_head=3.5e-5, data_
         {"params": model.backbone.parameters(), "lr": lr_backbone, "weight_decay": 5e-4},
         {"params": list(model.conformer.parameters()) + list(model.ctc_proj.parameters()), "lr": lr_head, "weight_decay": 5e-4}
     ]
+    for g in param_groups:
+        g["base_lr"] = g["lr"]
 
-    criterion = FinalBalancedCTCLoss(blank_id, deficit_w=0.5, min_frames_per_word=4.0)
+    criterion = FinalBalancedCTCLoss(blank_id, emission_w=1.0, min_frames_per_sign=10.0,
+                                     blank_target=0.97, blank_w=0.5, spike_w=0.10)
     optimizer = optim.AdamW(param_groups, betas=(0.9, 0.98))
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-6)
     ema = ModelEMA(model, decay=0.999)
@@ -186,6 +210,10 @@ def train_final(epochs=25, batch_size=4, lr_backbone=8e-6, lr_head=3.5e-5, data_
 
     best_wer = float("inf")
     history = {"train_loss": [], "val_loss": [], "wer": [], "wer_ema": []}
+    epochs_without_improvement = 0
+    escapes = 0
+    escape_patience = 8
+    escape_scale = 0.02
 
     for ep in range(epochs):
         model.train()
@@ -248,6 +276,22 @@ def train_final(epochs=25, batch_size=4, lr_backbone=8e-6, lr_head=3.5e-5, data_
 
         scheduler.step()
         print(f"[Ep {ep+1:02d}/{epochs:02d}] Train: {t_loss:.3f} | Val: {v_loss:.3f} | WER: {wer*100:.1f}% | EMA WER: {ema_wer*100:.1f}%")
+
+        # --- Local-minimum escape -------------------------------------------
+        if wer < best_wer - 1e-4:
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+        if escape_patience > 0 and epochs_without_improvement >= escape_patience:
+            escapes += 1
+            print(f"  [ESCAPE] No val-WER improvement for {epochs_without_improvement} epochs "
+                  f"(WER {wer*100:.1f}%). Kicking the model out of the local minimum.")
+            print(f"  [ESCAPE] {escape_local_minimum(model, optimizer, scale=escape_scale)}")
+            ema = ModelEMA(model, decay=0.999)
+            for g in optimizer.param_groups:
+                g["lr"] = g.get("base_lr", g["lr"])
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, epochs - ep), eta_min=1e-6)
+            epochs_without_improvement = 0
 
         torch.save(model.state_dict(), os.path.join(out_dir, "real_final_checkpoint.pth"))
         if wer < best_wer:

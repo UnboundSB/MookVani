@@ -1,11 +1,12 @@
 # Directory Structure: Backend/models/isl_real_sentences
 
-Real continuous human sign recognition model.
+Real continuous human sign recognition model (fine-tuned from the synthetic Conformer-CTC by `training/train_real_sentences.py`).
 
 ## Files
-- `real_sentence_best.pth`: Best checkpoint.
-- `real_sentence_ema_best.pth`: Best EMA shadow checkpoint.
-- `history.json`: Training metrics.
+- `real_sentence_best.pth`: Best-val-WER weights (plain state dict).
+- `real_sentence_ema_best.pth`: Best EMA shadow weights.
+- `real_sentence_checkpoint.pth`: Latest full training state (model, EMA, optimizer, history) for `--resume`.
+- `history.json`: Per-epoch metrics (CTC loss, WER, S/D/I, blank %).
 
 ## Immediate Subdirectories
-- `plots/`: Contains training loss and WER progression curves (`real_sentence_training_curves.png`).
+- `plots/`: Training curves (`real_sentence_training_curves.png`).
