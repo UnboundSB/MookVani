@@ -277,7 +277,7 @@ def build_model(nc, ckpt):
 # 6. DATA LOADING
 # =========================================================================
 
-def load_data(data_dir, max_per=MAX_SAMPLES, vfrac=VAL_FRAC):
+def load_data(data_dir, max_per=MAX_SAMPLES):
     """Load the word corpus with the shared selection rule.
 
     A class that owns fewer than MIN_SAMPLES clips is eliminated from the

@@ -400,7 +400,9 @@ class YAPConfig:
     # --- pooling into one entity ---------------------------------------------
     summary_channels: int = 32    # channels fed to HiPPO
     hippo_order: int = 16         # Legendre coefficients per channel
-    hippo_t0_s: float = 0.05      # time offset so 1/t never blows up at segment start
+    hippo_t0_s: float = 0.05      # floor for the elapsed time used in the pooling readout
+                                   # (guards a degenerate zero-length segment; the pool has
+                                   #  no 1/t term any more)
     hold_quality: float = 0.2     # frames with quality below this reuse the last good feature
     entity_dim: int = 256
 
@@ -875,8 +877,8 @@ class FeatureExpander(nn.Module):
                     a2 = v_pinky[:, :2]
                     e1_xy = F.normalize(a1, dim=-1)
                     zero = torch.zeros_like(e1_xy[:, :1])
-                    e1 = torch.cat([e1_xy, zero], dim=-1)
-                    e3 = torch.cat([zero, torch.ones_like(e1_xy[:, :1])], dim=-1)
+                    e1 = torch.cat([e1_xy, zero], dim=-1)                              # (B,3)
+                    e3 = torch.cat([zero, zero, torch.ones_like(e1_xy[:, :1])], dim=-1)   # (B,3) = +z
                     e2 = torch.linalg.cross(e3, e1, dim=-1)
                     R = torch.stack([e1, e2, e3], dim=-1)                                     # (B,3,3) columns = axes
                     area = (e1_xy[:, 0] * a2[:, 1] - e1_xy[:, 1] * a2[:, 0]).abs()             # |e1 x v_pinky|
@@ -1112,13 +1114,25 @@ class HiPPOLegS(nn.Module):
     def __init__(self, N: int):
         super().__init__()
         self.N = N
-        # LegMat[n,k] = sqrt(2n+1) * P[n,k]  (readout matrix, monomial basis)
-        LegMat = torch.zeros(N, N)
-        for n, row in enumerate(_legendre_monomial_coeffs(N)):
-            for k, v in enumerate(row):
-                LegMat[n, k] = math.sqrt(2 * n + 1) * v
-        self.register_buffer("LegMat", LegMat)
-        self.register_buffer("kp1", torch.arange(1, N + 1, dtype=torch.float32))
+        # The Legendre polynomials in the MONOMIAL basis.  These coefficients grow
+        # fast (|P_15| reaches ~1.4e4, and the readout matrix ~1.4e5), so they are
+        # kept as PYTHON floats (float64) and the readout matrix is built in float64
+        # on demand -- storing it as a float32 buffer silently destroys the accuracy
+        # of the whole pool.
+        self._leg_coeffs = _legendre_monomial_coeffs(N)
+        self._legmat_cache: Optional[torch.Tensor] = None
+        self.register_buffer("kp1", torch.arange(1, N + 1, dtype=torch.float64))
+
+    def _legmat(self, device) -> torch.Tensor:
+        """float64 readout matrix LegMat[n,k] = sqrt(2n+1) * P[n,k], cached per device."""
+        L = self._legmat_cache
+        if L is None or L.device != device:
+            L = torch.zeros(self.N, self.N, dtype=torch.float64)
+            for n, row in enumerate(self._leg_coeffs):
+                for k, v in enumerate(row):
+                    L[n, k] = math.sqrt(2 * n + 1) * v
+            self._legmat_cache = L.to(device)
+        return self._legmat_cache
 
     def step(self, c, f, dt, t_old, t_new=None):
         """
@@ -1131,18 +1145,21 @@ class HiPPOLegS(nn.Module):
           t_new  (S,)     elapsed time after the step (defaults to t_old + dt)
 
         Returns (S,N,C).  dt == 0 is an exact no-op.
+        The state is float64 on purpose: the Legendre readout combines the moments
+        with coefficients up to ~1e5, so a float32 state loses ~4 digits there.
         """
         if t_new is None:
             t_new = t_old + dt
-        t_old = t_old.reshape(-1)
-        t_new = t_new.reshape(-1)
+        t_old = t_old.reshape(-1).to(torch.float64)
+        t_new = t_new.reshape(-1).to(torch.float64)
+        c = c.to(torch.float64)
         ratio = torch.where(t_new > 1e-12,
                             (t_old / t_new.clamp_min(1e-12)).clamp(0.0, 1.0),
                             torch.zeros_like(t_new))
-        kp1 = self.kp1.view(1, -1)                                  # (1,N)
-        w = ratio.view(-1, 1) ** kp1                                # (S,N)  (T_old/T_new)^(k+1)
-        contrib = (1.0 - w) / kp1                                   # (S,N)
-        return c * w.unsqueeze(-1) + f.unsqueeze(1) * contrib.unsqueeze(-1)
+        kp1 = self.kp1.to(t_old.device).view(1, -1)                          # (1,N) float64
+        w = ratio.view(-1, 1) ** kp1                                        # (S,N)  (T_old/T_new)^(k+1)
+        contrib = (1.0 - w) / kp1                                           # (S,N)
+        return c * w.unsqueeze(-1) + f.to(torch.float64).unsqueeze(1) * contrib.unsqueeze(-1)
 
     def readout(self, c, T):
         """
@@ -1153,8 +1170,9 @@ class HiPPOLegS(nn.Module):
 
         Returns (S,N,C) with c_n = T * sum_k LegMat[n,k] * r_k.
         """
-        coef = torch.einsum("nk,skc->snc", self.LegMat, c)        # (S,N,C)
-        return coef * T.reshape(-1, 1, 1)
+        L = self._legmat(c.device)
+        coef = torch.einsum("nk,skc->snc", L, c.to(torch.float64))        # (S,N,C)
+        return coef * T.reshape(-1, 1, 1).to(torch.float64)
 
 
 # ==============================================================================
@@ -1520,20 +1538,22 @@ class YAP(nn.Module):
             extras[s, 1] = quality[b, st_:en].mean()
             extras[s, 2] = t[b, st_] - t[b, pre]
         F_ = F_ + CTX.unsqueeze(-1) * self.ctx_vec            # tell the pooling which poses are lead-in
-        c = feat.new_zeros(S, cfg.hippo_order, C)
+        # The pool state is float64: the Legendre readout combines the moments with
+        # coefficients up to ~1e5, so a float32 state would lose ~4 digits there.
+        c = feat.new_zeros(S, cfg.hippo_order, C, dtype=torch.float64)
         # tau tracks the true elapsed time from the segment start (begins at 0).
         # The pool keeps the exact scaled power moments of the held signal; the
         # Legendre coefficients are read out once, when the segment is complete.
-        tau = feat.new_zeros(S)
+        tau = feat.new_zeros(S, dtype=torch.float64)
         hold = F_[:, 0]
         for k in range(L):
             good = (Q[:, k] >= cfg.hold_quality).unsqueeze(-1)
             hold = torch.where(good, F_[:, k], hold)          # zero-order hold over unreliable poses
             t_old = tau
-            tau = tau + DT[:, k]
+            tau = tau + DT[:, k].to(torch.float64)
             c = self.hippo.step(c, hold, DT[:, k], t_old, tau)
         # exact Legendre projection of the held signal onto P_0..P_{N-1}
-        legs = self.hippo.readout(c, tau.clamp_min(cfg.hippo_t0_s))
+        legs = self.hippo.readout(c, tau.clamp_min(cfg.hippo_t0_s)).to(F_.dtype)
         flat = self.readout_norm(legs.flatten(1))
         ent = self.readout(torch.cat([flat, torch.log1p(extras[:, 0:1]), extras[:, 1:2], torch.log1p(extras[:, 2:3])], dim=-1))
         return ent, extras
@@ -1874,17 +1894,6 @@ def count_parameters(m: nn.Module) -> int:
 # ==============================================================================
 # __main__  : smoke tests (run `python yap_conformer.py`)
 # ==============================================================================
-def _legendre_eval(n: int, x: torch.Tensor) -> torch.Tensor:
-    """Evaluate the Legendre polynomial P_n at x (torch tensor) by the three-term recurrence."""
-    p0 = torch.ones_like(x)
-    if n == 0:
-        return p0
-    p1 = x
-    for m in range(1, n):
-        p0, p1 = p1, ((2 * m + 1) * x * p1 - m * p0) / (m + 1)
-    return p1
-
-
 def _analytic_legendre_coeffs(times: torch.Tensor, values: torch.Tensor, N: int) -> torch.Tensor:
     """
     Closed-form Legendre projection of a PIECEWISE-CONSTANT signal.
@@ -1895,27 +1904,27 @@ def _analytic_legendre_coeffs(times: torch.Tensor, values: torch.Tensor, N: int)
     and  INT P_0(v) dv = v.  This is an INDEPENDENT derivation (it never touches the
     power-moment formula the pool uses), so it is a real check of the pool.
 
-    times  (M,)   step boundaries, times[0] = 0, times[-1] = T
-    values (M,C) the signal value on [times[i-1], times[i]) -> value i is used on
-                    [times[i-1], times[i]) with values[0] used on [0, times[0])
+    times  (M+1,)  step boundaries: times[0] = 0, times[-1] = T
+    values (M,C)   values[i] is held on the interval [times[i], times[i+1])
     """
     M, C = values.shape
     T = float(times[-1])
-    out = torch.zeros(N, C)
+    out = torch.zeros(N, C, dtype=torch.float64)
+    coeffs = _legendre_monomial_coeffs(N)
     for i in range(M):
-        a = float(times[i - 1]) if i > 0 else 0.0
-        b = float(times[i])
+        a = float(times[i])
+        b = float(times[i + 1])
         if b <= a:
             continue
+        va, vb = a / T, b / T
         for n in range(N):
-            if n == 0:
-                integ = (b - a) / T
-            else:
-                va, vb = a / T, b / T
-                integ = ((_legendre_eval(n + 1, torch.tensor(vb)) - _legendre_eval(n - 1, torch.tensor(vb)))
-                         - (_legendre_eval(n + 1, torch.tensor(va)) - _legendre_eval(n - 1, torch.tensor(va)))) \
-                    / (2 * n + 1)
-            out[n] += math.sqrt(2 * n + 1) * integ * values[i]
+            # antiderivative of P_n in the monomial basis:  A_n(v) = sum_k c[n,k] v^(k+1)/(k+1)
+            # (computing it this way avoids the cancellation of the identity
+            #  INT P_n = (P_{n+1} - P_{n-1}) / (2n+1), which loses ~8 digits)
+            row = coeffs[n]
+            integ = T * (sum(c * vb ** (k + 1) / (k + 1) for k, c in enumerate(row))
+                         - sum(c * va ** (k + 1) / (k + 1) for k, c in enumerate(row)))
+            out[n] += math.sqrt(2 * n + 1) * integ * values[i].double()
     return out
 
 
@@ -2008,19 +2017,19 @@ def _run_tests():
     N = 8
     hip = HiPPOLegS(N)
     M = 40
-    dts = torch.tensor([1.0 / 30.0] * M)
-    times = torch.cat([torch.zeros(1), torch.cumsum(dts, 0)])
-    vals = torch.randn(M, 3)
-    c = torch.zeros(1, N, 3)
-    tau = torch.zeros(1)
+    dts = torch.full((M,), 1.0 / 30.0, dtype=torch.float64)
+    times = torch.cat([torch.zeros(1, dtype=torch.float64), torch.cumsum(dts, 0)])
+    vals = torch.randn(M, 3, dtype=torch.float64)
+    c = torch.zeros(1, N, 3, dtype=torch.float64)
+    tau = torch.zeros(1, dtype=torch.float64)
     for k in range(M):
         t_old = tau
         tau = tau + dts[k:k + 1]
         c = hip.step(c, vals[k:k + 1], dts[k:k + 1], t_old, tau)
     got = hip.readout(c, tau)
     ref = _analytic_legendre_coeffs(times, vals, N)
-    err = (got[0] - ref).abs().max().item() / max(ref.abs().max().item(), 1e-9)
-    assert err < 1e-5, f"pool is not the Legendre projection: rel err {err:.3e}\ngot {got[0]}\nref {ref}"
+    err = (got[0].double() - ref).abs().max().item() / max(ref.abs().max().item(), 1e-9)
+    assert err < 1e-10, f"pool is not the Legendre projection: rel err {err:.3e}\ngot {got[0]}\nref {ref}"
     print(f"[ok] pooling == exact Legendre projection (rel err {err:.2e}, "
           f"independent closed-form reference)")
 
@@ -2055,8 +2064,9 @@ def _run_tests():
     exp = FeatureExpander(hcfg)
     B = 32
     hp = torch.zeros(B, 21, 3)
-    hp[:, 0] = torch.tensor([0.0, 0.0, 0.0])
+    hp[:, 0] = torch.tensor([0.0, 0.0, 0.0])            # wrist
     hp[:, 5] = torch.tensor([0.03, 0.10, 0.0])          # index MCP
+    hp[:, 9] = torch.tensor([0.0, 0.09, 0.0])           # middle MCP (scale pair)
     hp[:, 17] = torch.tensor([-0.03, 0.10, 0.0])        # pinky MCP
     hp += torch.randn(B, 21, 3) * 0.002
     st = exp.init_state(B, "cpu")
@@ -2071,9 +2081,10 @@ def _run_tests():
     with torch.no_grad():
         st, core_f, rich_f, _ = exp.step(st, flat, flat, torch.zeros(B, 21, 3), torch.ones(B, 21),
                                           torch.zeros(B, 21), torch.full((B,), 1 / 30.0))
-    # palm_w is the second-to-last entry of the hand core block (before part_frac)
-    pw_ok = float(core[:, -3].abs().mean())            # a normal palm -> shape features alive
-    pw_flat = float(core_f[:, -3].abs().mean())
+    # palm_w sits after the shape block (3n) and the root block (16) of the hand part
+    pw_i = 3 * 21 + 16
+    pw_ok = float(core[:, pw_i].mean())                 # a normal palm -> frame fully trusted
+    pw_flat = float(core_f[:, pw_i].mean())
     assert pw_flat < 0.05 < pw_ok, f"edge-on palm not detected: {pw_flat:.4f} vs {pw_ok:.4f}"
     print(f"[ok] palm frame: edge-on palm fades out (palm_w {pw_ok:.3f} -> {pw_flat:.3f}), "
           f"features finite")

@@ -145,8 +145,14 @@ def decode_with_lm(
     beam_width: int = 25,
     topk_labels: int = 5,
     min_dur: int = 1,
+    lm_mode: str = "bigram",
 ) -> List[int]:
     """Decode one clip, optionally rescored by a word-level language model.
+
+    ``lm_mode`` selects what the language model contributes: ``"bigram"``
+    (the default) uses only the word ORDER, which is what we want - the unigram
+    prior of the continuous corpus is the very skew that makes the decoder
+    collapse onto "i" and "you".
 
     Returns the ids of the decoded words.
     """
@@ -163,7 +169,7 @@ def decode_with_lm(
             lm_score = 0.0
         else:
             words = [id_to_word[i] for i in ids if 0 <= i < len(id_to_word)]
-            lm_score = lm.score(words)
+            lm_score = lm.score(words, mode=lm_mode)
         score = acoustic + alpha * lm_score - beta * len(ids)
         if score > best_score:
             best_score, best_ids = score, ids
@@ -181,6 +187,7 @@ def batch_decode_with_lm(
     beam_width: int = 25,
     topk_labels: int = 5,
     min_dur: int = 1,
+    lm_mode: str = "bigram",
 ) -> List[List[int]]:
     """Decode a batch of clips (log_probs: (B, T, C))."""
     out = []
@@ -189,5 +196,6 @@ def batch_decode_with_lm(
         lp = log_probs[i, :length]
         out.append(decode_with_lm(lp, blank_id, id_to_word=id_to_word, lm=lm,
                                   alpha=alpha, beta=beta, beam_width=beam_width,
-                                  topk_labels=topk_labels, min_dur=min_dur))
+                                  topk_labels=topk_labels, min_dur=min_dur,
+                                  lm_mode=lm_mode))
     return out

@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Callable, Iterable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional
 
 import torch
 import torch.nn as nn
@@ -191,3 +191,164 @@ def plateau_escape_scheduler(
         new_sched = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=max(1, 20), eta_min=1e-6)
     return new_sched, True
+
+
+# --------------------------------------------------------------------------- #
+# Per-layer learning rates and schedules
+# --------------------------------------------------------------------------- #
+#: The layers of the CTC stack, in the order in which they are trained.
+LAYER_ORDER = ["front", "expander", "gru", "transformer", "tcnn", "conformer",
+                "head", "aux"]
+
+#: The default learning rate of every layer.  The rule:
+#:   - a NEW module (front-end, expander, conformer blocks, heads) learns FAST,
+#:     it has no pretrained weights to protect;
+#:   - a PRETRAINED module (GRU, Transformer, TCNN) learns SLOW, a high LR
+#     would destroy the representation it was trained for.
+DEFAULT_LAYER_LRS = {
+    "front":      3.0e-4,
+    "expander":   3.0e-4,
+    "gru":        1.0e-5,
+    "transformer": 1.0e-5,
+    "tcnn":       3.0e-5,
+    "conformer":  1.5e-4,
+    "head":       1.5e-4,
+    "aux":        1.5e-4,
+}
+
+
+def _layer_of(name: str) -> str:
+    """Which group does a parameter belong to?"""
+    if name.startswith("front."):
+        return "front"
+    if name.startswith("expander.") or name.startswith("backbone.expander."):
+        return "expander"
+    if name.startswith("backbone.gru.") or name.startswith("gru."):
+        return "gru"
+    if name.startswith("backbone.trans.") or name.startswith("trans."):
+        return "transformer"
+    if name.startswith("backbone.t1.") or name.startswith("backbone.t2.") \
+            or name.startswith("t1.") or name.startswith("t2."):
+        return "tcnn"
+    if name.startswith("conformer."):
+        return "conformer"
+    if name.startswith("aux_proj."):
+        return "aux"
+    return "head"
+
+
+def build_layer_param_groups(model, layer_lrs: Optional[dict] = None,
+                             weight_decay: float = 1e-4,
+                             no_decay: bool = True) -> List[dict]:
+    """One parameter group per LAYER, each with its own learning rate.
+
+    The groups follow the structure of the stack: the new modules (front-end,
+    expander, conformer blocks, CTC head) get a high LR because they start
+    from scratch, and the pretrained modules (GRU, Transformer, TCNN) get a
+    low LR because a high one would destroy the representation they were
+    pretrained on.
+
+    ``no_decay`` keeps the biases and the normalisation weights out of the
+    weight decay, which is the standard recipe for a transformer.
+    """
+    lrs = dict(DEFAULT_LAYER_LRS)
+    if layer_lrs:
+        lrs.update(layer_lrs)
+
+    buckets: Dict[str, List[nn.Parameter]] = {}
+    for name, p in model.named_parameters():
+        if not p.requires_grad:
+            continue
+        layer = _layer_of(name)
+        buckets.setdefault(layer, []).append(p)
+
+    groups = []
+    for layer in LAYER_ORDER:
+        params = buckets.pop(layer, [])
+        if not params:
+            continue
+        if no_decay:
+            decay_params = [p for n, p in model.named_parameters()
+                            if _layer_of(n) == layer and p.requires_grad and p.ndim > 1]
+            no_decay_params = [p for n, p in model.named_parameters()
+                               if _layer_of(n) == layer and p.requires_grad and p.ndim <= 1]
+            if decay_params:
+                groups.append({"params": decay_params, "lr": lrs[layer],
+                               "weight_decay": weight_decay, "name": layer})
+            if no_decay_params:
+                groups.append({"params": no_decay_params, "lr": lrs[layer],
+                               "weight_decay": 0.0, "name": f"{layer}_nd"})
+        else:
+            groups.append({"params": params, "lr": lrs[layer],
+                           "weight_decay": weight_decay, "name": layer})
+    # anything left over (a custom module) goes to the head group
+    for layer, params in buckets.items():
+        groups.append({"params": params, "lr": lrs.get("head", 1.5e-4),
+                       "weight_decay": weight_decay, "name": layer})
+    return groups
+
+
+class PerGroupCosineAnnealing:
+    """A cosine schedule where every parameter group has its own floor.
+
+    ``torch.optim.lr_scheduler.CosineAnnealingLR`` anneals EVERY group to the
+    same ``eta_min``, which is wrong for a stack with a 30x learning-rate
+    spread: the pretrained layers (LR 1e-5) would be pushed to 1e-6 while the
+    new ones (LR 3e-4) would need to keep annealing much further down.
+
+    This scheduler anneals every group to ``base_lr * min_lr_ratio``, so the
+    RELATIVE distance travelled is the same for all of them.
+    """
+
+    def __init__(self, optimizer, total_epochs: int, min_lr_ratio: float = 0.01,
+                 warmup_epochs: int = 0, last_epoch: int = -1):
+        self.optimizer = optimizer
+        self.total_epochs = max(1, total_epochs)
+        self.min_lr_ratio = min_lr_ratio
+        self.warmup_epochs = max(0, warmup_epochs)
+        self.last_epoch = last_epoch
+        self.base_lrs = [g.get("base_lr", g["lr"]) for g in optimizer.param_groups]
+        self.step()
+
+    def _factor(self, epoch: int) -> float:
+        if self.warmup_epochs and epoch < self.warmup_epochs:
+            return 0.1 + 0.9 * (epoch + 1) / self.warmup_epochs
+        progress = (epoch - self.warmup_epochs) / max(
+            1, self.total_epochs - self.warmup_epochs)
+        progress = min(max(progress, 0.0), 1.0)
+        return self.min_lr_ratio + (1 - self.min_lr_ratio) * 0.5 * (
+            1 + math.cos(math.pi * progress))
+
+    def step(self, epoch: int = None):
+        if epoch is None:
+            self.last_epoch += 1
+            epoch = self.last_epoch
+        factor = self._factor(epoch)
+        for g, base in zip(self.optimizer.param_groups, self.base_lrs):
+            g["lr"] = base * factor
+        return [g["lr"] for g in self.optimizer.param_groups]
+
+    def get_last_lr(self):
+        return [g["lr"] for g in self.optimizer.param_groups]
+
+    def state_dict(self):
+        return {"last_epoch": self.last_epoch}
+
+    def load_state_dict(self, state):
+        self.last_epoch = state.get("last_epoch", -1)
+
+
+def freeze_layers(model, layers: Sequence[str], freeze: bool = True) -> List[str]:
+    """Freeze (or release) whole LAYERS of the stack.
+
+    This is the staged schedule of the pipeline: the pretrained Transformer is
+    frozen for the first epochs (so the new modules can settle around it) and
+    released afterwards.
+    """
+    touched = []
+    for name, p in model.named_parameters():
+        layer = _layer_of(name)
+        if layer in layers:
+            p.requires_grad = not freeze
+            touched.append(layer)
+    return sorted(set(touched))

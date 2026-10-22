@@ -44,6 +44,12 @@ from utils.dataloader_word import get_word_classes  # noqa: E402
 from utils.checkpoint_utils import extract_state_dict, load_flexible  # noqa: E402
 from utils.ctc_decoder import batch_decode_with_lm  # noqa: E402
 from utils.word_lm import build_word_lm_from_index  # noqa: E402
+from utils.distillation import WordTeacher, batch_distillation_loss  # noqa: E402
+from utils.training_utils import (  # noqa: E402
+    PerGroupCosineAnnealing,
+    build_layer_param_groups,
+    freeze_layers,
+)
 
 # ---------------------------------------------------------------------------
 # Canonical layout + the ONE implementation of the pose augmentations.
@@ -364,7 +370,7 @@ class SyntheticSentenceDataset(Dataset):
     """
     def __init__(self, data_dir, classes, samples_per_epoch=1600,
                  is_train=True, max_words=18, min_words=1, aug_strength=1.0,
-                 max_per_class=None, fill_missing="none"):
+                 max_per_class=None, fill_missing="none", return_spans=False):
         self.data_dir       = data_dir
         self.classes        = classes
         self.class_to_idx   = {c: i for i, c in enumerate(classes)}
@@ -374,6 +380,7 @@ class SyntheticSentenceDataset(Dataset):
         self.min_words      = min_words
         self.aug_strength   = aug_strength
         self.fill_missing   = fill_missing
+        self.return_spans   = return_spans
 
         self.class_files = {}
         for c in classes:
@@ -428,11 +435,17 @@ class SyntheticSentenceDataset(Dataset):
             rest_len = random.randint(12, 28)
             blank_seq = self._rest_with_noise(rest_len, add_noise=True)
             blank_seq = augment(blank_seq, self.aug_strength * 0.5)
+            if self.return_spans:
+                # The same shape as a normal sample: no word, no span, no clip.
+                return (blank_seq, blank_seq.shape[0], torch.tensor([], dtype=torch.long),
+                        [], [])
             return blank_seq, blank_seq.shape[0], torch.tensor([], dtype=torch.long)
 
         n_words = random.randint(self.min_words, self.max_words)
         words   = random.sample(self.valid, min(n_words, len(self.valid)))
         segs, labels = [], []
+        spans = []          # the frames of every word (for the teacher/student loss)
+        teacher_clips = []  # the clean clip of every word (the teacher's input)
 
         # 1. Beginning: Rest frames + random noise & idle drift
         prefix_len = random.randint(6, 14) if self.is_train else 8
@@ -459,7 +472,13 @@ class SyntheticSentenceDataset(Dataset):
                     # Body landmarks only - the face block must stay exactly zero.
                     trans[:, :BODY_DIMS] += torch.randn_like(trans[:, :BODY_DIMS]) * 0.004
                 segs.append(_reclamp(trans))
+            # The word owns the frames of its clip; the transitions between the
+            # words are co-articulation and stay unassigned (the CTC labels them
+            # as blank, which is what they are).
+            start = sum(s.shape[0] for s in segs)
             segs.append(x)
+            spans.append((start, start + x.shape[0]))
+            teacher_clips.append(x)
             labels.append(self.class_to_idx[w])
 
         # 3. End: Rest frames + random noise & idle drift
@@ -471,6 +490,12 @@ class SyntheticSentenceDataset(Dataset):
         if self.is_train:
             full = augment(full, self.aug_strength)
 
+        # The spans and the clean word clips are the student-teacher signal:
+        # the teacher sees the ISOLATED word, the student sees the stitched
+        # sentence, and the consistency loss compares them word by word.
+        if self.return_spans:
+            return (full, full.shape[0], torch.tensor(labels, dtype=torch.long),
+                    spans, teacher_clips)
         return full, full.shape[0], torch.tensor(labels, dtype=torch.long)
 
 class MixedContinuousDataset(Dataset):
@@ -727,6 +752,37 @@ class MixedContinuousDataset(Dataset):
 
 
 def collate(batch):
+    """Collate a batch of sentences.
+
+    With the student-teacher setup the batch also carries the word SPANS (the
+    frames of every word in the stitched sentence) and the clean word clips
+    (the teacher's input), both padded to the longest sample.
+    """
+    if len(batch[0]) == 5:
+        xs, lengths, labels, spans_list, clips_list = zip(*batch)
+        B, maxT = len(xs), max(lengths)
+        xp = torch.zeros(B, maxT, xs[0].shape[-1])
+        for i, x in enumerate(xs):
+            xp[i, :lengths[i]] = x
+
+        # the teacher clips, padded to the longest word clip
+        max_w = max((len(c) for clips in clips_list for c in clips), default=0)
+        max_n = max((len(c) for c in clips_list), default=0)
+        teacher = torch.zeros(B, max_n, max_w, xs[0].shape[-1]) if max_n else torch.zeros(B, 0, 0, xs[0].shape[-1])
+        teacher_mask = torch.zeros(B, max_n, dtype=torch.bool)
+        for i, clips in enumerate(clips_list):
+            for j, c in enumerate(clips):
+                teacher[i, j, :c.shape[0]] = c
+                teacher_mask[i, j] = True
+
+        non_empty = [l for l in labels if len(l) > 0]
+        targets = torch.cat(non_empty) if non_empty else torch.tensor([], dtype=torch.long)
+        return (xp,
+                torch.tensor(lengths, dtype=torch.long),
+                targets,
+                torch.tensor([len(l) for l in labels], dtype=torch.long),
+                spans_list, teacher, teacher_mask)
+
     xs, lengths, labels = zip(*batch)
     B, maxT = len(xs), max(lengths)
     xp = torch.zeros(B, maxT, xs[0].shape[-1])
@@ -1221,7 +1277,12 @@ class ISLHybridConformerCTC(nn.Module):
             lens = lengths.to(x.device).clamp(min=1, max=T).unsqueeze(1)
             mask = (ar < lens).to(x.dtype)          # 1.0 = real frame, 0.0 = padding
 
-        attn_mask = self._causal_mask(x.size(1), x.device) if self.causal else None
+        if self.gru_expand in ("before", "before_keep_gru"):
+            # The sequence is expanded back to the ORIGINAL frame rate inside
+            # the backbone, so the causal mask has to be built at that length.
+            attn_mask = self._causal_mask(T_in, x.device) if self.causal else None
+        else:
+            attn_mask = self._causal_mask(x.size(1), x.device) if self.causal else None
 
         if self.gru_expand in ("before", "before_keep_gru"):
             # The GRU expands the compressed sequence and the Transformer
@@ -1233,6 +1294,7 @@ class ISLHybridConformerCTC(nn.Module):
                 ar = torch.arange(T, device=h.device).unsqueeze(0)
                 lens = in_lengths.to(h.device).clamp(min=1, max=T).unsqueeze(1)
                 mask = (ar < lens).to(h.dtype)
+            h_aux = h
             for block in self.conformer:
                 h = block(h, mask, attn_mask)
         else:
@@ -1730,15 +1792,23 @@ def save_plots(history, plots_dir, stage):
 def run_epoch(model, loader, criterion, optimizer, device, blank_id,
               is_train=True, ema=None, max_norm=1.0, mask_padding=True, min_dur=3,
               beam_width=0, beam_lm=None, beam_alpha=0.0, beam_beta=0.0,
-              beam_topk=5, id_to_word=None):
+              beam_topk=5, id_to_word=None,
+              teacher=None, kd_weight=0.0, kd_conf_threshold=0.5):
     model.train() if is_train else model.eval()
     total_loss = 0.0
+    total_kd = 0.0
+    n_kd_words = 0
     all_preds, all_refs = [], []
 
     ctx = torch.enable_grad() if is_train else torch.no_grad()
     with ctx:
         pbar = tqdm(loader, desc="  Train" if is_train else "  Val", leave=False)
-        for xs, lengths, targets, target_lengths in pbar:
+        for batch in pbar:
+            if len(batch) == 7:
+                xs, lengths, targets, target_lengths, spans_list, teacher_clips, teacher_mask = batch
+            else:
+                xs, lengths, targets, target_lengths = batch
+                spans_list, teacher_clips, teacher_mask = None, None, None
             xs, lengths = xs.to(device), lengths.to(device)
             targets, target_lengths = targets.to(device), target_lengths.to(device)
 
@@ -1755,6 +1825,27 @@ def run_epoch(model, loader, criterion, optimizer, device, blank_id,
                            if hasattr(model, "output_lengths") else lengths)
 
             loss = criterion(lp_t, targets, out_lengths, target_lengths)
+
+            # ---- the student-teacher consistency loss ----------------------
+            # The teacher sees the ISOLATED word, the student sees the stitched
+            # sentence.  A word is only used when the teacher agrees with the
+            # ground truth and is confident enough: that is the FILTER.
+            kd_loss = None
+            if teacher is not None and kd_weight > 0 and spans_list is not None:
+                B, N, W, _ = teacher_clips.shape
+                if N > 0:
+                    flat = teacher_clips.reshape(B * N, W, -1)
+                    t_probs = teacher(flat)                       # (B*N, C)
+                    t_probs = t_probs.reshape(B, N, -1)
+                    t_probs = t_probs * teacher_mask.unsqueeze(-1).to(t_probs.dtype)
+                    kd_loss, used = batch_distillation_loss(
+                        lp, t_probs, spans_list,
+                        [t.tolist() for t in torch.split(targets, target_lengths.tolist())]
+                        if target_lengths.numel() else [],
+                        teacher_conf_threshold=kd_conf_threshold)
+                    loss = loss + kd_weight * kd_loss
+                    total_kd += float(kd_loss)
+                    n_kd_words += used
 
             if is_train:
                 loss.backward()
@@ -1776,13 +1867,15 @@ def run_epoch(model, loader, criterion, optimizer, device, blank_id,
                                        min_dur=max(1, min_dur // max(1, getattr(model, "stride", 1))))
             refs    = batch_targets(targets, target_lengths)
             all_preds.extend(decoded); all_refs.extend(refs)
-            pbar.set_postfix({"loss": f"{loss.item():.3f}"})
+            pbar.set_postfix({"loss": f"{loss.item():.3f}",
+                              "kd": f"{(float(kd_loss) if kd_loss is not None else 0):.3f}"})
 
     N = max(1, len(all_refs))
     wer = sum(compute_wer(r, h) for r, h in zip(all_refs, all_preds)) / N
     acc = sum(1 for r, h in zip(all_refs, all_preds) if r == h) / N
     f1  = sum(len(set(r)&set(h))/(max(1,len(set(r)|set(h)))) for r, h in zip(all_refs, all_preds)) / N
-    return total_loss / max(1, len(loader)), wer, acc, f1
+    kd_avg = total_kd / max(1, len(all_refs))
+    return total_loss / max(1, len(loader)), wer, acc, f1, kd_avg, n_kd_words
 
 # =============================================================================
 # 10. MAIN TRAINING SCRIPT
@@ -1854,11 +1947,42 @@ def parse_args():
                         "(0 = pure acoustic)")
     p.add_argument("--beam_beta",        type=float, default=0.0,
                    help="Insertion penalty of the beam rescoring")
+    p.add_argument("--beam_lm_mode",     type=str, default="bigram",
+                   choices=["bigram", "unigram", "both"],
+                   help="What the language model contributes: 'bigram' (the word ORDER "
+                        "only, the default - the unigram prior of the continuous corpus "
+                        "is the pronoun skew we want to avoid), 'unigram' or 'both'")
     p.add_argument("--lm_index",         type=str,
                    default=os.path.join(BACKEND_DIR, "data", "tensors_sentence_level", "index.json"),
                    help="Sentence index the word-level language model is estimated from")
     p.add_argument("--lm_file",          type=str, default=None,
                    help="Save / load the language model at this path")
+    # Student-teacher (sequence-level knowledge distillation)
+    p.add_argument("--kd_weight",        type=float, default=0.0,
+                   help="Weight of the student-teacher consistency loss (0 disables it)")
+    p.add_argument("--kd_conf",          type=float, default=0.5,
+                   help="A word is only used as a target when the teacher is at least this "
+                        "confident AND its argmax matches the ground truth")
+    p.add_argument("--teacher_ckpt",     type=str, default=PHASE6_WEIGHTS,
+                   help="The word model used as the teacher")
+    p.add_argument("--teacher_classes",  type=str, default=CLASSES_SRC,
+                   help="The class list of the teacher (the rows are re-mapped by name)")
+    p.add_argument("--aux_ctc_weight",   type=float, default=0.0,
+                   help="Weight of the auxiliary (deep supervision) CTC loss on the "
+                        "contextualizer output")
+    # Per-layer learning rates and the staged freeze schedule
+    p.add_argument("--layer_lrs", type=str, default=None,
+                   help="Per-layer learning rates, e.g. "
+                        "'front=3e-4,gru=1e-5,transformer=1e-5,tcnn=3e-5,conformer=1.5e-4,head=1.5e-4'. "
+                        "The new modules learn fast, the pretrained ones slowly.")
+    p.add_argument("--weight_decay", type=float, default=1e-4)
+    p.add_argument("--min_lr_ratio", type=float, default=0.01,
+                   help="Every layer group is annealed to base_lr * this ratio (a "
+                        "single eta_min would push the pretrained layers to zero)")
+    p.add_argument("--freeze_transformer_epochs", type=int, default=0,
+                   help="Freeze the pretrained Transformer for the first N epochs")
+    p.add_argument("--freeze_backbone_epochs", type=int, default=0,
+                   help="Freeze the whole pretrained backbone for the first N epochs")
     p.add_argument("--mask_padding", type=int, default=1,
                    help="Exclude the padded frames from the attention and from the "
                         "BatchNorm statistics (0 = legacy behaviour, the padded frames "
@@ -1974,22 +2098,43 @@ def main():
                 sd = torch.load(prev_best, map_location=device, weights_only=True)
                 load_flexible(model, sd, label=f"STAGE{prev_stage}")
 
-    # Differential Learning Rates
-    bb_lr   = args.backbone_lr if args.backbone_lr != 1.0e-5 else cfg["bb_lr"]
-    conf_lr = args.conformer_lr if args.conformer_lr != 1.5e-4 else cfg["conf_lr"]
+    # ---- parameter groups: one learning rate per LAYER --------------------
+    # The new modules (front-end, expander, conformer blocks, heads) learn
+    # fast, the pretrained modules (GRU, Transformer, TCNN) learn slowly.
+    layer_lrs = {}
+    if args.layer_lrs:
+        for item in args.layer_lrs.split(","):
+            k, _, v = item.partition("=")
+            layer_lrs[k.strip()] = float(v)
 
-    param_groups = []
-    if bb_lr > 0.0:
-        param_groups.append({"params": model.backbone.parameters(), "lr": bb_lr, "weight_decay": 1e-4})
-    else:
-        for p in model.backbone.parameters(): p.requires_grad = False
-        print("[STAGE 1] Backbone FROZEN to preserve initial isolated sign alignments.")
-
-    param_groups.append({"params": list(model.conformer.parameters()) + list(model.ctc_proj.parameters()),
-                         "lr": conf_lr, "weight_decay": 1e-4})
-    # Remember the base LR so the escape can restart the schedule from it.
+    param_groups = build_layer_param_groups(
+        model, layer_lrs=layer_lrs, weight_decay=args.weight_decay)
     for g in param_groups:
         g["base_lr"] = g["lr"]
+    print("[PARAM GROUPS] " + ", ".join(
+        f"{g.get('name')}@{g['lr']:.1e}" for g in param_groups))
+
+    # The staged freeze schedule: the pretrained Transformer (and optionally the
+    # whole backbone) can be frozen for the first epochs, so the new modules
+    # settle around it before it is released.
+    # The frozen parameters STAY in the optimiser: PyTorch skips a parameter
+    # whose gradient is None, so they are not updated while frozen, and they
+    # start training (with their own LR) the moment they are released.
+    frozen_layers = []
+    if args.freeze_transformer_epochs > 0:
+        frozen_layers = freeze_layers(model, ["transformer"], freeze=True)
+        print(f"[FREEZE] Epochs 1-{args.freeze_transformer_epochs}: the Transformer is FROZEN")
+    if args.freeze_backbone_epochs > 0:
+        frozen_layers = freeze_layers(model, ["gru", "transformer", "tcnn"], freeze=True)
+        print(f"[FREEZE] Epochs 1-{args.freeze_backbone_epochs}: the whole backbone is FROZEN")
+
+    optimizer = optim.AdamW(param_groups, betas=(0.9, 0.98))
+
+    warmup_ep = max(2, min(5, epochs // 4))
+    scheduler = PerGroupCosineAnnealing(
+        optimizer, total_epochs=epochs, min_lr_ratio=args.min_lr_ratio,
+        warmup_epochs=warmup_ep)
+    ema = ModelEMA(model, decay=0.9995)
 
     criterion = AntiCollapseCTCLoss(
         CTC_BLANK_ID,
@@ -2004,19 +2149,30 @@ def main():
         deficit_w=args.deficit_w,
         min_frames_per_word=args.min_frames,
     )
-    optimizer = optim.AdamW(param_groups, betas=(0.9, 0.98))
-    warmup_ep = max(2, min(5, epochs // 4))
-    warmup_sched = optim.lr_scheduler.LinearLR(optimizer, start_factor=0.2, total_iters=warmup_ep)
-    cosine_sched = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, epochs - warmup_ep), eta_min=cfg["eta_min"])
-    scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[warmup_sched, cosine_sched], milestones=[warmup_ep])
-    ema = ModelEMA(model, decay=0.9995)
+
+    # ---- the teacher (student-teacher setup) -------------------------------
+    teacher = None
+    if args.kd_weight > 0:
+        if args.teacher_ckpt and os.path.exists(args.teacher_ckpt):
+            teacher = WordTeacher(args.teacher_ckpt, classes,
+                                  teacher_classes_path=args.teacher_classes,
+                                  device=device)
+            known = sum(1 for r in teacher.row_map if r >= 0)
+            print(f"[TEACHER] {os.path.basename(args.teacher_ckpt)} | "
+                  f"{known}/{len(classes)} classes known by name | "
+                  f"kd_weight={args.kd_weight} | kd_conf={args.kd_conf}")
+        else:
+            print(f"[TEACHER] {args.teacher_ckpt} not found - the consistency loss is disabled.")
+            args.kd_weight = 0.0
 
     # Datasets
-    train_ds = SyntheticSentenceDataset(args.data_dir, classes, args.train_samples, True,  cfg["max_w"], cfg["min_w"], cfg["aug"],
-                                        max_per_class=args.max_samples_per_class, fill_missing=args.fill_missing)
+    use_spans = args.kd_weight > 0 and bool(args.teacher_ckpt) and os.path.exists(args.teacher_ckpt)
+    train_ds = SyntheticSentenceDataset(args.data_dir, classes, args.train_samples, True,  cfg["max_w"], cfg["min_w"],  cfg["aug"],
+                                        max_per_class=args.max_samples_per_class, fill_missing=args.fill_missing,
+                                        return_spans=use_spans)
     val_ds   = SyntheticSentenceDataset(args.data_dir, classes, args.val_samples,   False, cfg["max_w"], cfg["min_w"], 0.0,
-                                        max_per_class=args.max_samples_per_class, fill_missing=args.fill_missing)
-    train_ld = DataLoader(train_ds, args.batch_size, shuffle=True,  collate_fn=collate, num_workers=args.num_workers)
+                                        max_per_class=args.max_samples_per_class, fill_missing=args.fill_missing,
+                                        return_spans=use_spans)
     val_ld   = DataLoader(val_ds,   args.batch_size, shuffle=False, collate_fn=collate, num_workers=args.num_workers)
 
     # ---- word-level language model (optional) -----------------------------
@@ -2044,24 +2200,41 @@ def main():
     escapes = 0
     for ep in range(start_ep, total_eps):
         cur_conf_lr = optimizer.param_groups[-1]["lr"]
-        cur_bb_lr   = optimizer.param_groups[0]["lr"] if bb_lr > 0.0 else 0.0
+        cur_bb_lr   = optimizer.param_groups[0]["lr"] if optimizer.param_groups else 0.0
+
+        # ---- the staged release of the frozen layers -----------------------
+        # The pretrained layers are frozen for the first epochs and released
+        # afterwards, so the new modules can settle around them first.
+        if frozen_layers:
+            ep0 = start_ep + 1
+            if ep0 > args.freeze_transformer_epochs and ep0 > args.freeze_backbone_epochs:
+                released = freeze_layers(model, frozen_layers, freeze=False)
+                if released:
+                    print(f"[FREEZE] Epoch {ep0}: released {', '.join(released)}")
+                frozen_layers = []
 
         if stage == 3:
             progress = (ep - start_ep) / max(1, epochs - 1)
             cur_max = max(cfg["min_w"], min(cfg["max_w"], int(1 + progress * (cfg["max_w"] - 1))))
             train_ds.max_words = cur_max
 
-        tl, wer, acc, f1 = run_epoch(model, train_ld, criterion, optimizer, device, CTC_BLANK_ID, True, ema,
+        tl, wer, acc, f1, kd, kd_n = run_epoch(model, train_ld, criterion, optimizer, device, CTC_BLANK_ID, True, ema,
                                      mask_padding=args.mask_padding,
                                      beam_width=args.beam_width, beam_lm=beam_lm,
                                      beam_alpha=args.beam_alpha, beam_beta=args.beam_beta,
-                                     beam_topk=args.beam_topk, id_to_word=classes)
-        vl, vwer, vacc, vf1 = run_epoch(model, val_ld, criterion, optimizer, device, CTC_BLANK_ID, False,
+                                     beam_topk=args.beam_topk, id_to_word=classes,
+                                     lm_mode=args.beam_lm_mode,
+                                     teacher=teacher, kd_weight=args.kd_weight,
+                                     kd_conf_threshold=args.kd_conf)
+        vl, vwer, vacc, vf1, _, _ = run_epoch(model, val_ld, criterion, optimizer, device, CTC_BLANK_ID, False,
                                         mask_padding=args.mask_padding,
                                         beam_width=args.beam_width, beam_lm=beam_lm,
                                         beam_alpha=args.beam_alpha, beam_beta=args.beam_beta,
-                                        beam_topk=args.beam_topk, id_to_word=classes)
-        ema_vl, ema_wer, _, _ = run_epoch(ema.model, val_ld, criterion, None, device, CTC_BLANK_ID, False,
+                                        beam_topk=args.beam_topk, id_to_word=classes,
+                                     lm_mode=args.beam_lm_mode,
+                                        teacher=teacher, kd_weight=args.kd_weight,
+                                        kd_conf_threshold=args.kd_conf)
+        ema_vl, ema_wer, _, _, _, _ = run_epoch(ema.model, val_ld, criterion, None, device, CTC_BLANK_ID, False,
                                           mask_padding=args.mask_padding,
                                           beam_width=args.beam_width, beam_lm=beam_lm,
                                           beam_alpha=args.beam_alpha, beam_beta=args.beam_beta,
@@ -2078,6 +2251,8 @@ def main():
         print(f"\n[S{stage} Ep {ep+1:03d}/{total_eps:03d}] Conf LR={cur_conf_lr:.2e} | BB LR={cur_bb_lr:.2e}{curriculum_note}")
         print(f"  Train Loss: {tl:.4f} | Val Loss: {vl:.4f} (EMA: {ema_vl:.4f})")
         print(f"  WER: {vwer*100:.2f}% | WER EMA: {ema_wer*100:.2f}% | ExAcc: {vacc*100:.2f}% | F1: {vf1:.4f}")
+        if teacher is not None:
+            print(f"  Student-Teacher: consistency loss {kd:.4f} | {kd_n} words passed the filter")
 
         # --- Local-minimum escape -------------------------------------------
         if vwer < best_wer - 1e-4:

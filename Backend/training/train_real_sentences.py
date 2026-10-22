@@ -99,6 +99,7 @@ from training.train_conformer_ctc import (
 from utils.dataloader_sentence import remap_sentence_words
 from utils.dataloader_word import FILL_MISSING_DEFAULT, get_word_classes
 from utils.checkpoint_utils import extract_state_dict, load_flexible
+from utils.ctc_decoder import batch_decode_with_lm
 from utils.pose_augmentation import fill_missing_temporal
 
 DEFAULT_DATA_DIR = os.path.join(BACKEND_DIR, "data", "tensors_sentence_level")
@@ -324,6 +325,7 @@ def build_capped_word_items(word_dir: str, classes: list, cap: int, seed: int = 
     """
     class_to_idx = {c: i for i, c in enumerate(classes)}
     rng = random.Random(seed)
+
     items = []
     if not os.path.isdir(word_dir):
         print(f"[WORD_CAP] word_dir {word_dir} does not exist, skipping word clips.")
@@ -578,7 +580,9 @@ def build_scheduler(optimizer, epochs, warmup, floor=0.02):
     return optim.lr_scheduler.LambdaLR(optimizer, mult)
 
 @torch.no_grad()
-def evaluate(model, loader, blank_id, min_dur, device, use_cuda):
+def evaluate(model, loader, blank_id, min_dur, device, use_cuda,
+             beam_width=0, beam_lm=None, beam_alpha=0.0, beam_beta=0.0,
+             beam_lm_mode="bigram", id_to_word=None):
     model.eval()
     loss_sum, n_batches, frames, blank_frames = 0.0, 0, 0, 0
     refs, hyps = [], []
@@ -588,11 +592,26 @@ def evaluate(model, loader, blank_id, min_dur, device, use_cuda):
         with torch.amp.autocast("cuda", enabled=use_cuda):
             lp = model(xs, lengths)
         loss_sum += ctc_loss_fn(lp, targets, lengths, tlens, blank_id).item(); n_batches += 1
-        am = lp.float().argmax(-1).cpu()
-        for i, L in enumerate(lengths.cpu().tolist()):
-            row = am[i, :L]
-            frames += L; blank_frames += int((row == blank_id).sum())
-            hyps.append(ctc_collapse(row.tolist(), blank_id, min_dur))
+        if beam_width and beam_width > 0:
+            # The prefix beam search (optionally rescored by the word-level
+            # language model).  This is the SAME decoder the live path uses, so
+            # the validation WER is measured with the decoder that will
+            # actually run on the webcam.
+            out_len = (model.output_lengths(lengths)
+                       if hasattr(model, "output_lengths") else lengths)
+            hyps.extend(batch_decode_with_lm(
+                lp, out_len, blank_id, id_to_word=id_to_word, lm=beam_lm,
+                alpha=beam_alpha, beta=beam_beta, beam_width=beam_width,
+                lm_mode=beam_lm_mode))
+            am = lp.float().argmax(-1).cpu()
+            for i, L in enumerate(out_len.cpu().tolist()):
+                frames += L; blank_frames += int((am[i, :L] == blank_id).sum())
+        else:
+            am = lp.float().argmax(-1).cpu()
+            for i, L in enumerate(lengths.cpu().tolist()):
+                row = am[i, :L]
+                frames += L; blank_frames += int((row == blank_id).sum())
+                hyps.append(ctc_collapse(row.tolist(), blank_id, min_dur))
         refs.extend(batch_targets(targets, tlens))
     S, D, I, N = corpus_errors(refs, hyps)
     return {"loss": loss_sum / max(1, n_batches), "wer": (S + D + I) / N, "S": S, "D": D, "I": I, "N": N,
@@ -636,6 +655,20 @@ def train_real_sentences(args):
     with open(args.classes) as f: classes = json.load(f)
     if isinstance(classes, dict): classes = classes["classes"]
     num_classes = len(classes)
+
+    # ---- the word-level language model (optional) --------------------------
+    # The decoder that will actually run on the webcam: a prefix beam search
+    # rescored with the word ORDER of the continuous corpus.
+    beam_lm = None
+    if args.beam_width and args.beam_width > 0:
+        if args.lm_file and os.path.exists(args.lm_file):
+            from utils.word_lm import WordLM
+            beam_lm = WordLM.load(args.lm_file)
+            print(f"[LM] {os.path.basename(args.lm_file)} loaded "
+                  f"({len(beam_lm.unigram)} word types) | alpha={args.beam_alpha} "
+                  f"({args.beam_lm_mode} only)")
+        else:
+            print(f"[LM] {args.lm_file} not found - the beam search stays purely acoustic.")
     blank_id = num_classes
     class_to_idx = {c: i for i, c in enumerate(classes)}
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -703,7 +736,8 @@ def train_real_sentences(args):
                 eff = c * min(1.0, args.mix_word_cap / max(1, c))
                 print(f"        {classes[w]:<16} {c:>4} instances -> {eff:>6.1f} effective")
 
-        # ---- THE LABEL PRIOR OF THE MIX -------------------------------------
+
+    # ---- the label prior of the mix -------------------------------------
         # The three sources have very different priors: the WORD and the
         # SYNTHETIC source draw their classes UNIFORMLY (flat), the REAL source
         # follows the corpus (six pronouns = 64% of the word instances).  This
@@ -881,9 +915,12 @@ def train_real_sentences(args):
         scheduler.step()
         t_loss /= max(1, n_ok)
 
-        val = evaluate(model, val_ld, blank_id, args.min_dur, device, use_cuda)
-        ema_val = evaluate(ema.model, val_ld, blank_id, args.min_dur, device, use_cuda)
-        tr = evaluate(model, probe_ld, blank_id, args.min_dur, device, use_cuda)
+        beam = dict(beam_width=args.beam_width, beam_lm=beam_lm,
+                    beam_alpha=args.beam_alpha, beam_beta=args.beam_beta,
+                    beam_lm_mode=args.beam_lm_mode, id_to_word=classes)
+        val = evaluate(model, val_ld, blank_id, args.min_dur, device, use_cuda, **beam)
+        ema_val = evaluate(ema.model, val_ld, blank_id, args.min_dur, device, use_cuda, **beam)
+        tr = evaluate(model, probe_ld, blank_id, args.min_dur, device, use_cuda, **beam)
 
         for k, v in [("train_loss", t_loss), ("val_loss", val["loss"]),
                      ("wer", val["wer"]), ("wer_ema", ema_val["wer"]),
@@ -968,7 +1005,7 @@ def train_real_sentences(args):
         print(f"[SWA] averaged {swa_n} checkpoints -> {swa_path}")
         swa_model = ISLHybridConformerCTC(num_classes).to(device)
         swa_model.load_state_dict({k: v.to(device) for k, v in swa_state.items()}, strict=True)
-        swa_val = evaluate(swa_model, val_ld, blank_id, args.min_dur, device, use_cuda)
+        swa_val = evaluate(swa_model, val_ld, blank_id, args.min_dur, device, use_cuda, **beam)
         print(f"[SWA] SWA val WER {swa_val['wer'] * 100:.1f}% (best single {best_wer * 100:.1f}%)")
         if swa_val["wer"] < best_wer:
             best_wer = swa_val["wer"]
@@ -1100,6 +1137,21 @@ def parse_args():
                    help="Fill the drop-out holes of a clip with the last valid value. "
                         "'none' keeps the corpus convention (an undetected modality owns a "
                         "zero block), which is what the backbone was pretrained on.")
+    # Prefix beam search + word-level language model (the live decoder)
+    p.add_argument("--beam_width", type=int, default=0,
+                   help="Width of the CTC prefix beam search (0 = the greedy decoder)")
+    p.add_argument("--beam_alpha", type=float, default=0.0,
+                   help="Weight of the word-level language model in the beam rescoring")
+    p.add_argument("--beam_beta", type=float, default=0.0,
+                   help="Insertion penalty of the beam rescoring")
+    p.add_argument("--beam_lm_mode", type=str, default="bigram",
+                   choices=["bigram", "unigram", "both"],
+                   help="What the language model contributes: 'bigram' (the word ORDER "
+                        "only - the unigram prior of the continuous corpus is the pronoun "
+                        "skew we want to avoid)")
+    p.add_argument("--lm_file", type=str,
+                   default=os.path.join(BACKEND_DIR, "models", "word_vocabulary", "word_lm.json"),
+                   help="The word-level language model used by the beam rescoring")
     # --- mixed training ----------------------------------------------------
     p.add_argument("--mix", type=int, default=0,
                    help="Enable balanced mixed training from three sources: isolated word "

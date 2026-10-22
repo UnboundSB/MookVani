@@ -9,6 +9,8 @@ extraction / diagnostic / plotting utilities.
 ## Files
 - `__init__.py`: Package initialization for the scripts module (feature extraction + gloss utilities).
 - `audit_data_leakage.py`: Verifies split hygiene and checks for train-test data leakage.
+- `audit_split_leakage.py`: **Proves that no phase leaks across the others.** Checks that the canonical split manifest is leak-free (no clip in both partitions, every class stratified, every file filed under its own class), that EVERY phase that reads the corpus resolves the same manifest fingerprint, that the legacy Phase-4 file agrees with it and that the corpus still matches it.
+- `benchmark_expansion.py`: Controlled comparison of the temporal-expansion architectures (baseline / compressed / expanded-before / expanded-after) on the same data, seed, loss and epoch budget: parameters, latency, epoch time and the WER per epoch.
 - `augment.py`: Spatial and temporal augmentation methods for sign keypoints and videos.
 - `augment_extract_sentence.py`: Augmentation and feature extraction pipeline for sentence sequences.
 - `check_ckpt.py`: Diagnostic utility to inspect PyTorch checkpoint keys and weights.

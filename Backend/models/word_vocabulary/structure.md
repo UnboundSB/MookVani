@@ -24,6 +24,7 @@ refresh_canonical_classes()
 
 ## Files
 - `classes.json`: Plain JSON list of the 228 class names, in the canonical order. The class index of a name is its position in that list; the CTC blank of a sentence model is `len(classes)`.
+- `split.json`: **The canonical train/val manifest.** For every class it pins the exact training clips and the exact validation clips. Every phase of the word pipeline reads this file (through `utils/splits.py`), so a clip that is training data in one phase is never validation data in another. Its fingerprint (`cb3a391151f9eb19` for the current corpus) is recorded in the metadata of every phase. Regenerate it with `python scripts/save_phase4_split.py --canonical` and verify it with `python scripts/audit_split_leakage.py`.
 - `word_lm.json`: The word-level **language model** of the continuous corpus (a smoothed unigram + bigram over 178 word types / 2 122 tokens, estimated on the TRAINING split only). It is what the prefix beam search rescores its hypotheses with (`--beam_alpha`). Regenerate it with `utils/word_lm.py`.
 
 ## Immediate Subdirectories

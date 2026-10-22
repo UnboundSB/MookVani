@@ -569,13 +569,18 @@ def parse_args():
     p.add_argument("--no_display", action="store_true")
     p.add_argument("--no_mirror", action="store_true", help="do not mirror the preview window")
     p.add_argument("--blank_penalty", type=float, default=0.0, help="subtract from blank log-prob (>0 = fewer deletions)")
-    p.add_argument("--beam_width", type=int, default=0,
-                   help="Width of the CTC prefix beam search (0 = the greedy decoder)")
-    p.add_argument("--beam_alpha", type=float, default=0.0,
-                   help="Weight of the word-level language model in the beam rescoring (0 = pure acoustic)")
-    p.add_argument("--beam_beta", type=float, default=0.0, help="Insertion penalty of the beam rescoring")
-    p.add_argument("--lm_file", default=None,
-                   help="Language model file (JSON). Build it with utils/word_lm.py")
+    p.add_argument("--beam_width", type=int, default=25,
+                   help="Width of the CTC prefix beam search (0 = the greedy decoder). "
+                        "The beam is ON by default: it is what gives the language model "
+                        "alternatives to choose between.")
+    p.add_argument("--beam_alpha", type=float, default=0.5,
+                   help="Weight of the word-level language model in the beam rescoring. "
+                        "0 = pure acoustic.  The LM contributes the word ORDER only "
+                        "(its unigram prior is the pronoun skew we want to avoid).")
+    p.add_argument("--beam_beta", type=float, default=0.0,
+                   help="Insertion penalty of the beam rescoring (higher = fewer words)")
+    p.add_argument("--lm_file", default=os.path.join(BACKEND_DIR, "models", "word_vocabulary", "word_lm.json"),
+                   help="Language model file (JSON). Built by utils/word_lm.py")
     for name in ["fps", "idle_sec", "still_sec", "still_speed", "lead_sec", "tail_sec", "min_sign_sec",
                  "max_sec", "infer_every_sec", "min_conf"]:
         p.add_argument(f"--{name}", type=float, default=getattr(d, name))
@@ -591,10 +596,14 @@ def main():
     print(f"[LOAD] {os.path.basename(a.ckpt)} | {len(classes)} classes | device {device}")
 
     beam_lm = None
-    if a.beam_width and a.beam_width > 0 and a.lm_file and os.path.exists(a.lm_file):
-        from utils.word_lm import WordLM
-        beam_lm = WordLM.load(a.lm_file)
-        print(f"[LM] {a.lm_file} loaded ({len(beam_lm.unigram)} word types)")
+    if a.beam_width and a.beam_width > 0:
+        if a.lm_file and os.path.exists(a.lm_file):
+            from utils.word_lm import WordLM
+            beam_lm = WordLM.load(a.lm_file)
+            print(f"[LM] {a.lm_file} loaded ({len(beam_lm.unigram)} word types) "
+                  f"| alpha={a.beam_alpha} (word ORDER only)")
+        else:
+            print(f"[LM] {a.lm_file} not found - the beam search stays purely acoustic.")
 
     rec = LiveRecognizer(model, classes, device, cfg, a.blank_penalty,
                          beam_width=a.beam_width, beam_lm=beam_lm,

@@ -433,13 +433,17 @@ def build_model(num_classes: int, pretrained_path: str) -> Phase2Reconformer:
 # 6. DATA LOADING + STRATIFIED SPLIT
 # ==============================================================================
 
-def load_and_split(data_dir: str, min_samples: int, val_frac: float = 0.2):
+def load_and_split(data_dir: str, min_samples: int):
     """Load the word corpus with the shared selection rule.
 
     A class that owns fewer than ``min_samples`` clips is ELIMINATED from the
     loader (the files stay on disk), and every surviving class is capped at
     ``max_samples`` clips.  The class list is ordered by descending clip count
     (the "top most frequent" classes).
+
+    The train/val ASSIGNMENT comes from the CANONICAL MANIFEST, not from a
+    local computation: it is the same file every other phase reads, so a clip
+    that is training data here is never validation data in another phase.
     """
     print(f"[INFO] Scanning {data_dir} ...")
     infos = discover_word_classes(
@@ -448,8 +452,6 @@ def load_and_split(data_dir: str, min_samples: int, val_frac: float = 0.2):
     classes = [i.name for i in infos]
     print(f"[INFO] {len(classes)} classes loaded (each capped at {MAX_SAMPLES} samples).")
 
-    # The canonical manifest decides which clip is training data and which one
-    # is validation data - the SAME assignment every other phase uses.
     train_data, val_data, classes = load_word_split_tensors(
         data_dir, min_samples, MAX_SAMPLES)
     num_classes = len(classes)
@@ -562,7 +564,7 @@ def train_phase2(epochs=40, batch_size=64, head_lr=5e-4, backbone_lr=5e-5,
 
     random.seed(42); np.random.seed(42); torch.manual_seed(42)
 
-    train_data, val_data, classes = load_and_split(DATA_DIR, MIN_SAMPLES, val_frac)
+    train_data, val_data, classes = load_and_split(DATA_DIR, MIN_SAMPLES)
     num_classes = len(classes)
 
     train_ds = Phase2TrainDataset(train_data, init_fps=START_FPS)

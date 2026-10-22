@@ -1,32 +1,35 @@
 # Directory Structure: Backend/segmentor
 
-YAP (You Adapt Progressively) segmentor development workspace. Contains the canonical
-`yap_conformer.py`, a noise augmentation module, and the two-stage training pipeline
-for a noise-robust gesture segmenter built on YAP + YAPpingConformer.
+YAP (You Adapt Progressively) gesture-segmentor workspace: the `yap_conformer.py`
+model, a MediaPipe noise augmenter, and the two-stage training pipeline for a
+noise-robust segmenter built on YAP + YAPpingConformer.
 
 ## Files
 
-- `yap_conformer.py`: Copy of the protected root `yap_conformer.py`. ONE FILE containing
-  PoseCleaner, FeatureExpander, CausalConvStem, MemoryLayer, HiPPOLegS, SegmentTracker,
-  YAPCore, YAP, YAPStream, all losses, YAPpingConformer, and smoke tests. Run directly
-  to verify: `python yap_conformer.py` → ALL TESTS PASSED.
-- `noise_aug.py`: MediaPipe noise augmentation for Stage 1 training. Applies jitter,
-  per-joint dropout, whole-part dropout, hand swap, depth noise, speed warp, and idle
-  padding to clean word-level clips to produce realistic corrupted versions.
-- `train_noise_filter.py`: **Stage 1** — Noise filtration training. Two YAPpingConformer
-  instances loaded simultaneously: teacher (clean path) and student (noisy path). Student
-  is trained to produce outputs consistent with the teacher via KL divergence on
-  presence/end heads and MSE on entity vectors. Teacher is updated as EMA of student.
-  Anti-collapse: word-label cross-entropy on clean path entities. Saves `yap_noise_robust.pth`.
-  The vocabulary is the published one (`models/word_vocabulary/classes.json`).
-- `train_segmentor.py`: **Stage 2** — Synthetic sentence segmentation. Loads Stage 1
-  weights and fine-tunes on synthetically stitched sentences with known boundaries.
-  Presence head: focal BCE. End head: Gaussian-bump BCE. Deep supervision: layer_conf_loss.
-  Conformer: CTC on entity stream. Regularisers: soft_count_loss, min_gap_penalty,
-  dip_prior_loss. Uses the same YAPStream queue path (offline equivalent) so live == offline.
-  Saves `yap_seg_best.pth` for Stage 3 real-sentence fine-tuning.
+- `yap_conformer.py`: The whole model in ONE file — PoseCleaner, FeatureExpander,
+  CausalConvStem, MemoryLayer, HiPPOLegS pooling, SegmentTracker, YAPCore, YAP,
+  YAPStream, all losses, YAPpingConformer, plus its own smoke tests.
+  Verify with `python yap_conformer.py` → ALL TESTS PASSED.
+  Math fixes applied: the pooling is now the **exact Legendre projection** of the
+  segment (was a wrong HiPPO operator: 50–130% off the analytic projection), the
+  palm frame is image-plane only so MediaPipe's noisy `z` cannot corrupt the
+  orientation or hide the edge-on condition, `min_gap_penalty` checks every
+  frame, `dip_prior_loss` normalises per sample, the memory rate is clamped, and
+  `timestamps_from_fps()` was added for data stored without timing.
+- `noise_aug.py`: MediaPipe noise augmentation for Stage 1 — jitter, per-joint and
+  whole-part dropout, hand swap, depth noise, speed warp and idle padding applied
+  to clean word-level clips.
+- `train_noise_filter.py`: **Stage 1** — noise-robustness training. Teacher (clean
+  path) and student (noisy path) YAPpingConformer in lockstep; the student is
+  trained to match the teacher (KL on the presence/end heads, MSE on the entity
+  vectors) while also predicting the word label to prevent collapse. Teacher is an
+  EMA of the student. Saves `yap_noise_robust.pth`.
+- `train_segmentor.py`: **Stage 2** — segmentation training on synthetically
+  stitched sentences with known boundaries. Focal-BCE presence head, Gaussian-bump
+  end head, deep supervision, CTC on the entity stream, and the soft-count /
+  min-gap / dip-prior regularisers. Saves `yap_seg_best.pth`.
 - `structure.md`: This file.
 
 ## Immediate Subdirectories
 
-- `models/`: Training outputs. `yap_stage1/` — Stage 1 noise-robust weights (`yap_noise_robust.pth`). `yap_stage2/` — Stage 2 segmentation weights (`yap_seg_best.pth`).
+- `__pycache__`: Python bytecode cache (generated, ignored).

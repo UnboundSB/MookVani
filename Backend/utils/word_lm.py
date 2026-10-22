@@ -78,19 +78,37 @@ class WordLM:
         return math.log(max(num / max(denom, 1e-12), 1e-12))
 
     # ------------------------------------------------------------------ #
-    def score(self, words: Sequence[str]) -> float:
-        """The log-probability of a word sequence (unigram + bigram)."""
+    def score(self, words: Sequence[str], mode: str = "bigram") -> float:
+        """The log-probability of a word sequence.
+
+        ``mode``
+            ``"bigram"``   (the default, and what the decoder uses) - the sum
+                of the conditional probabilities P(w_i | w_{i-1}).  The
+                UNIGRAM prior of the continuous corpus is deliberately NOT
+                added: it is exactly the skew that makes the model collapse
+                ("i" 441, "you" 338 = 37% of all tokens).  Rescoring with it
+                would push the decoder back onto the pronouns.
+            ``"unigram"``  - the sum of log P(w_i): the raw prior.
+            ``"both"``     - the sum of the two.
+        """
         if not words:
             return 0.0
+        if mode == "unigram":
+            return sum(self.log_unigram(w) for w in words)
+
         total = 0.0
         prev = None
         for w in words:
             total += self.log_bigram(prev, w)
             prev = w
+        if mode == "both":
+            total += sum(self.log_unigram(w) for w in words)
         return total
 
-    def score_ids(self, ids: Sequence[int], id_to_word: Sequence[str]) -> float:
-        return self.score([id_to_word[i] for i in ids if 0 <= i < len(id_to_word)])
+    def score_ids(self, ids: Sequence[int], id_to_word: Sequence[str],
+                  mode: str = "bigram") -> float:
+        return self.score([id_to_word[i] for i in ids if 0 <= i < len(id_to_word)],
+                          mode=mode)
 
     # ------------------------------------------------------------------ #
     def save(self, path: str) -> str:

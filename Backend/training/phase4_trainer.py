@@ -321,7 +321,7 @@ def build_model(nc: int, ckpt: str) -> Phase4Model:
 # =========================================================================
 
 def load_data(data_dir: str, phase3_classes_json: str,
-              max_per: int = MAX_SAMPLES, vfrac: float = VAL_FRAC):
+              max_per: int = MAX_SAMPLES):
     """
     Load the word corpus with the shared selection rule.
 
