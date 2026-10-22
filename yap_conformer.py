@@ -156,7 +156,10 @@ GLOSSARY
  4. Trust = tracker confidence, but MediaPipe can be confidently WRONG (hand
     swaps, jumps). Not handled yet (needs the noise augmenter + checks).
  5. Palm frame degenerates when the palm is edge-on; we down-weight (palm_w)
-    but do not repair it.
+    but do not repair it. Additionally, after any edge-on frame, the following
+    frame's palm-frame velocity is forced to zero even if the palm has fully
+    recovered (because prev_ok requires frame_w > 0.5 on the previous frame).
+    This produces one frame of zero velocity after every edge-on pose.
  6. Entity depends on the exact start/end; train with boundary jitter.
  7. All numeric defaults (thresholds, tau range, orders) are unvalidated.
  8. Latency adds up: off_hold_s + (1 frame for cut peak) + any look-ahead.
@@ -725,6 +728,20 @@ class FeatureExpander(nn.Module):
                 core_dim += 3 * n + 6 + 1
                 rich_dim += 3 * len(nonroot) + len(ang) + 3 * n
         self.core_dim, self.rich_dim = core_dim, rich_dim
+        # Verify that the manually tallied dims match what step() actually produces.
+        # This catches any future mismatch before the lift layer gets a wrong input size.
+        _B = 1
+        with torch.no_grad():
+            _st = self.init_state(_B, "cpu")
+            _z = torch.zeros(_B, self.J, 3)
+            _t = torch.zeros(_B, self.J)
+            _st, _c, _r, _ = self.step(_st, _z, _z, _z, _t, _t, torch.ones(_B))
+        assert _c.shape[-1] == self.core_dim, (
+            f"core_dim mismatch: declared {self.core_dim}, got {_c.shape[-1]}"
+        )
+        assert _r.shape[-1] == self.rich_dim, (
+            f"rich_dim mismatch: declared {self.rich_dim}, got {_r.shape[-1]}"
+        )
 
     def init_state(self, B: int, device):
         return dict(prev_local=[torch.zeros(B, s.num_joints, 3, device=device) for s in self.parts],
@@ -812,6 +829,9 @@ class FeatureExpander(nn.Module):
             core_parts.append(core_p)
             rich_parts.append(rich_p)
             new_prev_local.append(local)
+            # hand parts: frame_w > 0.5 requires the palm to have been non-edge-on;
+            # the next frame's palm-frame velocity will be zero even if the palm
+            # recovers immediately (one-frame velocity blackout after every edge-on pose).
             new_prev_ok.append((gate > 0) & (frame_w > 0.5))
 
             # aux scalars
@@ -1047,7 +1067,11 @@ class SegmentTracker:
         c, i = self.cfg, self.idx
         self.idx += 1
         self.t_of[i] = t
-        self.t_of.pop(i - 4096, None)           # bounded memory
+        # Evict timestamps older than needed. The furthest back-reference is
+        # max_seg_s or still_flush_s frames ago. We keep 4x that at the nominal
+        # fps as a safe margin, with a hard floor of 8192 entries.
+        _keep = max(8192, int(max(c.max_seg_s, c.still_flush_s) * c.nominal_fps * 4) + 1)
+        self.t_of.pop(i - _keep, None)
         out: List[Segment] = []
         reset = False
 
@@ -1058,7 +1082,8 @@ class SegmentTracker:
             self.still_time += dt
         else:
             self.still_time = 0.0
-            self.flushed = False
+            # flushed is cleared below, AFTER the flush check, so a resuming-motion
+            # frame cannot both fire the flush and clear the guard in the same step.
         # tracker dropout bookkeeping
         self.lost_time = 0.0 if ok else self.lost_time + dt
         high = ok and p >= c.on_thr
@@ -1107,6 +1132,10 @@ class SegmentTracker:
                 s = self._end(max(self.still_start_idx, self.seg_start_idx + 1), "still_flush")
                 if s:
                     out.append(s)
+        # Clear the flush guard only after the flush check so that the frame on
+        # which motion resumes cannot simultaneously fire and clear the guard.
+        if self.still_time == 0.0:
+            self.flushed = False
         self.q2, self.q1 = self.q1, q
         return out, reset
 
@@ -1201,13 +1230,18 @@ class YAPCore(nn.Module):
         return st, dict(presence=pres, end=end, layer_conf=torch.cat(confs, dim=-1), feat=feat,
                         quality=aux["quality"], speed=aux["speed"], hand_ok=aux["hand_ok"], clean=cl["x"])
 
-    def forward_frames(self, pose, conf, valid, t, reset_mask: Optional[torch.Tensor] = None):
+    def forward_frames(self, pose, conf, valid, t, reset_mask: Optional[torch.Tensor] = None,
+                       lengths: Optional[torch.Tensor] = None):
         """
         Run all T poses of B sequences. Returns dict of stacked per-pose outputs:
           presence (B,T) logits, end (B,T) logits, layer_conf (B,T,L), feat (B,T,C),
           quality (B,T), speed (B,T), hand_ok (B,T), clean (B,T,J,3), dt (B,T).
         reset_mask (B,T) bool: wipe that row's memory BEFORE that pose (mirrors the
         still-flush reset that YAPStream performs live).
+        CONTRACT: reset_mask[b, k] must be False for all k >= lengths[b]. Firing a
+        reset inside the padding region is safe (state goes to zero) but if a real
+        frame then follows in the same batch row the state will be incorrectly zeroed.
+        The caller is responsible for enforcing this; no runtime check is performed.
         """
         B, T = pose.shape[:2]
         dev = pose.device
@@ -1217,6 +1251,9 @@ class YAPCore(nn.Module):
         outs: List[Dict[str, torch.Tensor]] = []
         for k in range(T):
             if reset_mask is not None and bool(reset_mask[:, k].any()):
+                if lengths is not None:
+                    assert not (reset_mask[:, k] & (torch.arange(pose.shape[0], device=pose.device) >= lengths.to(pose.device))).any(), \
+                        "reset_mask is True inside the padding region for at least one batch row"
                 st = _tree_select(reset_mask[:, k], fresh, st)
             if self.cfg.tbptt and k > 0 and k % self.cfg.tbptt == 0:
                 st = _tree_detach(st)
@@ -1298,13 +1335,16 @@ class YAP(nn.Module):
             extras[s, 2] = t[b, st_] - t[b, pre]
         F_ = F_ + CTX.unsqueeze(-1) * self.ctx_vec            # tell the pooling which poses are lead-in
         c = feat.new_zeros(S, cfg.hippo_order, C)
-        tau = feat.new_full((S,), cfg.hippo_t0_s)
+        # tau tracks true elapsed time from segment start (begins at 0).
+        # hippo_t0_s is applied inside the step call via clamp_min so that
+        # 1/tau never blows up, without double-counting DT[:,0] in the ratio.
+        tau = feat.new_zeros(S)
         hold = F_[:, 0]
         for k in range(L):
             good = (Q[:, k] >= cfg.hold_quality).unsqueeze(-1)
             hold = torch.where(good, F_[:, k], hold)          # zero-order hold over unreliable poses
             tau = tau + DT[:, k]
-            c = self.hippo.step(c, hold, DT[:, k], tau)
+            c = self.hippo.step(c, hold, DT[:, k], tau.clamp_min(cfg.hippo_t0_s))
         flat = self.readout_norm(c.flatten(1))
         ent = self.readout(torch.cat([flat, torch.log1p(extras[:, 0:1]), extras[:, 1:2], torch.log1p(extras[:, 2:3])], dim=-1))
         return ent, extras
@@ -1318,13 +1358,13 @@ class YAP(nn.Module):
         spans, owner, gaps = [], [], []
         for b, segs in enumerate(segments):
             tl = t[b].tolist()
-            prev_end = None
+            prev_gesture_end = None   # end_t of the previous gesture (not pre-roll boundary)
             for s in segs:
                 pre = pre_idx_from_time(tl, s.start_idx, s.start_t, s.preroll_s)
                 spans.append((b, pre, s.start_idx, s.end_idx))
                 owner.append(b)
-                gaps.append(0.0 if prev_end is None else max(0.0, s.start_t - prev_end))
-                prev_end = s.end_t
+                gaps.append(0.0 if prev_gesture_end is None else max(0.0, s.start_t - prev_gesture_end))
+                prev_gesture_end = s.end_t
         dev = out["feat"].device
         if not spans:
             return out["feat"].new_zeros(0, self.cfg.entity_dim), out["feat"].new_zeros(0, 3), []

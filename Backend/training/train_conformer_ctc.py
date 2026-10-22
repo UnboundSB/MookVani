@@ -37,30 +37,54 @@ OUTPUT_DIR_DEFAULT = os.path.join(MODELS_ROOT, "isl_conformer_ctc")
 PHASE6_WEIGHTS     = os.path.join(MODELS_ROOT, "phase6_word_model", "best_phase6_model.pth")
 CLASSES_SRC        = os.path.join(MODELS_ROOT, "phase6_word_model", "classes.json")
 
-# Landmark block boundaries inside the 163-dim vector.
-#   0:63  left hand   63:126 right hand   126:138 arms   138:159 face   159:163 flags
-# The face block is kept EXACTLY ZERO: it is identically zero in the corpus the backbone
-# was pretrained on, so any value written into it (a jitter, a shift, a tilt) is pure
-# noise in 21 input dimensions the backbone has never seen.
-FACE_LO, FACE_HI = 138, 159
-BODY_DIMS = FACE_LO          # lh + rh + arms = 138 channels
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 
-# Canonical resting pose for an undetected hand.  scripts/extraction.py already divides
-# the landmarks by the per-frame scale, so the resting pose is scale invariant.
-# The right hand rests on the +X side of the body, the left hand on the -X side.
-MISSING_LH = torch.tensor([-1.5, 3.0, 0.0]).repeat(21)  # (63,)
-MISSING_RH = torch.tensor([+1.5, 3.0, 0.0]).repeat(21)  # (63,)
+from utils.dataloader_word import get_word_classes  # noqa: E402
 
-# Median neck position (shoulder midpoint) of each corpus, measured on the finished
-# tensors.  The three corpora in Backend/data were extracted with three different
-# anchors, so the same physical point sits in three different places.  These are the
-# reference frames; see harmonize_features().
-NECK_ANCHOR_WORD = (3.592, 2.769, -1.233)   # data/tensors_include50_word_level
-NECK_ANCHOR_SENT = (0.011, 0.605, -0.523)   # data/tensors_sentence_level
-# Constant that maps the continuous corpus into the frame the backbone was pretrained in.
-NECK_OFFSET = tuple(round(a - b, 3) for a, b in zip(NECK_ANCHOR_WORD, NECK_ANCHOR_SENT))
-# The word corpus is already expressed in the reference frame, so it needs no shift.
-NECK_OFFSET_WORD = (0.0, 0.0, 0.0)
+# ---------------------------------------------------------------------------
+# Canonical layout + the ONE implementation of the pose augmentations.
+# ---------------------------------------------------------------------------
+# The geometric augmentation (mirror / tilt / bounded left-right shift / speed),
+# the missing-modality convention and the cross-corpus harmonisation used to
+# live in this file and were copy-pasted into eight other files with three
+# different index conventions (two of them buggy).  They now live in
+# Backend/utils/pose_augmentation.py, which is the single source of truth.
+# The names are re-exported here so every other trainer can keep importing
+# them from this module.
+from utils.pose_augmentation import (  # noqa: E402
+    ARM_HI,
+    ARM_LO,
+    BODY_DIMS,
+    FACE_HI,
+    FACE_LO,
+    FLAG_HI,
+    FLAG_LO,
+    LH_HI,
+    LH_LO,
+    MISSING_LH,
+    MISSING_RH,
+    NECK_ANCHOR_SENT,
+    NECK_ANCHOR_WORD,
+    NECK_OFFSET,
+    NECK_OFFSET_WORD,
+    RH_HI,
+    RH_LO,
+    augment,
+    augment_pose_sequence,
+    aug_flip,
+    aug_shift,
+    aug_speed,
+    aug_temporal_mask,
+    aug_tilt,
+    harmonize_features,
+    harmonize_frame,
+    reclamp_missing,
+    fill_missing_temporal,
+)
+
+# Historic alias: the convention is "an undetected modality owns a ZERO block".
+_reclamp = reclamp_missing
 
 # =============================================================================
 # 1. METRICS
@@ -336,7 +360,8 @@ class SyntheticSentenceDataset(Dataset):
     3. Suffix rest frames with random coordinate noise & idle hand drift.
     """
     def __init__(self, data_dir, classes, samples_per_epoch=1600,
-                 is_train=True, max_words=18, min_words=1, aug_strength=1.0):
+                 is_train=True, max_words=18, min_words=1, aug_strength=1.0,
+                 max_per_class=None, fill_missing="none"):
         self.data_dir       = data_dir
         self.classes        = classes
         self.class_to_idx   = {c: i for i, c in enumerate(classes)}
@@ -345,12 +370,15 @@ class SyntheticSentenceDataset(Dataset):
         self.max_words      = max_words
         self.min_words      = min_words
         self.aug_strength   = aug_strength
+        self.fill_missing   = fill_missing
 
         self.class_files = {}
         for c in classes:
             d = os.path.join(data_dir, c)
             if os.path.isdir(d):
-                fs = glob.glob(os.path.join(d, "*.pt"))
+                fs = sorted(glob.glob(os.path.join(d, "*.pt")))
+                if max_per_class:
+                    fs = fs[:max_per_class]
                 if fs: self.class_files[c] = fs
         self.valid = [c for c in classes if c in self.class_files]
 
@@ -414,6 +442,8 @@ class SyntheticSentenceDataset(Dataset):
             # have to be harmonised.
             x = harmonize_features(x, offset=NECK_OFFSET_WORD)
             x = _reclamp(x.contiguous())
+            if self.fill_missing and self.fill_missing != "none":
+                x = fill_missing_temporal(x, mode=self.fill_missing)
             # 2. Between words: smooth-step non-linear co-articulation
             if i > 0:
                 prev_last = segs[-1][-1:]
@@ -982,7 +1012,16 @@ class ISLHybridConformerCTC(nn.Module):
                 self.ctc_proj[1].bias.data[self.ctc_blank_id] = float(blank_bias)
         return True
 
-    def load_phase6_backbone(self, weights_path=PHASE6_WEIGHTS):
+    def load_phase6_backbone(self, weights_path=PHASE6_WEIGHTS, class_map=None):
+        """Load the pretrained word backbone and (optionally) the word classifier.
+
+        ``class_map`` maps OUR class index -> the row index of the pretrained
+        classifier.  It is built from the class NAMES, because the vocabulary
+        changed (the word loader now trains on the frequency-filtered class
+        list), so the row order of the old checkpoint does not match anymore.
+        When the map is not given the transfer is only performed if the class
+        count did not change at all.
+        """
         if not os.path.exists(weights_path):
             print(f"[WARN] Phase 6 weights not found at {weights_path}; initializing randomly.")
             return False
@@ -1001,16 +1040,33 @@ class ISLHybridConformerCTC(nn.Module):
         print(f"[BACKBONE] Loaded {len(bb_sd)} pretrained layers from {os.path.basename(weights_path)}")
         if missing: print(f"           Missing keys: {len(missing)}")
 
-        # Transfer pretrained word classification weights into CTC Projection Head
+        # Transfer pretrained word classification weights into the CTC head.
         if "head.4.weight" in sd and "head.4.bias" in sd:
-            nc = min(self.num_classes, sd["head.4.bias"].shape[0])
-            with torch.no_grad():
-                self.ctc_proj[1].weight.data[:nc] = sd["head.4.weight"][:nc]
-                self.ctc_proj[1].bias.data[:nc] = sd["head.4.bias"][:nc]
-                # Initialize blank token with neutral bias so rest frames can be blank
+            src_w, src_b = sd["head.4.weight"], sd["head.4.bias"]
+            if class_map is not None:
+                # Row-by-row transfer using the class names.
+                with torch.no_grad():
+                    for our_idx, src_idx in class_map.items():
+                        if our_idx >= self.num_classes or src_idx >= src_w.shape[0]:
+                            continue
+                        self.ctc_proj[1].weight.data[our_idx] = src_w[src_idx]
+                        self.ctc_proj[1].bias.data[our_idx] = src_b[src_idx]
                 self.ctc_proj[1].bias.data[self.ctc_blank_id] = 0.0
                 self.ctc_proj[1].weight.data[self.ctc_blank_id].zero_()
-            print(f"[CTC HEAD] Transferred {nc} pretrained word classifiers from Phase 6 (Blank bias set to 0.0).")
+                print(f"[CTC HEAD] Transferred {len(class_map)} pretrained word classifiers "
+                      f"by class name (Blank bias set to 0.0).")
+            elif src_w.shape[0] == self.num_classes + 1:
+                with torch.no_grad():
+                    self.ctc_proj[1].weight.data[:self.num_classes] = src_w[:self.num_classes]
+                    self.ctc_proj[1].bias.data[:self.num_classes] = src_b[:self.num_classes]
+                self.ctc_proj[1].bias.data[self.ctc_blank_id] = 0.0
+                self.ctc_proj[1].weight.data[self.ctc_blank_id].zero_()
+                print(f"[CTC HEAD] Transferred {self.num_classes} pretrained word classifiers "
+                      f"(Blank bias set to 0.0).")
+            else:
+                print(f"[CTC HEAD] SKIPPED the classifier transfer: the vocabulary changed "
+                      f"({src_w.shape[0]} pretrained rows vs {self.num_classes} classes) and no "
+                      f"class-name map was given.")
 
         return True
 
@@ -1434,6 +1490,14 @@ def parse_args():
     p.add_argument("--resume",          action="store_true")
     p.add_argument("--weights",         type=str, default=None)
     p.add_argument("--num_workers",     type=int, default=0)
+    # Word-corpus selection (shared with utils/dataloader_word.py)
+    p.add_argument("--min_samples_per_class", type=int, default=14,
+                   help="A class with fewer clips than this is eliminated from the vocabulary")
+    p.add_argument("--max_samples_per_class", type=int, default=15,
+                   help="Hard budget of clips loaded per class")
+    p.add_argument("--fill_missing",    type=str, default="none",
+                   choices=["none", "hold", "interpolate"],
+                   help="Fill the drop-out holes of a clip with the last valid value")
     # Model parameters
     p.add_argument("--d_model",         type=int, default=256)
     p.add_argument("--n_blocks",        type=int, default=3)
@@ -1486,10 +1550,15 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     plots_dir = os.path.join(args.output_dir, "plots")
 
-    if os.path.exists(CLASSES_SRC):
-        with open(CLASSES_SRC) as f: classes = json.load(f)
-    else:
-        classes = sorted(d for d in os.listdir(args.data_dir) if os.path.isdir(os.path.join(args.data_dir, d)))
+    # ---- vocabulary ------------------------------------------------------
+    # The CTC vocabulary is the vocabulary of the WORD loader: the top-most
+    # frequent classes of the word corpus (a class below the 14-clip tier is
+    # eliminated) with a 15-clip budget per class.
+    classes = get_word_classes(
+        args.data_dir,
+        min_samples_per_class=args.min_samples_per_class,
+        max_samples_per_class=args.max_samples_per_class,
+    )
     num_classes  = len(classes)
     CTC_BLANK_ID = num_classes
 
@@ -1517,8 +1586,24 @@ def main():
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Total Parameters: {n_params:,}")
 
-    # Initialize pretrained backbone
-    model.load_phase6_backbone(PHASE6_WEIGHTS)
+    # Initialize pretrained backbone (the word classifier is transferred BY CLASS
+    # NAME, because the vocabulary is not the one the checkpoint was trained on).
+    phase6_classes = None
+    if os.path.exists(CLASSES_SRC):
+        try:
+            with open(CLASSES_SRC) as f:
+                phase6_classes = json.load(f)
+            if isinstance(phase6_classes, dict):
+                phase6_classes = phase6_classes.get("classes", [])
+        except Exception:
+            phase6_classes = None
+
+    class_map = None
+    if phase6_classes:
+        src_idx = {c: i for i, c in enumerate(phase6_classes)}
+        class_map = {i: src_idx[c] for i, c in enumerate(classes) if c in src_idx}
+
+    model.load_phase6_backbone(PHASE6_WEIGHTS, class_map=class_map)
 
     start_ep  = 0
     best_wer  = float("inf")
@@ -1589,8 +1674,10 @@ def main():
     ema = ModelEMA(model, decay=0.9995)
 
     # Datasets
-    train_ds = SyntheticSentenceDataset(args.data_dir, classes, args.train_samples, True,  cfg["max_w"], cfg["min_w"], cfg["aug"])
-    val_ds   = SyntheticSentenceDataset(args.data_dir, classes, args.val_samples,   False, cfg["max_w"], cfg["min_w"], 0.0)
+    train_ds = SyntheticSentenceDataset(args.data_dir, classes, args.train_samples, True,  cfg["max_w"], cfg["min_w"], cfg["aug"],
+                                        max_per_class=args.max_samples_per_class, fill_missing=args.fill_missing)
+    val_ds   = SyntheticSentenceDataset(args.data_dir, classes, args.val_samples,   False, cfg["max_w"], cfg["min_w"], 0.0,
+                                        max_per_class=args.max_samples_per_class, fill_missing=args.fill_missing)
     train_ld = DataLoader(train_ds, args.batch_size, shuffle=True,  collate_fn=collate, num_workers=args.num_workers)
     val_ld   = DataLoader(val_ds,   args.batch_size, shuffle=False, collate_fn=collate, num_workers=args.num_workers)
 

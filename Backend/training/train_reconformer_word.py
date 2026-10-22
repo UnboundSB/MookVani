@@ -21,7 +21,8 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 from models.isl_sentence_model import ISLSentenceReconformer
-from scripts.dataset import get_balanced_word_dataloaders
+from utils.dataloader_word import get_word_dataloaders
+from utils.pose_augmentation import AugmentConfig
 
 class FocalLoss(nn.Module):
     """
@@ -156,26 +157,33 @@ def train_reconformer_word(args):
     print(f"Batch Size:           {args.batch_size}")
     print(f"Learning Rate:        {args.lr}")
     print(f"D_Model:              {args.d_model}")
-    print(f"Samples per Class:    {args.samples_per_class} (Balanced)")
+    print(f"Samples per Class:    <= {args.max_samples_per_class} (min {args.min_samples_per_class})")
     print("=" * 75 + "\n")
 
     os.makedirs(args.save_dir, exist_ok=True)
     model_save_path = os.path.join(args.save_dir, "reconformer_word_model.pth")
     meta_save_path = os.path.join(args.save_dir, "classes_balanced.json")
 
-    # 1. Initialize Balanced DataLoader (Exact 14 samples per class + [NOTHING])
-    train_loader, val_loader, class_to_idx, idx_to_class, qualifying_classes = get_balanced_word_dataloaders(
+    # 1. Initialize the word DataLoader: the TOP-MOST FREQUENT classes of the
+    #    word corpus, at most 15 clips per class, and a class that owns fewer
+    #    than 14 clips is eliminated from the loader (its files stay on disk,
+    #    the pretrainer and the other models still use them).
+    train_loader, val_loader, class_to_idx, idx_to_class, classes = get_word_dataloaders(
         data_dir=args.data_dir,
         batch_size=args.batch_size,
-        samples_per_class=args.samples_per_class,
-        val_samples_per_class=args.val_samples_per_class,
+        min_samples_per_class=args.min_samples_per_class,
+        max_samples_per_class=args.max_samples_per_class,
+        val_fraction=args.val_fraction,
+        max_len=args.max_len,
         include_nothing_class=True,
+        augment_config=AugmentConfig(),
+        fill_missing=args.fill_missing,
         seed=42,
         save_meta_path=meta_save_path
     )
 
     all_class_names = [idx_to_class[i] for i in range(len(idx_to_class))]
-    num_classes = len(qualifying_classes) # gesture classes count; head outputs num_classes + 1 for [NOTHING]
+    num_classes = len(classes)  # gesture classes count; the head outputs num_classes + 1 for [NOTHING]
 
     # 2. Build Model: RNN -> Transformer -> TCNN
     print(f"\nBuilding FRESH ISLSentenceReconformer (Gesture Classes: {num_classes}, Total Classes with [NOTHING]: {num_classes + 1})...")
@@ -360,8 +368,11 @@ if __name__ == "__main__":
     parser.add_argument("--d_model", type=int, default=128, help="Model hidden dimension (default: 128)")
     parser.add_argument("--num_heads", type=int, default=4, help="Transformer attention heads (default: 4)")
     parser.add_argument("--dropout", type=float, default=0.2, help="Dropout probability (default: 0.2)")
-    parser.add_argument("--samples_per_class", type=int, default=14, help="Exact samples per class to balance (default: 14)")
-    parser.add_argument("--val_samples_per_class", type=int, default=0, help="Validation samples per class (default: 0 for all 14 samples)")
+    parser.add_argument("--min_samples_per_class", type=int, default=14, help="A class with fewer clips than this is eliminated from the loader (default: 14)")
+    parser.add_argument("--max_samples_per_class", type=int, default=15, help="Hard budget of clips loaded per class (default: 15)")
+    parser.add_argument("--val_fraction", type=float, default=0.2, help="Fraction of the clips kept for validation (default: 0.2)")
+    parser.add_argument("--max_len", type=int, default=300, help="Maximum number of frames per clip (default: 300)")
+    parser.add_argument("--fill_missing", type=str, default="none", choices=["none", "hold", "interpolate"], help="Fill the drop-out holes of a clip with the last valid value")
     parser.add_argument("--freeze_base", action="store_true", help="Freeze pretrained base for initial warmup epochs")
     args = parser.parse_args()
 
