@@ -42,6 +42,7 @@ from torch.utils.data import DataLoader, Dataset
 
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.checkpoint_utils import load_flexible
 
 from yap_conformer import (
     YAPConfig, YAPpingConformer, ConformerConfig,
@@ -237,13 +238,13 @@ def train(args):
     # Load Stage 1 noise-robust weights
     if args.init and os.path.exists(args.init):
         sd = torch.load(args.init, map_location=device, weights_only=True)
-        missing, unexpected = model.load_state_dict(sd, strict=False)
+        missing, unexpected = load_flexible(model, sd, label="STAGE1")
         print(f"[INIT] {args.init} | missing {len(missing)}, unexpected {len(unexpected)}")
     if args.resume:
         ck_path = os.path.join(args.out_dir, "yap_seg_ckpt.pth")
         if os.path.exists(ck_path):
             ck = torch.load(ck_path, map_location=device, weights_only=False)
-            model.load_state_dict(ck["model"])
+            load_flexible(model, ck["model"], label="RESUME")
             print(f"[RESUME] epoch {ck['epoch']}")
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)

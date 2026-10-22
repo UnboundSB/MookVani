@@ -3,10 +3,10 @@
 Core backend engine containing ML models, feature extractors, training loops, and inference services.
 
 ## Files
-- `live_inference.py`: Real-time webcam sentence recognition using the Phase 1 CTC sentence model (Phase1SentenceModel with frozen Phase 6 backbone). Greedily decodes continuous ISL sign sequences into sentences. Supports `--simulate` mode for streaming saved .pt tensor files through the CTC decoder.
+- `live_inference.py`: Real-time webcam sentence recognition using the Phase 1 CTC sentence model (Phase1SentenceModel with frozen Phase 6 backbone). Greedily decodes continuous ISL sign sequences into sentences. Supports `--simulate` mode for streaming saved .pt tensor files through the CTC decoder. A checkpoint whose head does not match the published vocabulary is loaded through `utils/checkpoint_utils.py` (the head is dropped and reported instead of crashing).
 - `merge_isign_to_dataset.py`: Merges and aligns iSign dataset annotations into main dataset directories.
 - `requirements.txt`: Python package dependencies required for backend execution and training.
-- `run_pipeline.py`: Pipeline orchestration script to trigger feature extraction and model training.
+- `run_pipeline.py`: Pipeline orchestrator (feature extraction → pretraining → word training → sentence training). Every step points at a real script; `--only <step>` runs a single stage.
 - `run_train_synthetic.py`: Script to launch training jobs on synthetic sentence datasets.
 - `structure.md`: Directory structure documentation for Backend.
 
@@ -17,5 +17,5 @@ Core backend engine containing ML models, feature extractors, training loops, an
 - `scripts/`: Data augmentation, extraction pipelines, directory management, and evaluation utilities.
 - `segmentor/`: YAP (You Adapt Progressively) gesture segmentor workspace. Contains `yap_conformer.py` (the full YAP + YAPpingConformer implementation), noise augmentation, and the two-stage training pipeline (noise filtration + synthetic sentence segmentation).
 - `training/`: Model training routines, fine-tuning scripts, and validation evaluation scripts.
-- `utils/`: Reusable utilities for gloss mapping, metric calculations, and formatting.
+- `utils/`: The word-level and sentence-level dataloaders, the canonical pose augmentation set, the checkpoint helpers, gloss mapping and the evaluation metrics.
 

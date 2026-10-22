@@ -18,6 +18,7 @@ for a noise-robust gesture segmenter built on YAP + YAPpingConformer.
   is trained to produce outputs consistent with the teacher via KL divergence on
   presence/end heads and MSE on entity vectors. Teacher is updated as EMA of student.
   Anti-collapse: word-label cross-entropy on clean path entities. Saves `yap_noise_robust.pth`.
+  The vocabulary is the published one (`models/word_vocabulary/classes.json`).
 - `train_segmentor.py`: **Stage 2** — Synthetic sentence segmentation. Loads Stage 1
   weights and fine-tunes on synthetically stitched sentences with known boundaries.
   Presence head: focal BCE. End head: Gaussian-bump BCE. Deep supervision: layer_conf_loss.

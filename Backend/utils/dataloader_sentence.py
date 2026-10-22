@@ -420,6 +420,7 @@ def get_sentence_dataloaders(
     print(f"Continuous clips on disk:     {report['total']}")
     print(f"  kept:                       {report['kept']}")
     print(f"  dropped (unknown word):     {report['dropped_unknown_word']}")
+    print(f"  target words dropped:       {report['unknown_words']}")
     print(f"  dropped (out of scope):     {report['dropped_out_of_scope']}")
     print(f"  dropped (empty):            {report['dropped_empty']}")
     print(f"Word clips added (train/val): {len(train_word)} / {len(val_word)}")

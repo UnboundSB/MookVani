@@ -12,7 +12,7 @@ Exploratory Data Analysis (EDA) module for dataset inspection, format verificati
 - `extract_isign_only.py`: Unpacks and filters subsets specifically from the iSign dataset.
 - `generate_isl_cslrt_eda.py`: Standalone EDA script generating comprehensive distribution plots for ISL-CSLRT (word and sentence levels).
 - `inspect_eda.py`: Console-based data inspector printing high-level dataset metrics.
-- `sentence_class_frequency_eda.py`: Analyzes distribution and frequencies of trained vocabulary classes in continuous sentences.
+- `sentence_class_frequency_eda.py`: Analyzes distribution and frequencies of trained vocabulary classes in continuous sentences. Reads the published vocabulary (`models/word_vocabulary/classes.json`).
 - `sentence_class_frequencies.json`: Stored JSON frequency metrics and vocabulary coverage data.
 - `structure.md`: Directory structure documentation for eda.
 - `tensor_collapse_audit_tensors_include50_word_level.json`: Audit report for the word-level tensor corpus (262 classes / 4,273 samples / 275,009 frames).

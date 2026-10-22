@@ -50,6 +50,7 @@ from torch.utils.data import DataLoader, Dataset
 # ── local imports (run from the repo root or add segmentor to sys.path) ─────
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))  # Backend/
+from utils.checkpoint_utils import load_flexible
 
 from yap_conformer import (
     YAPConfig, YAPCore, YAP, YAPpingConformer, ConformerConfig,
@@ -241,14 +242,14 @@ def train(args):
     # If resuming or initialising from a pretrained YAP
     if args.init and os.path.exists(args.init):
         sd = torch.load(args.init, map_location=device, weights_only=True)
-        student.load_state_dict(sd, strict=False)
-        teacher.load_state_dict(sd, strict=False)
+        load_flexible(student, sd, label="INIT")
+        load_flexible(teacher, sd, label="INIT", verbose=False)
         print(f"[INIT] loaded weights from {args.init}")
     if args.resume and os.path.exists(os.path.join(args.out_dir, "yap_noise_ckpt.pth")):
         ck = torch.load(os.path.join(args.out_dir, "yap_noise_ckpt.pth"), map_location=device, weights_only=False)
-        student.load_state_dict(ck["student"])
-        teacher.load_state_dict(ck["teacher"])
-        cls_head.load_state_dict(ck["cls_head"])
+        load_flexible(student, ck["student"], label="RESUME")
+        load_flexible(teacher, ck["teacher"], label="RESUME", verbose=False)
+        load_flexible(cls_head, ck["cls_head"], label="RESUME")
         print(f"[RESUME] epoch {ck['epoch']}")
 
     optimizer = torch.optim.AdamW(list(student.parameters()) + list(cls_head.parameters()),
