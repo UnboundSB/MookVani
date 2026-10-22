@@ -52,10 +52,24 @@ os.makedirs(PLOTS_DIR, exist_ok=True)
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
+from utils.dataloader_word import (  # noqa: E402
+    discover_word_classes,
+    load_split_tensors,
+    split_word_classes,
+)
+from utils.pose_augmentation import (  # noqa: E402
+    AugmentConfig,
+    augment_pose_sequence as augment_pose_sequence_canonical,
+    mirror_pose,
+    tilt_pose as canonical_tilt,
+)
+from utils.checkpoint_utils import load_flexible  # noqa: E402
+
 # =========================================================================
 # HYPER-PARAMETERS
 # =========================================================================
-MAX_SAMPLES      = 14          # cap per class (no minimum skip)
+MIN_SAMPLES       = 14          # a class below this tier is eliminated
+MAX_SAMPLES       = 15          # hard budget of clips per class
 INPUT_DIM        = 163
 D_MODEL          = 128
 N_HEAD           = 4
@@ -82,6 +96,24 @@ GRAD_CLIP        = 2.0
 STRETCH_RANGE    = (0.75, 1.25)   # time-stretch factor
 FLIP_PROB        = 0.5
 TILT_RANGE       = (-20.0, 20.0)  # degrees, uniform
+TILT_MAX         = max(abs(TILT_RANGE[0]), abs(TILT_RANGE[1]))
+
+# The canonical augmentation set (Backend/utils/pose_augmentation.py).
+PHASE4_AUGMENT = AugmentConfig(
+    flip_prob=FLIP_PROB,
+    tilt_prob=1.0,
+    tilt_deg=TILT_MAX,
+    shift_prob=0.4,
+    shift_dx=0.05,
+    shift_dy=0.02,
+    speed_prob=0.5,
+    speed_lo=STRETCH_RANGE[0],
+    speed_hi=STRETCH_RANGE[1],
+    time_shift_prob=0.2,
+    time_shift_max=3,
+    mask_prob=0.0,
+    noise_std=0.0,
+)
 
 
 # =========================================================================
@@ -107,46 +139,24 @@ def time_stretch(seq: torch.Tensor) -> torch.Tensor:
 # =========================================================================
 
 def flip_pose(seq: torch.Tensor) -> torch.Tensor:
-    """Horizontal mirror: negate x-coords and swap left/right landmarks."""
-    seq = seq.clone(); T = seq.shape[0]
-    coords = seq[:, :159].view(T, 53, 3).clone()
-    coords[:, :, 0] = -coords[:, :, 0]
-    # Swap hand groups: 0:21 <-> 21:42
-    lh = coords[:, 0:21, :].clone(); rh = coords[:, 21:42, :].clone()
-    coords[:, 0:21, :] = rh;         coords[:, 21:42, :] = lh
-    # Swap shoulder/elbow pairs
-    la = coords[:, [42, 44], :].clone(); ra = coords[:, [43, 45], :].clone()
-    coords[:, [42, 44], :] = ra;         coords[:, [43, 45], :] = la
-    # Swap wrist/finger pairs
-    lf = coords[:, [46, 49], :].clone(); rf = coords[:, [47, 50], :].clone()
-    coords[:, [46, 49], :] = rf;         coords[:, [47, 50], :] = lf
-    # Swap handedness scalars (channels 159 & 160)
-    l2 = seq[:, 159].clone(); r2 = seq[:, 160].clone()
-    seq[:, 159] = r2; seq[:, 160] = l2
-    seq[:, :159] = coords.view(T, 159)
-    return seq
+    """Horizontal mirror around the signer's own axis (canonical version)."""
+    return mirror_pose(seq)
 
 
 def tilt_pose(seq: torch.Tensor) -> torch.Tensor:
-    """Uniform 2-D rotation of all joint x/y coordinates."""
-    seq = seq.clone(); T = seq.shape[0]
-    angle = math.radians(random.uniform(*TILT_RANGE))
-    ca, sa = math.cos(angle), math.sin(angle)
-    coords = seq[:, :159].view(T, 53, 3).clone()
-    x, y   = coords[:, :, 0].clone(), coords[:, :, 1].clone()
-    coords[:, :, 0] = x * ca - y * sa
-    coords[:, :, 1] = x * sa + y * ca
-    seq[:, :159] = coords.view(T, 159)
-    return seq
+    """Rotation around the neck (canonical version)."""
+    return canonical_tilt(seq, TILT_MAX)
 
 
 def augment(seq: torch.Tensor) -> torch.Tensor:
-    """Compose: time-stretch -> optional flip -> tilt."""
-    seq = time_stretch(seq)
-    if random.random() < FLIP_PROB:
-        seq = flip_pose(seq)
-    seq = tilt_pose(seq)
-    return seq
+    """Compose: time-stretch -> optional mirror -> tilt -> bounded shift.
+
+    The canonical implementation in ``Backend/utils/pose_augmentation.py`` is
+    used, so the mouth corners are swapped as well (the old local copy left
+    the mouth asymmetric) and the rotation pivots on the neck instead of the
+    origin.
+    """
+    return augment_pose_sequence_canonical(seq, PHASE4_AUGMENT)
 
 
 # =========================================================================
@@ -294,7 +304,7 @@ def build_model(nc: int, ckpt: str) -> Phase4Model:
         return model
     raw = torch.load(ckpt, map_location="cpu", weights_only=True)
     # Phase-3 uses identical key names (proj/gru/gnorm/pe/trans/tnorm/t1/t2/head)
-    miss, unex = model.load_state_dict(raw, strict=False)
+    miss, unex = load_flexible(model, raw, label="PHASE3->PHASE4")
     loaded = len(raw) - len(miss)
     print(f"[INFO] Phase-3 weights loaded: {loaded}/{len(raw)} keys matched.")
     if miss:  print(f"  Missing (new):    {miss}")
@@ -309,55 +319,40 @@ def build_model(nc: int, ckpt: str) -> Phase4Model:
 def load_data(data_dir: str, phase3_classes_json: str,
               max_per: int = MAX_SAMPLES, vfrac: float = VAL_FRAC):
     """
-    Load tensors for exactly the classes used in Phase 3 (from classes.json).
-    Cap at max_per samples per class. Split into train/val (no augmentation yet).
+    Load the word corpus with the shared selection rule.
+
+    A class that owns fewer than MIN_SAMPLES clips is eliminated from the
+    loader (the files stay on disk) and every surviving class is capped at
+    MAX_SAMPLES clips.  The class ORDER comes from the shared loader, so it is
+    identical to the order Phase 3 produced (both use the same rule) and the
+    head of the warm-started checkpoint keeps its meaning.
     """
     print(f"[INFO] Scanning {data_dir} ...")
 
-    # Load Phase-3 class list to keep classes consistent
+    infos = discover_word_classes(data_dir, min_samples_per_class=MIN_SAMPLES,
+                                  max_samples_per_class=max_per)
+    classes = [i.name for i in infos]
+
+    # The previous phase wrote its class list; it is only used to CHECK that
+    # the vocabulary did not change under our feet.
     if os.path.exists(phase3_classes_json):
         with open(phase3_classes_json, encoding="utf-8") as f:
-            phase3_classes = json.load(f)
-        print(f"[INFO] Restricting to {len(phase3_classes)} Phase-3 classes.")
+            payload = json.load(f)
+        prev_classes = payload.get("classes", []) if isinstance(payload, dict) else payload
+        if list(prev_classes) != classes:
+            print(f"[WARN] The previous phase trained on {len(prev_classes)} classes "
+                  f"but the loader selects {len(classes)}.")
+            print("       The head of the warm-started checkpoint will be re-learned "
+                  "(its shape changed).")
     else:
-        phase3_classes = None
-        print("[WARN] No Phase-3 classes.json found; loading all classes.")
+        print("[INFO] No previous-phase classes.json found; using the top-most "
+              "frequent classes of the corpus.")
 
-    c2t = {}
-    for cls in sorted(os.listdir(data_dir)):
-        p = os.path.join(data_dir, cls)
-        if not os.path.isdir(p): continue
-        if phase3_classes is not None and cls not in phase3_classes: continue
-        pts = glob.glob(os.path.join(p, "*.pt"))
-        if not pts: continue
-        ts = []
-        for f in pts:
-            try:
-                ts.append(torch.load(f, map_location="cpu", weights_only=True).float())
-            except Exception as e:
-                print(f"  [WARN] {f}: {e}")
-        if not ts: continue
-        if len(ts) > max_per:
-            random.shuffle(ts); ts = ts[:max_per]
-        c2t[cls] = ts
-
-    # Use Phase-3 class ordering if available (keeps idx consistent)
-    if phase3_classes is not None:
-        classes = [c for c in phase3_classes if c in c2t]
-    else:
-        classes = sorted(c2t.keys())
-
-    c2i = {c: i for i, c in enumerate(classes)}
     print(f"[INFO] {len(classes)} classes loaded (capped at {max_per} each).")
 
-    tr, va = {}, {}
-    for cls, ts in c2t.items():
-        idx = c2i[cls]; random.shuffle(ts)
-        nv = max(1, round(len(ts) * vfrac))
-        va[idx] = ts[:nv]; tr[idx] = ts[nv:]
-
-    tr = {k: v for k, v in tr.items() if v}
-    va = {k: v for k, v in va.items() if v}
+    train_items, val_items = split_word_classes(infos, val_fraction=vfrac, seed=42)
+    tr = load_split_tensors(train_items)
+    va = load_split_tensors(val_items)
     tot_tr = sum(len(v) for v in tr.values())
     tot_va = sum(len(v) for v in va.values())
     print(f"[INFO] Split: {tot_tr} train | {tot_va} val")

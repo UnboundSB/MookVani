@@ -59,12 +59,15 @@ from yap_conformer import (
 from noise_aug import add_noise
 
 # ── defaults ─────────────────────────────────────────────────────────────────
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DATA_DIRS = [
-    "Backend/data/tensors_include50_word_level",
-    "Backend/data/tensors_isl_csltr_word_level",
+    os.path.join(BACKEND_DIR, "data", "tensors_include50_word_level"),
+    os.path.join(BACKEND_DIR, "data", "tensors_isl_csltr_word_level"),
 ]
-DEFAULT_OUT = "Backend/segmentor/models/yap_stage1"
-CLASSES_PATH = "Backend/data/classes.json"
+DEFAULT_OUT = os.path.join(BACKEND_DIR, "segmentor", "models", "yap_stage1")
+# The published vocabulary of the project (the top-most frequent classes of the
+# word corpus) - the same list every other trainer uses.
+CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
 
 
 # ==============================================================================

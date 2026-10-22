@@ -28,7 +28,7 @@ if hasattr(sys.stdout, "reconfigure"):
     except: pass
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "phase6_word_model", "classes.json")
+CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
 EDA_PLOTS_DIR = os.path.join(BACKEND_DIR, "eda", "plots")
 MODEL_PLOTS_DIR = os.path.join(BACKEND_DIR, "models", "isl_conformer_ctc", "plots")
 

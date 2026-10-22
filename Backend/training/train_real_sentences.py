@@ -96,12 +96,15 @@ from training.train_conformer_ctc import (
     _reclamp, escape_local_minimum, harmonize_features, match_pretraining_domain,
     MixedContinuousDataset, collate as collate_mixed
 )
+from utils.dataloader_sentence import remap_sentence_words
+from utils.dataloader_word import get_word_classes
+from utils.checkpoint_utils import extract_state_dict, load_flexible
 
 DEFAULT_DATA_DIR = os.path.join(BACKEND_DIR, "data", "tensors_sentence_level")
 DEFAULT_OUT_DIR = os.path.join(BACKEND_DIR, "models", "isl_real_sentences")
 STAGE3_BEST = os.path.join(BACKEND_DIR, "models", "isl_conformer_ctc", "stage3_best.pth")
 STAGE1_BEST = os.path.join(BACKEND_DIR, "models", "isl_conformer_ctc", "stage1_best.pth")
-CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "phase6_word_model", "classes.json")
+CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
 
 
 # =============================================================================
@@ -165,17 +168,33 @@ def _ctc_feasible(labels, frames):
     repeats = sum(1 for a, b in zip(labels, labels[1:]) if a == b)
     return frames is None or frames >= len(labels) + repeats
 
-def split_items(index_file, val_split=0.10, seed=42, max_out_scope=1, max_words=18, overfit=0):
-    """Sentence-level split (all takes of a sentence stay on one side). Returns (train, val, stats)."""
+def split_items(index_file, val_split=0.10, seed=42, max_out_scope=1, max_words=18,
+                overfit=0, class_to_idx=None):
+    """Sentence-level split (all takes of a sentence stay on one side). Returns (train, val, stats).
+
+    The targets are re-indexed onto the CURRENT vocabulary by NAME: the
+    ``index.json`` of the corpus was written for the old 262-class list, so the
+    stored indices are meaningless for the frequency-filtered vocabulary the
+    word loader uses now.  A word that is not in the vocabulary is dropped
+    from the CTC target, exactly like an out-of-scope word.
+    """
     with open(index_file, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     stats = {"index_total": len(data), "dropped_missing": 0, "dropped_no_labels": 0,
-             "dropped_out_scope": 0, "dropped_long": 0, "dropped_infeasible": 0}
+             "dropped_out_scope": 0, "dropped_long": 0, "dropped_infeasible": 0,
+             "dropped_unknown_word": 0}
     items = []
     for it in data:
         if not os.path.exists(it.get("tensor_path", "")):
             stats["dropped_missing"] += 1; continue
+        if class_to_idx is not None:
+            remapped, report = remap_sentence_words(
+                [it], class_to_idx, max_out_scope=-1, max_words=max_words
+            )
+            if not remapped:
+                stats["dropped_unknown_word"] += 1; continue
+            it = remapped[0]
         labels = it.get("in_scope_indices", [])
         if len(labels) == 0:
             stats["dropped_no_labels"] += 1; continue
@@ -439,12 +458,15 @@ def set_bn_eval(model):
 
 def load_init_weights(model, path, device, allow_partial=False):
     raw = torch.load(path, map_location=device, weights_only=False)
-    sd = raw["model_state_dict"] if isinstance(raw, dict) and "model_state_dict" in raw else raw
-    res = model.load_state_dict(sd, strict=False)
-    bad_missing = [k for k in res.missing_keys if not k.endswith("pe")]
-    print(f"[INIT] {os.path.basename(path)}: missing={len(res.missing_keys)} unexpected={len(res.unexpected_keys)}")
-    if bad_missing or res.unexpected_keys:
-        print("       missing (first 5):", bad_missing[:5], "| unexpected (first 5):", list(res.unexpected_keys)[:5])
+    sd = extract_state_dict(raw)
+    # The CTC head depends on the vocabulary size, so a checkpoint trained on
+    # the old class list cannot be loaded verbatim: the mismatching head is
+    # dropped and re-learned, the backbone is kept.
+    missing, unexpected = load_flexible(model, sd, label="INIT")
+    bad_missing = [k for k in missing if not k.endswith("pe")]
+    print(f"[INIT] {os.path.basename(path)}: missing={len(missing)} unexpected={len(unexpected)}")
+    if bad_missing or unexpected:
+        print("       missing (first 5):", bad_missing[:5], "| unexpected (first 5):", list(unexpected)[:5])
         if not allow_partial:
             raise RuntimeError("Checkpoint does not match the model (see above). Pass --allow_partial_load "
                                "only if you really want to train partly from scratch.")
@@ -516,6 +538,7 @@ def train_real_sentences(args):
     if isinstance(classes, dict): classes = classes["classes"]
     num_classes = len(classes)
     blank_id = num_classes
+    class_to_idx = {c: i for i, c in enumerate(classes)}
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     use_cuda = device.type == "cuda"
 
@@ -523,7 +546,8 @@ def train_real_sentences(args):
     if not os.path.exists(index_file):
         raise FileNotFoundError(f"Missing index.json in {args.data_dir}. Run scripts/extract_real_sentences.py first!")
     train_items, val_items, stats = split_items(index_file, args.val_split, args.seed,
-                                                args.max_out_scope, args.max_words, args.overfit)
+                                                args.max_out_scope, args.max_words, args.overfit,
+                                                class_to_idx=class_to_idx)
     if not train_items: raise RuntimeError("No usable training clips after filtering; see [DATA] report.")
     print_data_report(train_items, val_items, stats, classes, args.max_len)
 
@@ -661,10 +685,11 @@ def train_real_sentences(args):
         ck = torch.load(ckpt_path, map_location=device, weights_only=False)
         best_pth = os.path.join(args.out_dir, "real_sentence_best.pth")
         if os.path.exists(best_pth):
-            model.load_state_dict(torch.load(best_pth, map_location=device, weights_only=True))
+            load_flexible(model, extract_state_dict(torch.load(best_pth, map_location=device, weights_only=True)),
+                          label="RESUME")
             print(f"[RESUME] loaded BEST model weights from {best_pth}")
         else:
-            model.load_state_dict(ck["model_state_dict"])
+            load_flexible(model, extract_state_dict(ck), label="RESUME")
             print(f"[RESUME] best weights not found, loaded last-checkpoint model")
         ema.model.load_state_dict(ck["ema_state_dict"])
         optimizer.load_state_dict(ck["optimizer_state_dict"])

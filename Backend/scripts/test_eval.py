@@ -6,20 +6,21 @@ import numpy as np
 BACKEND_DIR = r"d:\MookVani\Backend"
 sys.path.insert(0, BACKEND_DIR)
 from models.isl_sentence_model import ISLSentenceReconformer
-from scripts.dataset import get_balanced_word_dataloaders
+from utils.dataloader_word import get_word_dataloaders
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 data_dir = os.path.join(BACKEND_DIR, "data", "tensors_include50_word_level")
-train_loader, val_loader, class_to_idx, idx_to_class, qualifying_classes = get_balanced_word_dataloaders(
+train_loader, val_loader, class_to_idx, idx_to_class, classes = get_word_dataloaders(
     data_dir=data_dir,
     batch_size=32,
-    samples_per_class=14,
-    val_samples_per_class=3,
+    min_samples_per_class=14,
+    max_samples_per_class=15,
+    val_fraction=0.2,
     include_nothing_class=True,
     seed=42
 )
-num_classes = len(qualifying_classes)
+num_classes = len(classes)
 
 model = ISLSentenceReconformer(
     input_dim=163,

@@ -83,7 +83,7 @@ class Phase6Model(nn.Module):
 
 def test_word_model(n_samples=20):
     ckpt_path = os.path.join(BACKEND_DIR, "models", "phase6_word_model", "best_phase6_model.pth")
-    classes_path = os.path.join(BACKEND_DIR, "models", "phase6_word_model", "classes.json")
+    classes_path = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
     data_dir = os.path.join(BACKEND_DIR, "data", "tensors_include50_word_level")
 
     with open(classes_path, "r") as f:

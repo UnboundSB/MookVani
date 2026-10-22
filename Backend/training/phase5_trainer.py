@@ -58,6 +58,16 @@ os.makedirs(PLOTS_DIR, exist_ok=True)
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
+from utils.pose_augmentation import (  # noqa: E402
+    AugmentConfig,
+    augment_pose_sequence as augment_pose_sequence_canonical,
+    mirror_pose as canonical_mirror,
+    tilt_pose as canonical_tilt,
+    time_stretch as canonical_time_stretch,
+)
+from utils.checkpoint_utils import load_flexible  # noqa: E402
+from utils.dataloader_word import get_word_classes  # noqa: E402
+
 # =========================================================================
 # HYPER-PARAMETERS
 # =========================================================================
@@ -88,57 +98,51 @@ TILT_DEG      = 20.0
 NOISE_STD     = 0.008
 MIXUP_ALPHA   = 0.30
 
+# The canonical augmentation set (Backend/utils/pose_augmentation.py).
+PHASE5_AUGMENT = AugmentConfig(
+    flip_prob=FLIP_P,
+    tilt_prob=1.0,
+    tilt_deg=TILT_DEG,
+    shift_prob=0.4,
+    shift_dx=0.05,
+    shift_dy=0.02,
+    speed_prob=0.5,
+    speed_lo=STRETCH_LO,
+    speed_hi=STRETCH_HI,
+    time_shift_prob=0.2,
+    time_shift_max=3,
+    mask_prob=0.0,
+    noise_std=NOISE_STD,
+)
+
 
 # =========================================================================
 # 1. AUGMENTATION
 # =========================================================================
 
 def time_stretch(seq):
-    T, D = seq.shape
-    factor = random.uniform(STRETCH_LO, STRETCH_HI)
-    new_T = max(1, round(T * factor))
-    if new_T == T: return seq
-    s = F.interpolate(seq.T.unsqueeze(0), size=new_T, mode="linear",
-                      align_corners=True)
-    return s.squeeze(0).T
+    """Speed up / slow down the clip (canonical implementation)."""
+    return canonical_time_stretch(seq, STRETCH_LO, STRETCH_HI)
 
 
 def flip_pose(seq):
-    seq = seq.clone(); T = seq.shape[0]
-    coords = seq[:, :159].view(T, 53, 3).clone()
-    coords[:, :, 0] = -coords[:, :, 0]
-    lh = coords[:, 0:21, :].clone(); rh = coords[:, 21:42, :].clone()
-    coords[:, 0:21, :] = rh;         coords[:, 21:42, :] = lh
-    la = coords[:, [42,44], :].clone(); ra = coords[:, [43,45], :].clone()
-    coords[:, [42,44], :] = ra;         coords[:, [43,45], :] = la
-    lf = coords[:, [46,49], :].clone(); rf = coords[:, [47,50], :].clone()
-    coords[:, [46,49], :] = rf;         coords[:, [47,50], :] = lf
-    l2 = seq[:, 159].clone(); r2 = seq[:, 160].clone()
-    seq[:, 159] = r2; seq[:, 160] = l2
-    seq[:, :159] = coords.view(T, 159)
-    return seq
+    """Mirror around the signer's own axis (canonical implementation)."""
+    return canonical_mirror(seq)
 
 
 def tilt_pose(seq):
-    seq = seq.clone(); T = seq.shape[0]
-    a = math.radians(random.uniform(-TILT_DEG, TILT_DEG))
-    ca, sa = math.cos(a), math.sin(a)
-    coords = seq[:, :159].view(T, 53, 3).clone()
-    x, y = coords[:,:,0].clone(), coords[:,:,1].clone()
-    coords[:,:,0] = x*ca - y*sa
-    coords[:,:,1] = x*sa + y*ca
-    if NOISE_STD > 0:
-        coords += torch.randn_like(coords) * NOISE_STD
-    seq[:, :159] = coords.view(T, 159)
-    return seq
+    """Rotate around the neck + jitter (canonical implementation)."""
+    return canonical_tilt(seq, TILT_DEG)
 
 
 def augment(seq):
-    seq = time_stretch(seq)
-    if random.random() < FLIP_P:
-        seq = flip_pose(seq)
-    seq = tilt_pose(seq)
-    return seq
+    """The canonical augmentation set (Backend/utils/pose_augmentation.py).
+
+    The old local copy rotated around the origin (the corpus is anchor
+    relative, so the body sat at x ~ +3.5 shoulder widths) and never swapped
+    the mouth corners.
+    """
+    return augment_pose_sequence_canonical(seq, PHASE5_AUGMENT)
 
 
 def mixup(x1, y1, x2, y2, alpha=MIXUP_ALPHA):
@@ -289,7 +293,7 @@ def build_model(nc, ckpt):
         print(f"[WARN] Phase-4 checkpoint not found: {ckpt} -- random init")
         return model
     raw = torch.load(ckpt, map_location="cpu", weights_only=True)
-    miss, unex = model.load_state_dict(raw, strict=False)
+    miss, unex = load_flexible(model, raw, label="PHASE4->PHASE5")
     loaded = len(raw) - len(miss)
     print(f"[INFO] Phase-4 weights loaded: {loaded}/{len(raw)} keys matched.")
     if miss:  print(f"  Missing:    {miss}")
@@ -441,6 +445,18 @@ def train_phase5():
     classes = split["classes"]
     c2i = {c: i for i, c in enumerate(classes)}
     nc  = len(classes)
+
+    # The split defines the vocabulary of this phase, so it must match the
+    # vocabulary of the word loader.  A stale split (from the old 262-class
+    # corpus) would silently train a model on a different class list.
+    expected = get_word_classes()
+    if set(classes) != set(expected):
+        raise RuntimeError(
+            f"[ERROR] The Phase-4 split is stale: it holds {len(classes)} classes "
+            f"but the word loader selects {len(expected)}.\n"
+            f"       Regenerate it with:  python scripts/save_phase4_split.py"
+        )
+
     print(f"[INFO] Loaded split: {nc} classes, "
           f"{sum(len(v) for v in split['train'].values())} train, "
           f"{sum(len(v) for v in split['val'].values())} val")

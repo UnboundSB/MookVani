@@ -41,6 +41,7 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 from utils.dataloader_word import get_word_classes  # noqa: E402
+from utils.checkpoint_utils import extract_state_dict, load_flexible  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Canonical layout + the ONE implementation of the pose augmentations.
@@ -1615,7 +1616,7 @@ def main():
     if args.resume and os.path.exists(CKPT_FILE):
         print(f"[RESUME] Loading {CKPT_FILE}")
         ckpt = torch.load(CKPT_FILE, map_location=device, weights_only=False)
-        model.load_state_dict(ckpt["model_state_dict"])
+        load_flexible(model, extract_state_dict(ckpt), label="RESUME")
         start_ep = ckpt.get("epoch", 0)
         best_wer = ckpt.get("best_wer", float("inf"))
         best_ema_wer = ckpt.get("best_ema_wer", float("inf"))
@@ -1626,8 +1627,7 @@ def main():
     if not loaded and args.weights and os.path.exists(args.weights):
         print(f"[LOAD] Weights from: {args.weights}")
         raw = torch.load(args.weights, map_location=device, weights_only=False)
-        sd  = raw["model_state_dict"] if isinstance(raw, dict) and "model_state_dict" in raw else raw
-        model.load_state_dict(sd, strict=False)
+        load_flexible(model, extract_state_dict(raw), label="WEIGHTS")
 
     if not loaded and not args.weights:
         prev_stage = stage - 1
@@ -1636,7 +1636,7 @@ def main():
             if os.path.exists(prev_best):
                 print(f"[WARM-START] Loading stage {prev_stage} weights from {prev_best}")
                 sd = torch.load(prev_best, map_location=device, weights_only=True)
-                model.load_state_dict(sd, strict=True)
+                load_flexible(model, sd, label=f"STAGE{prev_stage}")
 
     # Differential Learning Rates
     bb_lr   = args.backbone_lr if args.backbone_lr != 1.0e-5 else cfg["bb_lr"]

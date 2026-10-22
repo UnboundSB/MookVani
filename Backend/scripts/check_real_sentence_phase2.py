@@ -24,6 +24,7 @@ PHASE1_DIR = os.path.join(BACKEND_DIR, "models", "isl_real_sentences")
 DEFAULT_CKPT = os.path.join(FINAL_DIR, "real_final_best.pth")
 if not os.path.exists(DEFAULT_CKPT):
     DEFAULT_CKPT = os.path.join(FINAL_DIR, "real_final_ema_best.pth")
+from utils.checkpoint_utils import extract_state_dict, load_flexible
 if not os.path.exists(DEFAULT_CKPT):
     DEFAULT_CKPT = os.path.join(PHASE2_DIR, "phase2_sentence_best.pth")
 if not os.path.exists(DEFAULT_CKPT):
@@ -32,7 +33,7 @@ if not os.path.exists(DEFAULT_CKPT):
     DEFAULT_CKPT = os.path.join(PHASE1_DIR, "real_sentence_best.pth")
 
 DEFAULT_DATA_DIR = os.path.join(BACKEND_DIR, "data", "tensors_sentence_level")
-CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "phase6_word_model", "classes.json")
+CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
 
 def get_zero_leakage_split(index_path, val_split=0.10, seed=42):
     """Recreates the exact deterministic sentence-level split used by training."""
@@ -84,8 +85,7 @@ def audit_phase2(ckpt_path=DEFAULT_CKPT, data_dir=DEFAULT_DATA_DIR, n_samples=15
     model = ISLHybridConformerCTC(num_classes).to(device)
 
     sd = torch.load(ckpt_path, map_location=device, weights_only=False)
-    if isinstance(sd, dict) and "model_state_dict" in sd: sd = sd["model_state_dict"]
-    model.load_state_dict(sd, strict=False)
+    load_flexible(model, extract_state_dict(sd), label="CHECK")
     model.eval()
 
     # Get zero-leakage partitions

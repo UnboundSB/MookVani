@@ -68,6 +68,12 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 WORD_LEVEL_DIR_DEFAULT = os.path.join(BACKEND_DIR, "data", "tensors_include50_word_level")
 
+# The PUBLISHED vocabulary of the project.  Every trainer, every evaluation
+# script and the live inference path read this file, so the CTC blank id, the
+# head size and the sentence targets always refer to the SAME class list.
+# It is generated from the corpus with the selection rule below.
+CANONICAL_CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
+
 # --- selection budget ------------------------------------------------------ #
 MIN_SAMPLES_PER_CLASS = 14     # a class below this tier is eliminated
 MAX_SAMPLES_PER_CLASS = 15     # hard budget of clips loaded per class
@@ -508,3 +514,47 @@ def load_word_class_metadata(path: str) -> List[str]:
     if isinstance(payload, dict):
         return list(payload["classes"])
     return list(payload)
+
+
+# --------------------------------------------------------------------------- #
+# The published vocabulary
+# --------------------------------------------------------------------------- #
+def refresh_canonical_classes(
+    data_dir: str = WORD_LEVEL_DIR_DEFAULT,
+    min_samples_per_class: int = MIN_SAMPLES_PER_CLASS,
+    max_samples_per_class: int = MAX_SAMPLES_PER_CLASS,
+    path: str = CANONICAL_CLASSES_PATH,
+) -> List[str]:
+    """Regenerate the published vocabulary from the corpus and write it out.
+
+    The file is a PLAIN JSON list of class names, so that it is a drop-in
+    replacement for every ``json.load(classes.json)`` in the repository.
+    """
+    infos = discover_word_classes(
+        data_dir, min_samples_per_class, max_samples_per_class
+    )
+    classes = [i.name for i in infos]
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(classes, f, indent=2)
+    print(f"Published vocabulary ({len(classes)} classes) -> {path}")
+    return classes
+
+
+def canonical_classes(
+    data_dir: str = WORD_LEVEL_DIR_DEFAULT,
+    min_samples_per_class: int = MIN_SAMPLES_PER_CLASS,
+    max_samples_per_class: int = MAX_SAMPLES_PER_CLASS,
+    path: str = CANONICAL_CLASSES_PATH,
+    refresh: bool = False,
+) -> List[str]:
+    """The vocabulary of the project - the ONE class list everybody uses.
+
+    It is read from the published file when it exists (so every process sees
+    exactly the same list) and derived from the corpus otherwise.
+    """
+    if refresh or not os.path.exists(path):
+        return refresh_canonical_classes(
+            data_dir, min_samples_per_class, max_samples_per_class, path
+        )
+    return load_word_class_metadata(path)

@@ -24,13 +24,14 @@ if BACKEND_DIR not in sys.path: sys.path.insert(0, BACKEND_DIR)
 from training.train_conformer_ctc import (
     ISLHybridConformerCTC, greedy_decode, compute_wer, harmonize_features, _reclamp
 )
+from utils.checkpoint_utils import extract_state_dict, load_flexible
 
 REAL_DIR = os.path.join(BACKEND_DIR, "models", "isl_real_sentences")
 DEFAULT_CKPT = os.path.join(REAL_DIR, "real_sentence_checkpoint.pth")
 if not os.path.exists(DEFAULT_CKPT):
     DEFAULT_CKPT = os.path.join(REAL_DIR, "real_sentence_best.pth")
 DEFAULT_DATA_DIR = os.path.join(BACKEND_DIR, "data", "tensors_sentence_level")
-CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "phase6_word_model", "classes.json")
+CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
 
 def audit_real_model(ckpt_path=DEFAULT_CKPT, data_dir=DEFAULT_DATA_DIR, n_samples=20, random_sample=True, seed=None):
     if not os.path.exists(ckpt_path):
@@ -55,8 +56,7 @@ def audit_real_model(ckpt_path=DEFAULT_CKPT, data_dir=DEFAULT_DATA_DIR, n_sample
     model = ISLHybridConformerCTC(num_classes).to(device)
 
     sd = torch.load(ckpt_path, map_location=device, weights_only=False)
-    if isinstance(sd, dict) and "model_state_dict" in sd: sd = sd["model_state_dict"]
-    model.load_state_dict(sd, strict=False)
+    load_flexible(model, extract_state_dict(sd), label="CHECK")
     model.eval()
 
     with open(index_path, "r", encoding="utf-8") as f: items = json.load(f)

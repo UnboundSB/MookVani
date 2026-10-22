@@ -47,13 +47,25 @@ os.makedirs(PLOTS_DIR, exist_ok=True)
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
+from utils.dataloader_word import (  # noqa: E402
+    discover_word_classes,
+    load_split_tensors,
+    split_word_classes,
+)
+from utils.pose_augmentation import (  # noqa: E402
+    AugmentConfig,
+    augment_pose_sequence as augment_pose_sequence_canonical,
+)
+from utils.checkpoint_utils import load_flexible  # noqa: E402
+
 # =========================================================================
 # HYPER-PARAMETERS
 # =========================================================================
-MAX_SAMPLES = 14
-SOURCE_FPS  = 25.0
+MIN_SAMPLES = 14          # a class below this tier is eliminated from the loader
+MAX_SAMPLES = 15          # hard budget of clips per class
+SOURCE_FPS  = 25.0        # reference rate the corpus was measured at (NOT a cap)
 START_FPS   = 1.0
-END_FPS     = 25.0
+END_FPS     = 50.0        # the curriculum may go ABOVE the source rate
 MEDIAN_T    = 62
 INPUT_DIM   = 163
 D_MODEL     = 128
@@ -88,9 +100,14 @@ def target_T(fps):
     return max(1, round(MEDIAN_T * fps / SOURCE_FPS))
 
 def sample_norm(tensor, fps):
+    """Center-out sample (when downsampling) then interpolate to the target.
+
+    The SOURCE frame rate is not a ceiling: above SOURCE_FPS every source frame
+    is kept and the clip is interpolated UP to the denser target.
+    """
     T = tensor.shape[0]
-    idxs = center_out(T, max(1, round(T * fps / SOURCE_FPS)))
-    s = tensor[idxs]
+    n_pick = max(1, round(T * fps / SOURCE_FPS))
+    s = tensor[center_out(T, n_pick)] if n_pick < T else tensor
     tgt = target_T(fps)
     if s.shape[0] == tgt: return s
     s = F.interpolate(s.T.unsqueeze(0), size=tgt, mode="linear",
@@ -101,32 +118,30 @@ def sample_norm(tensor, fps):
 # 2. AUGMENTATION  (train only)
 # =========================================================================
 
-def augment(seq, angle=(-15., 15.), scale=(.9, 1.1),
-            shift=(-.05, .05), p_flip=.5, noise=.007):
-    seq = seq.clone(); T, D = seq.shape
-    a = math.radians(random.uniform(*angle))
-    ca, sa = math.cos(a), math.sin(a)
-    coords = seq[:, :159].view(T, 53, 3).clone()
-    x, y = coords[:,:,0].clone(), coords[:,:,1].clone()
-    coords[:,:,0] = x*ca - y*sa
-    coords[:,:,1] = x*sa + y*ca
-    if random.random() < p_flip:
-        coords[:,:,0] = -coords[:,:,0]
-        lh=coords[:,0:21,:].clone(); rh=coords[:,21:42,:].clone()
-        coords[:,0:21,:]=rh; coords[:,21:42,:]=lh
-        la=coords[:,[42,44],:].clone(); ra=coords[:,[43,45],:].clone()
-        coords[:,[42,44],:]=ra; coords[:,[43,45],:]=la
-        lf=coords[:,[46,49],:].clone(); rf=coords[:,[47,50],:].clone()
-        coords[:,[46,49],:]=rf; coords[:,[47,50],:]=lf
-        l2=seq[:,159].clone(); r2=seq[:,160].clone()
-        seq[:,159]=r2; seq[:,160]=l2
-    sc=random.uniform(*scale); sx,sy=random.uniform(*shift),random.uniform(*shift)
-    coords[:,:,0]=coords[:,:,0]*sc+sx
-    coords[:,:,1]=coords[:,:,1]*sc+sy
-    coords[:,:,2]=coords[:,:,2]*sc
-    if noise > 0: coords += torch.randn_like(coords)*noise
-    seq[:,:159] = coords.view(T, 159)
-    return seq
+def augment(seq, **kwargs):
+    """Geometric augmentation (train only).
+
+    Delegates to the canonical implementation in
+    ``Backend/utils/pose_augmentation.py``: the mirror swaps every L/R pair
+    (mouth corners included) around the signer's own axis, the tilt rotates
+    around the neck and the shift is bounded so nothing leaves the frame.
+    """
+    return augment_pose_sequence_canonical(seq, PHASE3_AUGMENT)
+
+
+PHASE3_AUGMENT = AugmentConfig(
+    flip_prob=0.5,
+    tilt_prob=0.6,
+    tilt_deg=15.0,
+    shift_prob=0.5,
+    shift_dx=0.05,
+    shift_dy=0.05,
+    scale_prob=0.4,
+    scale_lo=0.90,
+    scale_hi=1.10,
+    speed_prob=0.0,
+    noise_std=0.007,
+)
 
 # =========================================================================
 # 3. DATASETS
@@ -242,7 +257,7 @@ def build_model(nc, ckpt):
                   .replace(".conv2.", ".c2.").replace(".bn2.", ".b2.")
                   .replace(".residual.", ".res."))
         remap[k] = v
-    miss, unex = model.load_state_dict(remap, strict=False)
+    miss, unex = load_flexible(model, remap, label="PHASE2->PHASE3")
     loaded = len(remap) - len(miss)
     print(f"[INFO] Loaded {loaded}/{len(remap)} Phase-2 keys.")
     if miss:  print(f"  Missing (new): {miss}")
@@ -254,32 +269,23 @@ def build_model(nc, ckpt):
 # =========================================================================
 
 def load_data(data_dir, max_per=MAX_SAMPLES, vfrac=VAL_FRAC):
+    """Load the word corpus with the shared selection rule.
+
+    A class that owns fewer than MIN_SAMPLES clips is eliminated from the
+    loader (the files stay on disk) and every surviving class is capped at
+    MAX_SAMPLES clips.  The classes are ordered by descending clip count.
+    """
     print(f"[INFO] Scanning {data_dir} ...")
-    c2t = {}
-    for cls in sorted(os.listdir(data_dir)):
-        p = os.path.join(data_dir, cls)
-        if not os.path.isdir(p): continue
-        pts = glob.glob(os.path.join(p, "*.pt"))
-        if not pts: continue
-        ts = []
-        for f in pts:
-            try: ts.append(torch.load(f, map_location="cpu", weights_only=True).float())
-            except Exception as e: print(f"  [WARN] {f}: {e}")
-        if not ts: continue
-        if len(ts) > max_per: random.shuffle(ts); ts = ts[:max_per]
-        c2t[cls] = ts
-    classes = sorted(c2t.keys())
-    c2i = {c:i for i,c in enumerate(classes)}
+    infos = discover_word_classes(data_dir, min_samples_per_class=MIN_SAMPLES,
+                                  max_samples_per_class=max_per)
+    classes = [i.name for i in infos]
     print(f"[INFO] {len(classes)} classes (capped at {max_per})")
-    tr, va = {}, {}
-    for cls, ts in c2t.items():
-        idx = c2i[cls]; random.shuffle(ts)
-        nv = max(1, round(len(ts)*vfrac))
-        va[idx]=ts[:nv]; tr[idx]=ts[nv:]
-    tr={k:v for k,v in tr.items() if v}
-    va={k:v for k,v in va.items() if v}
-    tot_tr=sum(len(v) for v in tr.values())
-    tot_va=sum(len(v) for v in va.values())
+
+    train_items, val_items = split_word_classes(infos, val_fraction=vfrac, seed=42)
+    tr = load_split_tensors(train_items)
+    va = load_split_tensors(val_items)
+    tot_tr = sum(len(v) for v in tr.values())
+    tot_va = sum(len(v) for v in va.values())
     print(f"[INFO] Split: {tot_tr} train | {tot_va} val | {len(classes)} classes")
     return tr, va, classes
 

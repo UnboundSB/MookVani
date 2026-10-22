@@ -1,36 +1,49 @@
+"""Pipeline orchestration: feature extraction -> training.
+
+Every step is a real, existing script of this repository.  Run a single step
+with ``--only <step>``, or run the whole chain with no argument.
+"""
+import argparse
 import os
 import subprocess
 import sys
 
-os.environ["PYTHONIOENCODING"] = "utf-8"
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def run_script(script_path):
-    print(f"\n==============================================")
-    print(f"Running {script_path}...")
-    print(f"==============================================")
-    result = subprocess.run([sys.executable, script_path], cwd="d:/MookVani/Backend")
+STEPS = {
+    # name: (script, extra args)
+    "extract_words": ("scripts/extraction.py", []),
+    "extract_sentences": ("scripts/extract_real_sentences.py", []),
+    "pretrain": ("training/pretrainer.py", []),
+    "word": ("training/train_reconformer_word.py", []),
+    "sentence": ("training/train_synthetic_sentences.py", []),
+}
+
+
+def run_script(script_path, extra_args=()):
+    print("\n" + "=" * 60)
+    print(f"Running {script_path} {' '.join(extra_args)}".strip())
+    print("=" * 60)
+    cmd = [sys.executable, script_path, *extra_args]
+    result = subprocess.run(cmd, cwd=BACKEND_DIR)
     if result.returncode != 0:
-        print(f"Error running {script_path}")
-        sys.exit(1)
+        print(f"Error running {script_path} (exit code {result.returncode})")
+        sys.exit(result.returncode)
+
 
 if __name__ == "__main__":
-    scripts = [
-        ["scripts/extract_word.py"],
-        ["scratch_dedup_confound.py"],
-        ["scripts/augment_extract_sentence.py"],
-        ["training/train_word.py", "--train_dir", "data/tensors_word_level_163_train", "--val_dir", "data/tensors_word_level_163_val"],
-        ["training/train_synthetic.py"]
-    ]
-    
-    for script_args in scripts:
-        print(f"\n==============================================")
-        print(f"Running {' '.join(script_args)}...")
-        print(f"==============================================")
-        
-        cmd = [sys.executable] + script_args
-        result = subprocess.run(cmd, cwd="d:/MookVani/Backend")
-        if result.returncode != 0:
-            print(f"Error running {' '.join(script_args)}")
-            sys.exit(1)
-        
+    parser = argparse.ArgumentParser(description="MookVani pipeline orchestrator")
+    parser.add_argument("--only", choices=list(STEPS.keys()),
+                        help="Run only this step (default: the whole chain)")
+    args = parser.parse_args()
+
+    selected = [args.only] if args.only else list(STEPS.keys())
+    for name in selected:
+        script, extra = STEPS[name]
+        path = os.path.join(BACKEND_DIR, script)
+        if not os.path.exists(path):
+            print(f"[SKIP] {name}: {script} does not exist")
+            continue
+        run_script(script, extra)
+
     print("\nAll tasks completed successfully!")

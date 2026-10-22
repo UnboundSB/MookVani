@@ -37,6 +37,8 @@ from training.train_conformer_ctc import (
     greedy_decode, batch_decode, batch_targets, compute_wer,
     augment, _reclamp, escape_local_minimum, harmonize_features, BODY_DIMS
 )
+from utils.dataloader_sentence import load_sentence_items
+from utils.checkpoint_utils import extract_state_dict, load_flexible
 
 DEFAULT_DATA_DIR = os.path.join(BACKEND_DIR, "data", "tensors_sentence_level")
 DEFAULT_OUT_DIR = os.path.join(BACKEND_DIR, "models", "isl_real_sentences_phase2")
@@ -44,7 +46,7 @@ PHASE1_DIR = os.path.join(BACKEND_DIR, "models", "isl_real_sentences")
 PHASE1_BEST = os.path.join(PHASE1_DIR, "real_sentence_best.pth")
 PHASE1_EMA = os.path.join(PHASE1_DIR, "real_sentence_ema_best.pth")
 STAGE3_BEST = os.path.join(BACKEND_DIR, "models", "isl_conformer_ctc", "stage3_best.pth")
-CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "phase6_word_model", "classes.json")
+CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
 
 # -----------------------------------------------------------------------------
 # 1. CLASS-BALANCED FOCAL CTC LOSS
@@ -89,12 +91,12 @@ class RealSentenceDatasetPhase2(Dataset):
     - All takes of the same sentence string strictly assigned to either Train OR Val.
     - SpecAugment temporal cutout applied on train samples to break static pose overfitting.
     """
-    def __init__(self, index_file, is_train=True, val_split=0.10):
-        with open(index_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        # Filter valid items
-        all_items = [it for it in data if os.path.exists(it.get("tensor_path", "")) and len(it.get("in_scope_indices", [])) > 0]
+    def __init__(self, items, is_train=True, val_split=0.10):
+        # The items already carry the targets re-indexed onto the CURRENT
+        # vocabulary (the historic in_scope_indices of index.json refer to the
+        # old 262-class list and are meaningless for the current one).
+        all_items = [it for it in items
+                     if os.path.exists(it.get("tensor_path", "")) and len(it.get("in_scope_indices", [])) > 0]
 
         # Deterministic zero-leakage sentence grouping
         sentence_groups = {}
@@ -207,8 +209,7 @@ def train_real_sentences_phase2(epochs=30, batch_size=4, lr_backbone=1.5e-5, lr_
 
     if warm_path:
         raw = torch.load(warm_path, map_location=device, weights_only=False)
-        sd = raw["model_state_dict"] if isinstance(raw, dict) and "model_state_dict" in raw else raw
-        model.load_state_dict(sd, strict=False)
+        load_flexible(model, extract_state_dict(raw), label="WARM-START")
         print(f"[WARM-START PHASE 2] Successfully loaded checkpoint: {os.path.basename(warm_path)}")
     else:
         model.load_phase6_backbone()
@@ -217,8 +218,14 @@ def train_real_sentences_phase2(epochs=30, batch_size=4, lr_backbone=1.5e-5, lr_
     if not os.path.exists(index_file):
         raise FileNotFoundError(f"Missing index.json in {data_dir}. Run extract_real_sentences.py first!")
 
-    ds = RealSentenceDatasetPhase2(index_file, is_train=True)
-    val_ds = RealSentenceDatasetPhase2(index_file, is_train=False)
+    # Re-index the sentence targets onto the CURRENT vocabulary by NAME.
+    class_to_idx = {c: i for i, c in enumerate(classes)}
+    items, report = load_sentence_items(data_dir, class_to_idx)
+    print(f"[DATA] continuous clips: {report['kept']}/{report['total']} kept | "
+          f"{report['unknown_words']} target words outside the vocabulary")
+
+    ds = RealSentenceDatasetPhase2(items, is_train=True)
+    val_ds = RealSentenceDatasetPhase2(items, is_train=False)
 
     train_ld = DataLoader(ds, batch_size=batch_size, shuffle=True, collate_fn=collate_real_phase2)
     val_ld = DataLoader(val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate_real_phase2)

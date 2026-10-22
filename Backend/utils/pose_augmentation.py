@@ -88,6 +88,13 @@ NECK_ANCHOR_SENT = (0.011, 0.605, -0.523)   # data/tensors_sentence_level
 NECK_OFFSET = tuple(round(a - b, 3) for a, b in zip(NECK_ANCHOR_WORD, NECK_ANCHOR_SENT))
 NECK_OFFSET_WORD = (0.0, 0.0, 0.0)
 
+# The canonical resting pose of an undetected hand (21 landmarks x 3).
+# NOTE: the corpora themselves store an undetected hand as an ALL-ZERO block
+# (see :func:`reclamp_missing`); these constants describe the *physical*
+# resting pose and are only used to synthesise the idle / rest segments.
+MISSING_LH = torch.tensor([-1.5, 3.0, 0.0]).repeat(21)   # (63,)
+MISSING_RH = torch.tensor([+1.5, 3.0, 0.0]).repeat(21)   # (63,)
+
 
 # --------------------------------------------------------------------------- #
 # Small helpers

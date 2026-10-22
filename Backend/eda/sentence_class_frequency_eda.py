@@ -19,7 +19,7 @@ import numpy as np
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEX_PATH = os.path.join(BACKEND_DIR, "data", "tensors_sentence_level", "index.json")
-CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "phase6_word_model", "classes.json")
+CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
 PLOTS_DIR = os.path.join(BACKEND_DIR, "eda", "plots")
 OUT_JSON = os.path.join(BACKEND_DIR, "eda", "sentence_class_frequencies.json")
 

@@ -49,9 +49,10 @@ ROOT_DIR = os.path.dirname(BACKEND_DIR)
 if BACKEND_DIR not in sys.path: sys.path.insert(0, BACKEND_DIR)
 
 from training.train_conformer_ctc import ISLHybridConformerCTC
+from utils.checkpoint_utils import extract_state_dict, load_flexible
 
 DEFAULT_CKPT = os.path.join(BACKEND_DIR, "models", "isl_real_sentences", "real_sentence_best.pth")
-CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "phase6_word_model", "classes.json")
+CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
 
 
 # =============================================================================
@@ -276,9 +277,12 @@ def load_model(ckpt_path, classes_path, device):
     if isinstance(classes, dict): classes = classes["classes"]
     model = ISLHybridConformerCTC(len(classes)).to(device)
     raw = torch.load(ckpt_path, map_location=device, weights_only=False)
-    sd = raw["model_state_dict"] if isinstance(raw, dict) and "model_state_dict" in raw else raw
-    res = model.load_state_dict(sd, strict=False)
-    bad = [k for k in res.missing_keys if not k.endswith("pe")] + list(res.unexpected_keys)
+    sd = extract_state_dict(raw)
+    # The CTC head depends on the vocabulary size: a checkpoint trained on the
+    # old class list cannot be loaded verbatim.  The mismatching head is
+    # dropped (and reported), the backbone is kept.
+    missing, unexpected = load_flexible(model, sd, label="LIVE")
+    bad = [k for k in missing if not k.endswith("pe")] + list(unexpected)
     if bad:
         raise RuntimeError(f"Checkpoint does not match the model ({len(bad)} mismatched keys, e.g. {bad[:3]}). "
                            f"Is {ckpt_path} a Conformer-CTC checkpoint with {len(classes)} classes?")

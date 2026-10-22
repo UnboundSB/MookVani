@@ -58,7 +58,22 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR_DEFAULT = os.path.join(BACKEND_DIR, "data", "tensors_include50_word_level")
 MODELS_ROOT = os.path.join(BACKEND_DIR, "models")
 PHASE1_DIR_DEFAULT = os.path.join(MODELS_ROOT, "islsentence_synthetic")
-PHASE6_CLASSES_DEFAULT = os.path.join(MODELS_ROOT, "phase6_word_model", "classes.json")
+PHASE6_CLASSES_DEFAULT = os.path.join(MODELS_ROOT, "word_vocabulary", "classes.json")
+
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+
+from utils.pose_augmentation import (  # noqa: E402
+    AugmentConfig,
+    augment_pose_sequence as augment_pose_sequence_canonical,
+    mirror_pose,
+    shift_pose as canonical_shift,
+    tilt_pose as canonical_tilt,
+    temporal_mask as canonical_mask,
+    time_stretch as canonical_time_stretch,
+)
+from utils.dataloader_word import MAX_SAMPLES_PER_CLASS  # noqa: E402
+from utils.checkpoint_utils import extract_state_dict, load_flexible  # noqa: E402
 
 # Sentinel coordinates for absent hands
 MISSING_HAND_VALS = torch.tensor([-1.5, 3.0, 0.0], dtype=torch.float32)
@@ -150,119 +165,58 @@ def compute_f1_prec_rec(ref, hyp):
     return f1, precision, recall
 
 # =========================================================================
-# 3. UNIFORM SENTENCE AUGMENTATIONS
+# 3. SENTENCE-LEVEL AUGMENTATIONS  (canonical implementation)
 # =========================================================================
+# The augmentations live in Backend/utils/pose_augmentation.py so that the
+# word-level and the sentence-level models see exactly the same geometry.
+# The old local copy swapped the 5-landmark block 42:47 against 47:52, which
+# in the 53-landmark view mixes the arm landmarks with the eye landmarks, and
+# it tilted around the origin instead of around the neck.
+SENTENCE_AUGMENT = AugmentConfig(
+    flip_prob=0.50,
+    tilt_prob=0.70,
+    tilt_deg=10.0,
+    shift_prob=0.70,
+    shift_dx=0.06,
+    shift_dy=0.02,
+    speed_prob=0.50,
+    speed_lo=0.90,
+    speed_hi=1.10,
+    mask_prob=0.40,
+    mask_max=3,
+    mask_count=2,
+    noise_std=0.0,
+)
+
+
 def flip_pose(seq):
-    """Flips entire sentence horizontally with accurate landmark swapping."""
-    seq = seq.clone()
-    T = seq.shape[0]
-    coords = seq[:, :159].view(T, 53, 3).clone()
-    coords[:, :, 0] = -coords[:, :, 0]
+    """Mirror around the signer's own axis (canonical version)."""
+    return mirror_pose(seq)
 
-    # Swap Left and Right hands: [0..21) <-> [21..42)
-    lh = coords[:, 0:21, :].clone()
-    rh = coords[:, 21:42, :].clone()
-    coords[:, 0:21, :] = rh
-    coords[:, 21:42, :] = lh
-
-    # Swap Arm landmarks: [42..47) <-> [47..52)
-    l_arm = coords[:, 42:47, :].clone()
-    r_arm = coords[:, 47:52, :].clone()
-    coords[:, 42:47, :] = r_arm
-    coords[:, 47:52, :] = l_arm
-
-    # Swap Mouth corner landmarks: 51 (lip left) <-> 52 (lip right)
-    m_left = coords[:, 51, :].clone()
-    m_right = coords[:, 52, :].clone()
-    coords[:, 51, :] = m_right
-    coords[:, 52, :] = m_left
-
-    seq[:, :159] = coords.view(T, 159)
-
-    # Swap presence flags: [159]=lh_flag, [160]=rh_flag
-    lh_flag = seq[:, 159].clone()
-    rh_flag = seq[:, 160].clone()
-    seq[:, 159] = rh_flag
-    seq[:, 160] = lh_flag
-
-    # Re-clamp missing hand sentinel positions
-    for t in range(T):
-        if seq[t, 159] == 0:
-            seq[t, 0:63] = MISSING_HAND_VALS.repeat(21)
-        if seq[t, 160] == 0:
-            seq[t, 63:126] = MISSING_HAND_VALS.repeat(21)
-    return seq
 
 def tilt_pose(seq, deg=12.0):
-    """Uniform rotation tilt across all frames."""
-    seq = seq.clone()
-    T = seq.shape[0]
-    angle = math.radians(random.uniform(-deg, deg))
-    c, s = math.cos(angle), math.sin(angle)
-    R = torch.tensor([[c, -s], [s, c]], dtype=torch.float32)
+    """Rotation around the neck (canonical version)."""
+    return canonical_tilt(seq, deg)
 
-    coords = seq[:, :159].view(T, 53, 3)
-    xy = coords[:, :, :2].reshape(-1, 2)
-    coords[:, :, :2] = (xy @ R.T).view(T, 53, 2)
-    seq[:, :159] = coords.view(T, 159)
-
-    for t in range(T):
-        if seq[t, 159] == 0: seq[t, 0:63] = MISSING_HAND_VALS.repeat(21)
-        if seq[t, 160] == 0: seq[t, 63:126] = MISSING_HAND_VALS.repeat(21)
-    return seq
 
 def shift_pose(seq, max_dx=0.08, max_dy=0.03):
-    """Uniform translation across the entire sentence."""
-    seq = seq.clone()
-    T = seq.shape[0]
-    dx = random.uniform(-max_dx, max_dx)
-    dy = random.uniform(-max_dy, max_dy)
-    coords = seq[:, :159].view(T, 53, 3)
-    coords[:, :, 0] += dx
-    coords[:, :, 1] += dy
-    seq[:, :159] = coords.view(T, 159)
+    """Bounded left/right shift (canonical version)."""
+    return canonical_shift(seq, max_dx, max_dy)
 
-    for t in range(T):
-        if seq[t, 159] == 0: seq[t, 0:63] = MISSING_HAND_VALS.repeat(21)
-        if seq[t, 160] == 0: seq[t, 63:126] = MISSING_HAND_VALS.repeat(21)
-    return seq
 
 def time_stretch_pose(seq, low=0.85, high=1.15):
-    """Uniform temporal time-stretch."""
-    T, F_dim = seq.shape
-    factor = random.uniform(low, high)
-    new_T = max(8, int(round(T * factor)))
-    seq_in = seq.unsqueeze(0).transpose(1, 2)  # (1, F, T)
-    seq_out = F.interpolate(seq_in, size=new_T, mode="linear", align_corners=False)
-    seq_stretched = seq_out.transpose(1, 2).squeeze(0)
-    seq_stretched[:, 159:163] = (seq_stretched[:, 159:163] >= 0.5).float()
-    return seq_stretched
+    """Speed up / slow down the clip (canonical version)."""
+    return canonical_time_stretch(seq, low, high)
+
 
 def temporal_masking(seq, max_mask_frames=4, num_masks=2):
-    """SpecAugment-style temporal zero-masking for frame drop robustness."""
-    seq = seq.clone()
-    T = seq.shape[0]
-    if T <= max_mask_frames * 2:
-        return seq
-    for _ in range(random.randint(1, num_masks)):
-        mask_len = random.randint(1, max_mask_frames)
-        start = random.randint(0, T - mask_len)
-        seq[start:start + mask_len, :159] = 0.0
-    return seq
+    """SpecAugment temporal cutout (canonical version)."""
+    return canonical_mask(seq, max_mask_frames, num_masks)
+
 
 def augment_sentence(seq):
-    """Applies chained uniform sentence-level augmentations."""
-    if random.random() < 0.5:
-        seq = flip_pose(seq)
-    if random.random() < 0.7:
-        seq = tilt_pose(seq, deg=10.0)
-    if random.random() < 0.7:
-        seq = shift_pose(seq, max_dx=0.06, max_dy=0.02)
-    if random.random() < 0.5:
-        seq = time_stretch_pose(seq, low=0.90, high=1.10)
-    if random.random() < 0.4:
-        seq = temporal_masking(seq, max_mask_frames=3, num_masks=2)
-    return seq
+    """Applies the canonical sentence-level augmentation set."""
+    return augment_pose_sequence_canonical(seq, SENTENCE_AUGMENT)
 
 # =========================================================================
 # 4. SYNTHETIC SENTENCE DATASET
@@ -279,7 +233,10 @@ class SyntheticSentenceDataset(Dataset):
         for c in classes:
             c_dir = os.path.join(data_dir, c)
             if os.path.isdir(c_dir):
-                files = glob.glob(os.path.join(c_dir, "*.pt"))
+                files = sorted(glob.glob(os.path.join(c_dir, "*.pt")))
+                # the same per-class clip budget as the word-level loader
+                if len(files) > MAX_SAMPLES_PER_CLASS:
+                    files = files[:MAX_SAMPLES_PER_CLASS]
                 if files:
                     self.class_files[c] = files
 
@@ -712,7 +669,7 @@ def run_phase_training():
         print(f"[RESUME] Loading in-progress checkpoint from {CHECKPOINT_FILE}")
         ckpt = torch.load(CHECKPOINT_FILE, map_location=device, weights_only=False)
         if "model_state_dict" in ckpt:
-            model.load_state_dict(ckpt["model_state_dict"])
+            load_flexible(model, extract_state_dict(ckpt), label="RESUME")
             start_epoch = ckpt.get("epoch", 0)
             best_wer = ckpt.get("val_wer", float("inf"))
             best_loss = ckpt.get("val_loss", float("inf"))
@@ -728,7 +685,7 @@ def run_phase_training():
             raw = torch.load(weights_to_load, map_location=device, weights_only=False)
             sd = raw["model_state_dict"] if (isinstance(raw, dict) and "model_state_dict" in raw) else raw
             filtered = {k: v for k, v in sd.items() if not k.startswith("head.") and k != "pe.pe"}
-            missing, unexpected = model.load_state_dict(filtered, strict=False)
+            missing, unexpected = load_flexible(model, filtered, label="SOURCE")
             print(f"[LOAD] Weights restored. ({len(filtered)} keys loaded, missing: {len(missing)})")
             loaded_weights = True
         else:

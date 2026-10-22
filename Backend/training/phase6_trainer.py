@@ -66,6 +66,18 @@ os.makedirs(PLOTS_DIR, exist_ok=True)
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
+from utils.pose_augmentation import (  # noqa: E402
+    AugmentConfig,
+    augment_pose_sequence as augment_pose_sequence_canonical,
+    mirror_pose as canonical_mirror,
+    shift_pose as canonical_shift,
+    tilt_pose as canonical_tilt,
+    temporal_mask as canonical_mask,
+    time_stretch as canonical_time_stretch,
+)
+from utils.checkpoint_utils import load_flexible  # noqa: E402
+from utils.dataloader_word import get_word_classes  # noqa: E402
+
 # =========================================================================
 # HYPER-PARAMETERS (25 EPOCHS SQUEEZE)
 # =========================================================================
@@ -112,110 +124,75 @@ MIXUP_P        = 0.30
 MASK_P         = 0.30
 MAX_MASK_LEN   = 3
 
+# The canonical augmentation set (Backend/utils/pose_augmentation.py).
+PHASE6_AUGMENT = AugmentConfig(
+    flip_prob=FLIP_P,
+    tilt_prob=1.0,
+    tilt_deg=TILT_DEG,
+    shift_prob=0.5,
+    shift_dx=SHIFT_X_MAX,
+    shift_dy=SHIFT_Y_MAX,
+    speed_prob=0.5,
+    speed_lo=STRETCH_LO,
+    speed_hi=STRETCH_HI,
+    time_shift_prob=0.2,
+    time_shift_max=3,
+    mask_prob=MASK_P,
+    mask_max=MAX_MASK_LEN,
+    mask_count=1,
+    noise_std=NOISE_STD,
+)
+
 
 # =========================================================================
 # 1. AUGMENTATION
 # =========================================================================
 
 def time_stretch(seq):
-    T, D = seq.shape
-    factor = random.uniform(STRETCH_LO, STRETCH_HI)
-    new_T = max(1, round(T * factor))
-    if new_T == T:
-        return seq
-    s = F.interpolate(seq.T.unsqueeze(0), size=new_T, mode="linear", align_corners=True)
-    return s.squeeze(0).T
+    """Speed up / slow down the clip (canonical implementation).
+
+    Only the 159 landmark channels are interpolated; the presence flags are
+    resampled with nearest neighbour and re-thresholded, otherwise the flags
+    become fractional and the missing-modality bookkeeping breaks.
+    """
+    return canonical_time_stretch(seq, STRETCH_LO, STRETCH_HI)
 
 
 def flip_pose(seq):
-    seq = seq.clone()
-    T = seq.shape[0]
-    coords = seq[:, :159].view(T, 53, 3).clone()
-    coords[:, :, 0] = -coords[:, :, 0]
-    # Swap left and right hand landmarks
-    lh = coords[:, 0:21, :].clone()
-    rh = coords[:, 21:42, :].clone()
-    coords[:, 0:21, :] = rh
-    coords[:, 21:42, :] = lh
-    # Swap arm landmarks
-    la = coords[:, [42, 44], :].clone()
-    ra = coords[:, [43, 45], :].clone()
-    coords[:, [42, 44], :] = ra
-    coords[:, [43, 45], :] = la
-    # Swap face landmarks (eyes 46/47, cheeks 49/50, mouth corners 51/52)
-    lf = coords[:, [46, 49, 51], :].clone()
-    rf = coords[:, [47, 50, 52], :].clone()
-    coords[:, [46, 49, 51], :] = rf
-    coords[:, [47, 50, 52], :] = lf
-    # Swap presence indicators
-    l2 = seq[:, 159].clone()
-    r2 = seq[:, 160].clone()
-    seq[:, 159] = r2
-    seq[:, 160] = l2
-    seq[:, :159] = coords.view(T, 159)
-    return seq
+    """Mirror around the signer's own axis (canonical implementation)."""
+    return canonical_mirror(seq)
 
 
 def tilt_pose(seq):
-    seq = seq.clone()
-    T = seq.shape[0]
-    a = math.radians(random.uniform(-TILT_DEG, TILT_DEG))
-    ca, sa = math.cos(a), math.sin(a)
-    coords = seq[:, :159].view(T, 53, 3).clone()
-    x, y = coords[:, :, 0].clone(), coords[:, :, 1].clone()
-    coords[:, :, 0] = x * ca - y * sa
-    coords[:, :, 1] = x * sa + y * ca
-    if NOISE_STD > 0:
-        coords += torch.randn_like(coords) * NOISE_STD
-    seq[:, :159] = coords.view(T, 159)
-    return seq
+    """Rotate around the neck (canonical implementation)."""
+    return canonical_tilt(seq, TILT_DEG)
 
 
 def temporal_frame_mask(seq, max_mask_len=MAX_MASK_LEN, p=MASK_P):
-    """SpecAugment-style temporal cutout: zero out 1 to max_mask_len consecutive frames."""
+    """SpecAugment-style temporal cutout (canonical implementation)."""
     if random.random() > p or seq.shape[0] <= 5:
         return seq
-    seq = seq.clone()
-    T = seq.shape[0]
-    mask_len = random.randint(1, min(max_mask_len, max(1, T // 4)))
-    start = random.randint(0, T - mask_len)
-    seq[start:start + mask_len] = 0.0
-    return seq
+    return canonical_mask(seq, max_mask_len, 1)
 
 
 def shift_pose(seq, shift_x_max=SHIFT_X_MAX, shift_y_max=SHIFT_Y_MAX):
-    """
-    Random horizontal (left/right) and subtle vertical shift from centre per video sequence,
-    applied uniformly across all frames so the model learns coordinates are not always centered.
-    """
-    seq = seq.clone()
-    T = seq.shape[0]
-    dx = random.uniform(-shift_x_max, shift_x_max)
-    dy = random.uniform(-shift_y_max, shift_y_max) if shift_y_max > 0 else 0.0
-    coords = seq[:, :159].view(T, 53, 3).clone()
-    coords[:, :, 0] += dx
-    if dy != 0.0:
-        coords[:, :, 1] += dy
+    """Bounded left/right shift (canonical implementation).
 
-    # Re-clamp resting sentinel coordinates for missing hands
-    for t in range(T):
-        if seq[t, 159] == 0:
-            coords[t, 0:21, :] = torch.tensor([-1.5, 3.0, 0.0], device=seq.device)
-        if seq[t, 160] == 0:
-            coords[t, 21:42, :] = torch.tensor([1.5, 3.0, 0.0], device=seq.device)
-
-    seq[:, :159] = coords.view(T, 159)
-    return seq
+    The magnitude is expressed in shoulder widths, so the landmarks can never
+    be pushed out of the frame.
+    """
+    return canonical_shift(seq, shift_x_max, shift_y_max)
 
 
 def augment(seq):
-    seq = time_stretch(seq)
-    if random.random() < FLIP_P:
-        seq = flip_pose(seq)
-    seq = tilt_pose(seq)
-    seq = shift_pose(seq)
-    seq = temporal_frame_mask(seq)
-    return seq
+    """The canonical augmentation set (Backend/utils/pose_augmentation.py).
+
+    The old local copy rotated around the origin (the corpus is anchor
+    relative, so the body sat at x ~ +3.5 shoulder widths) and re-clamped the
+    missing hands to the resting placeholder, which is NOT the encoding of
+    this corpus (a missing modality owns a ZERO block here).
+    """
+    return augment_pose_sequence_canonical(seq, PHASE6_AUGMENT)
 
 
 def mixup_criterion(crit, pred, y_a, y_b, lam):
@@ -505,7 +482,7 @@ def build_model(nc):
         return model
 
     raw = torch.load(ckpt_path, map_location="cpu", weights_only=True)
-    miss, unex = model.load_state_dict(raw, strict=False)
+    miss, unex = load_flexible(model, raw, label="PHASE5->PHASE6")
     matched = len(raw) - len(miss)
     print(f"[INFO] Weights successfully loaded: {matched}/{len(raw)} keys matched.")
     if miss:
@@ -694,6 +671,18 @@ def train_phase6():
     classes = split["classes"]
     c2i = {c: i for i, c in enumerate(classes)}
     nc  = len(classes)
+
+    # The split defines the vocabulary of this phase, so it must match the
+    # vocabulary of the word loader.  A stale split (from the old 262-class
+    # corpus) would silently train a model on a different class list.
+    expected = get_word_classes()
+    if set(classes) != set(expected):
+        raise RuntimeError(
+            f"[ERROR] The Phase-4 split is stale: it holds {len(classes)} classes "
+            f"but the word loader selects {len(expected)}.\n"
+            f"       Regenerate it with:  python scripts/save_phase4_split.py"
+        )
+
     n_train = sum(len(v) for v in split['train'].values())
     n_val   = sum(len(v) for v in split['val'].values())
     print(f"[INFO] Loaded split: {nc} classes | {n_train} train samples | {n_val} val samples")

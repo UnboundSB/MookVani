@@ -13,7 +13,7 @@ TENSORS_DIR = os.path.join(BACKEND_DIR, "data", "tensors_sentence_level")
 ISL_CSLRT_VIDS = os.path.join(BACKEND_DIR, "data", "ISL_CSLRT_Corpus", "Videos_Sentence_Level")
 ISIGN_ROOT = r"F:\dataset\isign_extracted"
 ISIGN_CSV = os.path.join(ISIGN_ROOT, "word-presence-dataset_v1.1.csv")
-CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "phase6_word_model", "classes.json")
+CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
 
 def get_total_candidates():
     # 1. ISL_CSLRT candidates

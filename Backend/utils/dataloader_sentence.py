@@ -118,6 +118,7 @@ def remap_sentence_words(
     class_to_idx: Dict[str, int],
     max_out_scope: int = 5,
     max_words: int = DEFAULT_MAX_WORDS,
+    drop_sentence_on_unknown: bool = False,
 ) -> Tuple[List[dict], dict]:
     """Re-index the sentence targets onto the CURRENT vocabulary.
 
@@ -126,8 +127,12 @@ def remap_sentence_words(
     different (smaller, frequency filtered) class list, so the sentence targets
     have to be re-indexed BY NAME.
 
+    A word that is not part of the current vocabulary is treated exactly like
+    an out-of-scope word: it is removed from the CTC target (the model cannot
+    be scored on a sign it does not know).  With
+    ``drop_sentence_on_unknown=True`` the whole sentence is dropped instead.
+
     A sentence is dropped when
-      * one of its in-scope words is not part of the current vocabulary, or
       * it has more than ``max_out_scope`` out-of-scope words (the sentence
         contains a lot of sign the model cannot be scored on), or
       * nothing is left of it after the re-indexing.
@@ -138,6 +143,7 @@ def remap_sentence_words(
     dropped_unknown = 0
     dropped_out_of_scope = 0
     dropped_empty = 0
+    unknown_words = 0
 
     for item in items:
         out_scope = item.get("out_scope_words") or []
@@ -147,14 +153,19 @@ def remap_sentence_words(
 
         words = item.get("in_scope_words") or []
         indices: List[int] = []
+        kept_words: List[str] = []
         unknown = False
         for word in words:
             idx = class_to_idx.get(word)
             if idx is None:
                 unknown = True
-                break
+                unknown_words += 1
+                if drop_sentence_on_unknown:
+                    break
+                continue
             indices.append(idx)
-        if unknown:
+            kept_words.append(word)
+        if unknown and drop_sentence_on_unknown:
             dropped_unknown += 1
             continue
         if not indices:
@@ -162,8 +173,11 @@ def remap_sentence_words(
             continue
 
         new_item = dict(item)
-        new_item["target_words"] = words[:max_words]
+        new_item["target_words"] = kept_words[:max_words]
         new_item["target_indices"] = indices[:max_words]
+        # The historic key is rewritten in place, so every downstream consumer
+        # keeps working with the CURRENT vocabulary.
+        new_item["in_scope_indices"] = new_item["target_indices"]
         kept.append(new_item)
 
     report = {
@@ -172,7 +186,25 @@ def remap_sentence_words(
         "dropped_unknown_word": dropped_unknown,
         "dropped_out_of_scope": dropped_out_of_scope,
         "dropped_empty": dropped_empty,
+        "unknown_words": unknown_words,
     }
+    return kept, report
+
+
+def load_sentence_items(
+    sentence_dir: str,
+    class_to_idx: Dict[str, int],
+    max_out_scope: int = 5,
+    max_words: int = DEFAULT_MAX_WORDS,
+    require_file: bool = True,
+) -> Tuple[List[dict], dict]:
+    """Load the continuous corpus and re-index its targets onto ``class_to_idx``."""
+    items = load_sentence_index(sentence_dir)
+    kept, report = remap_sentence_words(
+        items, class_to_idx, max_out_scope=max_out_scope, max_words=max_words
+    )
+    if require_file:
+        kept = [it for it in kept if os.path.exists(it.get("tensor_path", ""))]
     return kept, report
 
 

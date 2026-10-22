@@ -23,7 +23,7 @@ if SCRIPTS_DIR not in sys.path: sys.path.insert(0, SCRIPTS_DIR)
 from extract_video import extract_video_features
 from plotter import match_sentence_tokens
 
-CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "phase6_word_model", "classes.json")
+CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
 DEFAULT_OUT_DIR = os.path.join(BACKEND_DIR, "data", "tensors_sentence_level")
 
 ISL_CSLRT_CSV = os.path.join(BACKEND_DIR, "data", "ISL_CSLRT_Corpus", "corpus_csv_files", "ISL Corpus sign glosses.csv")

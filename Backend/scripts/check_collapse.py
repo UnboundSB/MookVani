@@ -20,6 +20,7 @@ from training.train_conformer_ctc import (
     ISLHybridConformerCTC, SyntheticSentenceDataset, collate,
     greedy_decode, batch_decode, batch_targets, compute_wer
 )
+from utils.checkpoint_utils import extract_state_dict, load_flexible
 
 def run_collapse_check(weights_path=None, model_dir=None, n_samples=30, data_dir=None):
     if model_dir is None:
@@ -47,7 +48,7 @@ def run_collapse_check(weights_path=None, model_dir=None, n_samples=30, data_dir
     # Load classes
     classes_file = os.path.join(model_dir, "classes.json")
     if not os.path.exists(classes_file):
-        classes_file = os.path.join(BACKEND_DIR, "models", "phase6_word_model", "classes.json")
+        classes_file = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
     with open(classes_file, "r") as f:
         meta = json.load(f)
         classes = meta["classes"] if isinstance(meta, dict) and "classes" in meta else meta
@@ -59,8 +60,7 @@ def run_collapse_check(weights_path=None, model_dir=None, n_samples=30, data_dir
     # Build & load model
     model = ISLHybridConformerCTC(num_classes).to(device)
     raw = torch.load(weights_path, map_location=device, weights_only=False)
-    sd = raw["model_state_dict"] if isinstance(raw, dict) and "model_state_dict" in raw else raw
-    model.load_state_dict(sd, strict=False)
+    load_flexible(model, extract_state_dict(raw), label="CHECK")
     model.eval()
 
     print("=" * 72)
