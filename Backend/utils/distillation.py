@@ -1,25 +1,28 @@
 """
-Sequence-level knowledge distillation for the CTC sentence model.
-==============================================================
+Sequence-level knowledge distillation for the CTC sentence model (EXPERIMENTAL).
+=============================================================================
 
-The problem this solves
+.. warning::
+
+   This is NOT part of the recommended recipe, and it should not be used until a
+   PROPER teacher exists.  The only teacher available today is the Phase-6 word
+   classifier: it is word-only (it never sees a sentence), it reaches 81.9%
+   top-1 on the isolated clips and it was not trained properly either.  A
+   sentence model distilled from it inherits its mistakes, and the CTC head is
+   exactly the part that must NOT be dragged down by a weak teacher.
+
+   The flag exists (``--kd_weight``) because the mechanism is worth having
+   once a real teacher does: a sentence-level teacher (the YAP segmentor with
+   its word boundaries, or a sentence model trained on the full corpus) can
+   supervise the real sentences word by word, which is the supervision the
+   continuous corpus currently does not provide.
+
+The idea, for the record
 -----------------------
-The CTC sentence model has to learn two things at once: WHAT sign is being
-signed and WHERE it is in time.  The CTC loss only supervises the second one
-(the alignment), and the first one has to be inferred from the (very weak)
-evidence of the isolated-word corpus.  The result is the failure this
-repository keeps hitting: the head collapses onto the blank and the training
-loses 7-8 epochs before it escapes.
-
-The student-teacher setup
--------------------------
 Two networks look at the SAME sign in two different ways:
 
     TEACHER  an isolated word clip  ->  a clean class distribution over the
-             vocabulary (the word model is trained on exactly that data and
-             reaches ~69% accuracy, so its belief about a word is much better
-             than anything the sentence model can extract from a stitched
-             clip)
+             vocabulary
 
     STUDENT  a synthetic sentence (word clips patched together with
              co-articulation)  ->  per-frame log-probabilities
@@ -30,22 +33,6 @@ guessed: the frames of word *i* are known exactly.  The consistency loss then
 says: *inside the frames of word i, the student must express what the teacher
 believes about word i*.
 
-Two consequences:
-
-1. **FILTERING.**  A word is only used as a target when the teacher agrees
-   with the ground truth (``teacher_argmax == label``) and is confident
-   enough (``teacher_conf >= threshold``).  The words the teacher gets wrong
-   are exactly the ambiguous ones, and their synthetic sentences are exactly
-   the ones that teach the student noise.  They are dropped.
-
-2. **A DENSE SIGNAL.**  The teacher supplies a full distribution per word
-   instead of a single label, so the student gets the "dark knowledge" of the
-   word model: how much the teacher believes in the runners-up.  That is a
-   much stronger training signal than the one-hot CTC target, and it is
-   exactly what breaks the blank collapse.
-
-The loss
---------
 For the word *i* occupying the frames ``[s_i, e_i)``:
 
     p_teacher  = softmax(teacher(word_clip_i))            # (C,)
@@ -53,7 +40,10 @@ For the word *i* occupying the frames ``[s_i, e_i)``:
     loss_i     = KL(p_teacher || p_student)
 
 and the total loss is ``ctc_loss + lambda * mean_i loss_i`` over the words
-that passed the filter.
+that passed the filter (the teacher's argmax matches the ground truth AND its
+confidence is high enough - the words the teacher gets wrong are the ambiguous
+ones, and their synthetic sentences are exactly the ones that teach the student
+noise).
 """
 
 from __future__ import annotations

@@ -1895,7 +1895,7 @@ def parse_args():
     # Word-corpus selection (shared with utils/dataloader_word.py)
     p.add_argument("--min_samples_per_class", type=int, default=14,
                    help="A class with fewer clips than this is eliminated from the vocabulary")
-    p.add_argument("--max_samples_per_class", type=int, default=15,
+    p.add_argument("--max_samples_per_class", type=int, default=20,
                    help="Hard budget of clips loaded per class")
     p.add_argument("--fill_missing",    type=str, default="none",
                    choices=["none", "hold", "interpolate"],

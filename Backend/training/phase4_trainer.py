@@ -71,7 +71,7 @@ from utils.training_utils import escape_from_plateau, unfreeze_and_extend  # noq
 # HYPER-PARAMETERS
 # =========================================================================
 MIN_SAMPLES       = 14          # a class below this tier is eliminated
-MAX_SAMPLES       = 15          # hard budget of clips per class
+MAX_SAMPLES    = 20          # hard budget of clips per class
 INPUT_DIM        = 163
 D_MODEL          = 128
 N_HEAD           = 4

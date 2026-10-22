@@ -89,7 +89,7 @@ PHASE2_AUGMENT = AugmentConfig(
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 MIN_SAMPLES    = 14       # a class below this tier is eliminated from the loader
-MAX_SAMPLES    = 15       # hard budget of clips per class
+MAX_SAMPLES    = 20       # hard budget of clips per class
 SOURCE_FPS     = 25.0      # reference rate the corpus was measured at (NOT a cap)
 START_FPS      = 1.0
 END_FPS        = 50.0      # the curriculum may go ABOVE the source rate

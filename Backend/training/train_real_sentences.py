@@ -200,7 +200,8 @@ def split_items(index_file, val_split=0.10, seed=42, max_out_scope=1, max_words=
         labels = it.get("in_scope_indices", [])
         if len(labels) == 0:
             stats["dropped_no_labels"] += 1; continue
-        if max_out_scope is not None and len(it.get("out_scope_words", [])) > max_out_scope:
+        if max_out_scope is not None and max_out_scope >= 0 \
+                and len(it.get("out_scope_words", [])) > max_out_scope:
             stats["dropped_out_scope"] += 1; continue
         if len(labels) > max_words:
             stats["dropped_long"] += 1; continue
@@ -1172,7 +1173,7 @@ def parse_args():
                    help="Cap on the clips per word in the CONTINUOUS (real sentence) source. "
                         "0 = off (DEFAULT).  Measured: a cap of 60 removes too much label "
                         "signal and the CTC head collapses (100%% blank / 97%% WER).")
-    p.add_argument("--word_cap", type=int, default=14,
+    p.add_argument("--word_cap", type=int, default=20,
                    help="Hard cap on isolated-word clips kept per class before any sampling. "
                         "Applied at dataset build time so it is absolute and cannot be "
                         "overridden by --mix_cap or --mix_word_cap.  14 is the measured "

@@ -369,7 +369,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_heads", type=int, default=4, help="Transformer attention heads (default: 4)")
     parser.add_argument("--dropout", type=float, default=0.2, help="Dropout probability (default: 0.2)")
     parser.add_argument("--min_samples_per_class", type=int, default=14, help="A class with fewer clips than this is eliminated from the loader (default: 14)")
-    parser.add_argument("--max_samples_per_class", type=int, default=15, help="Hard budget of clips loaded per class (default: 15)")
+    parser.add_argument("--max_samples_per_class", type=int, default=20, help="Hard budget of clips loaded per class (default: 20)")
     parser.add_argument("--val_fraction", type=float, default=0.2, help="Fraction of the clips kept for validation (default: 0.2)")
     parser.add_argument("--max_len", type=int, default=300, help="Maximum number of frames per clip (default: 300)")
     parser.add_argument("--fill_missing", type=str, default="none", choices=["none", "hold", "interpolate"], help="Fill the drop-out holes of a clip with the last valid value")

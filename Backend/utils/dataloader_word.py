@@ -75,8 +75,19 @@ WORD_LEVEL_DIR_DEFAULT = os.path.join(BACKEND_DIR, "data", "tensors_include50_wo
 CANONICAL_CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
 
 # --- selection budget ------------------------------------------------------ #
+# The TIER is what balances the corpus: a class below it is eliminated.  The
+# corpus itself only spans 14..22 clips per class above the tier, so the CAP
+# does not buy any balance (1.07x at 15 clips, 1.43x at 20 clips, 1.57x with no
+# cap at all) - it only buys less data.  Measured:
+#
+#   cap 14 -> 3192 clips     cap 18 -> 3699 clips
+#   cap 15 -> 3327 clips     cap 20 -> 3941 clips   (+18% over 15)
+#   cap 16 -> 3452 clips     cap 22 -> 3994 clips   (+20% over 15)
+#
+# So the cap is set just below the maximum the corpus offers: 20 clips per
+# class, which is 3941 clips over 228 classes with a 1.43x spread.
 MIN_SAMPLES_PER_CLASS = 14     # a class below this tier is eliminated
-MAX_SAMPLES_PER_CLASS = 15     # hard budget of clips loaded per class
+MAX_SAMPLES_PER_CLASS = 20     # hard budget of clips loaded per class
 
 EXCLUDED_CLASS_NAMES = ("NONE", "[NOTHING]", "NOTHING")
 

@@ -50,12 +50,19 @@ def accuracy_steps():
         ("phase6", ["training/phase6_trainer.py"]),
 
         # --- the sentence model --------------------------------------------
-        # The student-teacher consistency loss is what stops the CTC head from
-        # collapsing on the blank (the documented stage-1 failure), and the
-        # evaluation decodes with the beam search + the language model.
+        # NO student-teacher distillation here on purpose: the only candidate
+        # teacher is the Phase-6 word classifier (81.9% top-1, word-only, and
+        # not trained properly), and distilling a sentence model from a weak
+        # word classifier would make the sentence model inherit its mistakes.
+        # The student-teacher loss stays available as an OPT-IN experiment
+        # (--kd_weight), it is simply not part of the recommended recipe.
+        #
+        # The accuracy comes from the three-source mix (the class knowledge of
+        # all 228 classes + the alignment + the real domain), the hardened
+        # anti-collapse CTC loss, the per-layer learning rates and the prefix
+        # beam search with the language model at inference time.
         ("ctc", ["training/train_conformer_ctc.py",
                  "--stage", "1",
-                 "--kd_weight", "0.5", "--kd_conf", "0.5",
                  "--stride", "2", "--gru_expand", "after",
                  "--layer_lrs",
                  "front=3e-4,expander=3e-4,gru=1e-5,transformer=1e-5,"
@@ -67,7 +74,10 @@ def accuracy_steps():
                       "--beam_width", "25", "--beam_alpha", "0.5"]),
         ("real", ["training/train_real_sentences.py",
                   "--mix", "1", "--mix_weights", "0.40", "0.35", "0.25",
-                  "--max_out_scope", "5", "--word_cap", "15",
+                  # 8 out-of-scope words: 1296 real clips / 921 sentences / 156
+                  # classes (the default 5 throws away 27% of the real corpus;
+                  # 12 is the ceiling at 1411 clips / 161 classes).
+                  "--max_out_scope", "8", "--word_cap", "20",
                   "--beam_width", "25", "--beam_alpha", "0.5"]),
     ]
 
@@ -83,7 +93,6 @@ def fast_steps():
         ("phase5", ["training/phase5_trainer.py"]),
         ("phase6", ["training/phase6_trainer.py"]),
         ("ctc", ["training/train_conformer_ctc.py", "--stage", "1",
-                 "--kd_weight", "0.5", "--kd_conf", "0.5",
                  "--stride", "2", "--gru_expand", "after"]),
         ("sentence", ["training/train_synthetic_sentences.py"]),
         ("real", ["training/train_real_sentences.py", "--mix", "1",
