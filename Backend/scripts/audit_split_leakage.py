@@ -81,8 +81,10 @@ def main():
         with open(path, "r", encoding="utf-8") as f:
             src = f.read()
         uses_manifest = ("canonical_split_items" in src or "load_word_split_tensors" in src
-                         or "load_canonical_split" in src)
-        computes_own = "split_word_classes(" in src and "load_word_split_tensors" not in src
+                         or "load_canonical_split" in src
+                         or "get_word_dataloaders" in src)   # the loader uses it by default
+        computes_own = "split_word_classes(" in src and "load_word_split_tensors" not in src \
+            and "get_word_dataloaders" not in src
         status = "manifest" if uses_manifest else ("OWN SPLIT" if computes_own else "?")
         if not uses_manifest:
             ok = False

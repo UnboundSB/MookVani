@@ -1,0 +1,152 @@
+{
+  "epochs": 16,
+  "samples_per_epoch": 400,
+  "seed": 42,
+  "results": [
+    {
+      "name": "baseline",
+      "cfg": {
+        "stride": 1,
+        "gru_expand": "none"
+      },
+      "params": 5492453,
+      "latency_ms_per_batch": 27.83,
+      "median_epoch_seconds": 13.43,
+      "wer_per_epoch": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        99.5,
+        98.52,
+        97.73,
+        88.65,
+        89.65,
+        83.88,
+        83.98,
+        82.93,
+        78.73,
+        81.28,
+        81.03,
+        80.97
+      ],
+      "best_wer": 78.73
+    },
+    {
+      "name": "compress",
+      "cfg": {
+        "stride": 2,
+        "gru_expand": "none"
+      },
+      "params": 5630309,
+      "latency_ms_per_batch": 28.04,
+      "median_epoch_seconds": 12.82,
+      "wer_per_epoch": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        99.8,
+        100.0,
+        96.83,
+        96.12,
+        94.58,
+        85.37,
+        84.28,
+        79.78,
+        86.12,
+        79.52
+      ],
+      "best_wer": 79.52
+    },
+    {
+      "name": "expand-before",
+      "cfg": {
+        "stride": 2,
+        "gru_expand": "before"
+      },
+      "params": 5580389,
+      "latency_ms_per_batch": 28.62,
+      "median_epoch_seconds": 12.75,
+      "wer_per_epoch": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "best_wer": 100.0
+    },
+    {
+      "name": "before+keepGRU",
+      "cfg": {
+        "stride": 2,
+        "gru_expand": "before_keep_gru"
+      },
+      "params": 5729381,
+      "latency_ms_per_batch": 31.97,
+      "median_epoch_seconds": 9.26,
+      "wer_per_epoch": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "best_wer": 100.0
+    },
+    {
+      "name": "expand-after",
+      "cfg": {
+        "stride": 2,
+        "gru_expand": "after"
+      },
+      "params": 6025061,
+      "latency_ms_per_batch": 12.14,
+      "median_epoch_seconds": 5.65,
+      "wer_per_epoch": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        99.75,
+        99.08,
+        98.83
+      ],
+      "best_wer": 98.83
+    }
+  ]
+}

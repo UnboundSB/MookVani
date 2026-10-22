@@ -65,8 +65,9 @@ GLOSSARY
    v  SegmentTracker     (plain python state machine, hysteresis)
         decides start / end from presence & end probabilities
    v  HiPPO-LegS pooling (encode_spans)
-        folds all poses of the segment (+pre-roll) into a fixed-size state
-        with real timestamps, then a readout makes the ENTITY vector.
+        folds all poses of the segment (+pre-roll) into the exact Legendre
+        projection of the segment signal (fixed size, order preserving),
+        then a readout makes the ENTITY vector.
    v  entities -> YAPpingConformer -> word logits
 
 ------------------------------------------------------------------------------
@@ -85,10 +86,13 @@ GLOSSARY
     clamped to [preroll_min_s, preroll_max_s]. Pre-roll frames get a learned
     "context" flag so the entity can tell lead-in from the gesture itself.
     The 0.5 / 0.1 / 0.5 numbers are GUESSES, not validated.
- g) Pooling is HiPPO-LegS (Gu et al. 2020): an online, fixed-size
-    approximation of the whole history by Legendre polynomials. Order is
-    preserved (unlike plain averaging). Backward-Euler step handles uneven dt.
-    A step with dt = 0 is an exact no-op, which is how we batch segments of
+ g) Pooling is the LEGENDRE PROJECTION of the segment (the LegS state of
+    Gu et al. 2020): the N Legendre coefficients of the segment signal.
+    It is computed EXACTLY, not by integrating the HiPPO ODE -- see the
+    HiPPOLegS docstring for why the ODE route is unusable here.  Order is
+    preserved (unlike plain averaging).  The state is fixed-size (N x C)
+    however long the segment is, the real timestamps are used, and a step
+    with dt = 0 is an exact no-op, which is how we batch segments of
     different length (pad with dt = 0).
  h) The segment is pooled AFTER its end is known (not incrementally), because
     the end index is back-dated (e.g. presence dropped 0.2 s ago). This also
@@ -160,6 +164,11 @@ GLOSSARY
     frame's palm-frame velocity is forced to zero even if the palm has fully
     recovered (because prev_ok requires frame_w > 0.5 on the previous frame).
     This produces one frame of zero velocity after every edge-on pose.
+    MEASURED on ISL-CSLRT: the edge-on condition used to be computed with a 3D
+    normal, which MediaPipe's noisy z made almost never fire (13.4% of real
+    hand frames are edge-on in the image plane, but the 3D test flagged only
+    1.2%).  The default palm frame is now image-plane only, which detects them
+    correctly (~15%).
  6. Entity depends on the exact start/end; train with boundary jitter.
  7. All numeric defaults (thresholds, tau range, orders) are unvalidated.
  8. Latency adds up: off_hold_s + (1 frame for cut peak) + any look-ahead.
@@ -178,6 +187,10 @@ GLOSSARY
      velocities: the network can recover fast motion. Tune beta/min_cutoff_hz on
      REAL MediaPipe data (or replace with a learned or zero-phase filter offline).
      A 6-pose landmark dropout was bridged with ~2x the jitter error (0.021).
+    RE-MEASURED on the real ISL-CSLRT tensors: the 2nd-difference jitter drops
+    by 27% (0.2359 -> 0.1719 shoulder-widths), but a 3 Hz flick gets 2.5x WORSE
+    than the raw signal (0.0161 -> 0.0405).  The cleaner helps on average and
+    hurts exactly on the sign strokes.
  12. LIMITS of the "one for all" config. Works for: any FIXED set of tracked points
      (2D or 3D; for 2D set z=0), any bone tree, any number of points per part, one
      shared clock. Does NOT cover: a VARIABLE number of tracked entities per frame
@@ -187,6 +200,13 @@ GLOSSARY
      speed and cleaner settings were designed around human gestures; retune for
      other subjects. FACE_LANDMARKS defaults are UNVERIFIED: check them against your
      MediaPipe version.
+ 13. TIMESTAMPS ARE NOT OPTIONAL. The filter, the memory bank, the tracker and
+    the pooling all read the real time, so a clip without real timing is fed a
+    fiction. The stored ISL-CSLRT .pt tensors carry NO timestamps (the
+    extraction computes them and throws them away); the ISL-CSLRT word-level
+    set is a folder of individual JPGs and has no real timing at all, so it is
+    NOT a valid input for the segmenter. Use the continuous sentence-level
+    videos, or timestamps_from_fps() when the true frame rate is known.
 
 ------------------------------------------------------------------------------
 6. QUICK USAGE
@@ -359,6 +379,15 @@ class YAPConfig:
     expand_floor: float = 0.25    # "rich" features always keep >= this fraction
     hand_ok_frac: float = 0.3     # a part counts as present if >30% of its joints are trusted
     vel_clip: float = 10.0        # clip velocity features (part-scales per second)
+    palm_use_depth: bool = False  # build the palm frame from the noisy z as well.
+                                   # False (default) = IMAGE-PLANE frame: only x,y decide the
+                                   # hand orientation and the third axis stays the camera depth
+                                   # axis.  On ISL-CSLRT the mean |z| of a hand is ~23% of its
+                                   # in-plane size, so letting z into the palm normal both
+                                   # corrupts the rotation features and hides the edge-on
+                                   # condition (13.4% of real hand frames).  True = the classic
+                                   # 3D palm frame (keep it only if your landmark source has a
+                                   # trustworthy depth channel).
 
     # --- network widths -------------------------------------------------------
     d_model: int = 128
@@ -479,6 +508,22 @@ def frame_dts(t: torch.Tensor, fps: float) -> torch.Tensor:
     dt[:, 0] = 1.0 / fps
     dt[:, 1:] = (t[:, 1:] - t[:, :-1]).clamp(1e-3, 0.5)
     return dt
+
+
+def timestamps_from_fps(n_frames: int, fps: float = 30.0, start: float = 0.0) -> torch.Tensor:
+    """
+    Build the (1, n_frames) timestamp tensor that YAP expects, for data that was stored
+    WITHOUT timing information -- e.g. the .pt tensors of the ISL-CSLRT corpus, whose
+    extraction computes a timestamp and then discards it.
+
+    USE THIS ONLY IF THE REAL FRAME INTERVAL IS KNOWN.  Every time-dependent part of
+    the model (the One-Euro filter, the multi-scale memory bank, the segment tracker,
+    the pooling) reads the timestamps, so on data whose true interval is unknown they
+    are all running on a fiction.  The ISL-CSLRT word-level set is a folder of
+    individual JPGs (a handful of frames per sign), not a continuous stream: it has no
+    real timing at all and is not a valid input for the segmenter.
+    """
+    return (start + torch.arange(n_frames, dtype=torch.float32) / float(fps)).unsqueeze(0)
 
 
 # ---- helpers to treat nested recurrent state (dict / list / tensor) uniformly --
@@ -673,9 +718,14 @@ class FeatureExpander(nn.Module):
                wrist velocity/scale 3) | palm_w 1 | part_frac 1
         rich : bones 3*nb (unit directions) | angles (cos between a bone and its parent bone)
                | tips 10 (pairwise fingertip distances: pinch!) | vel 3n
-        Palm frame: origin wrist, e1 toward index base, e3 = e1 x (wrist->pinky base),
-        e2 = e3 x e1. If the palm is edge-on e3 is ill-defined -> palm_w shrinks to 0 and
-        frame-dependent features fade out (known weakness).
+        Palm frame (DEFAULT, cfg.palm_use_depth=False): origin wrist, e1 = in-plane
+        direction wrist->index base, e3 = camera depth axis, e2 = e3 x e1.  Only x,y
+        decide the orientation, because MediaPipe's z is ~23% of the in-plane hand
+        size and very noisy.  The edge-on test uses the IN-PLANE area of the palm
+        triangle (wrist, index base, pinky base): if the palm is edge-on that area
+        vanishes, palm_w shrinks to 0 and the frame-dependent features fade out.
+        With cfg.palm_use_depth=True the classic 3D frame is used instead
+        (e3 = e1 x (wrist->pinky base)); that needs a trustworthy depth channel.
     kind == "generic" (arms/torso, face subset, anything else). Translation+scale
         invariant only (no rotation canonicalisation):
         core : local coords 3n (relative to anchor / scale) | root 6 (body-relative anchor 3,
@@ -796,13 +846,41 @@ class FeatureExpander(nn.Module):
 
             if spec.kind == "hand":
                 wrist = xp[:, WRIST]
-                e1 = F.normalize(xp[:, INDEX_MCP] - wrist, dim=-1)
-                nvec = torch.linalg.cross(e1, xp[:, PINKY_MCP] - wrist, dim=-1)
-                n_norm = nvec.norm(dim=-1)
-                e3 = nvec / n_norm.clamp_min(1e-6).unsqueeze(-1)
-                e2 = torch.linalg.cross(e3, e1, dim=-1)
-                R = torch.stack([e1, e2, e3], dim=-1)                                     # (B,3,3) columns = axes
-                frame_w = (n_norm / (0.3 * scale)).clamp(0, 1)                            # 1 normal, ->0 edge-on
+                v_index = xp[:, INDEX_MCP] - wrist
+                v_pinky = xp[:, PINKY_MCP] - wrist
+                if cfg.palm_use_depth:
+                    # Classic 3D palm frame.  The normal is the cross product of two
+                    # 3D vectors, so MediaPipe's noisy z enters the orientation.
+                    e1 = F.normalize(v_index, dim=-1)
+                    nvec = torch.linalg.cross(e1, v_pinky, dim=-1)
+                    n_norm = nvec.norm(dim=-1)
+                    e3 = nvec / n_norm.clamp_min(1e-6).unsqueeze(-1)
+                    e2 = torch.linalg.cross(e3, e1, dim=-1)
+                    R = torch.stack([e1, e2, e3], dim=-1)                                     # (B,3,3) columns = axes
+                    frame_w = (n_norm / (0.3 * scale)).clamp(0, 1)                            # 1 normal, ->0 edge-on
+                else:
+                    # IMAGE-PLANE palm frame (default).
+                    # MediaPipe's z is ~23% of the in-plane hand size on ISL-CSLRT and is
+                    # very noisy, so it must NOT decide the hand orientation: the frame is
+                    # built from x,y only and the third axis stays the camera depth axis.
+                    #   e1 = in-plane direction wrist -> index MCP
+                    #   e3 = camera depth axis (+z)
+                    #   e2 = e3 x e1                      (right-handed: det R = +1)
+                    # The edge-on test uses the IN-PLANE area of the palm triangle
+                    # (wrist, index MCP, pinky MCP): an edge-on palm has almost no area
+                    # in the image, and with the 3D normal that condition was masked by
+                    # the z noise (13.4% of real ISL-CSLRT hand frames were edge-on but
+                    # frame_w still said 1.0, so the fade-out never fired).
+                    a1 = v_index[:, :2]
+                    a2 = v_pinky[:, :2]
+                    e1_xy = F.normalize(a1, dim=-1)
+                    zero = torch.zeros_like(e1_xy[:, :1])
+                    e1 = torch.cat([e1_xy, zero], dim=-1)
+                    e3 = torch.cat([zero, torch.ones_like(e1_xy[:, :1])], dim=-1)
+                    e2 = torch.linalg.cross(e3, e1, dim=-1)
+                    R = torch.stack([e1, e2, e3], dim=-1)                                     # (B,3,3) columns = axes
+                    area = (e1_xy[:, 0] * a2[:, 1] - e1_xy[:, 1] * a2[:, 0]).abs()             # |e1 x v_pinky|
+                    frame_w = (area / (0.3 * scale)).clamp(0, 1)                            # 1 normal, ->0 edge-on
                 local = torch.einsum("bkc,bcd->bkd", xp - wrist.unsqueeze(1), R) / scale[:, None, None]
                 wvel = (vp[:, WRIST] / scale.unsqueeze(-1)).clamp(-cfg.vel_clip, cfg.vel_clip)
                 root = torch.cat([rel, R.flatten(1), scale.log().unsqueeze(-1), wvel], dim=-1)      # 16
@@ -912,6 +990,10 @@ class MemoryLayer(nn.Module):
         self.write = nn.Linear(d, d)
         taus = torch.exp(torch.linspace(math.log(tau_min), math.log(tau_max), d))
         self.log_rate = nn.Parameter(torch.log(1.0 / taus))          # rate = 1/tau, kept positive via exp
+        # The rate is learnable but bounded: exp(log_rate) could otherwise grow
+        # without limit (gradient explosion) and silently kill the memory bank.
+        self.register_buffer("rate_lo", torch.tensor(1.0 / (10.0 * tau_max)))
+        self.register_buffer("rate_hi", torch.tensor(10.0 / tau_min))
         self.conf_head = nn.Linear(2 * d, 1)
         self.out = nn.Linear(d, d)
         self.norm2 = nn.LayerNorm(d)
@@ -923,7 +1005,8 @@ class MemoryLayer(nn.Module):
     def step(self, x, conf_prev, dt, s):
         x = x + self.mix(torch.cat([x, conf_prev], dim=-1))
         h = self.norm1(x)
-        a = torch.exp(-self.log_rate.exp().unsqueeze(0) * dt.unsqueeze(-1))      # (B,d)
+        rate = self.log_rate.exp().clamp(self.rate_lo, self.rate_hi)
+        a = torch.exp(-rate.unsqueeze(0) * dt.unsqueeze(-1))                      # (B,d)
         u = self.inp(h) * torch.sigmoid(self.write(h))
         s = a * s + (1 - a) * u
         conf = torch.sigmoid(self.conf_head(torch.cat([h, s], dim=-1)))          # (B,1)
@@ -935,40 +1018,143 @@ class MemoryLayer(nn.Module):
 # ==============================================================================
 # HiPPO-LegS pooling  (time axis -> fixed-size state)
 # ==============================================================================
+def _legendre_monomial_coeffs(N: int) -> List[List[float]]:
+    """
+    Coefficients of the Legendre polynomials P_0..P_{N-1} in the MONOMIAL basis:
+        out[n][k] = coefficient of u^k in P_n(u)
+    Built from the three-term recurrence
+        P_0 = 1,  P_1 = u,  P_n = ((2n-1) u P_{n-1} - (n-1) P_{n-2}) / n
+    """
+    out: List[List[float]] = []
+    p_prev: List[float] = []
+    p_prev2: List[float] = []
+    for n in range(N):
+        if n == 0:
+            c = [1.0]
+        elif n == 1:
+            c = [0.0, 1.0]
+        else:
+            a = (2.0 * n - 1.0) / n
+            b = (n - 1.0) / n
+            c = [0.0] * (n + 1)
+            for k, v in enumerate(p_prev):
+                c[k + 1] += a * v
+            for k, v in enumerate(p_prev2):
+                c[k] -= b * v
+        out.append(c)
+        p_prev2, p_prev = p_prev, c
+    return out
+
+
 class HiPPOLegS(nn.Module):
     """
     Online projection of a signal's whole history onto N Legendre polynomials.
-        dc/dt = -(1/t) A c + (1/t) B f(t)
-    A,B are the fixed LegS matrices. We integrate with BACKWARD EULER using the
-    real time step so uneven timestamps work and the step is unconditionally
-    stable:
-        (I + r A) c_new = c_old + r B f,   r = dt / t_new
-    Properties we rely on:
-      * dt == 0  =>  r == 0  =>  c_new == c_old (exact no-op): lets us batch
-        segments of different length by padding with dt = 0.
-      * state is fixed-size (C channels x N coefficients) however long the segment.
+    This is the "LegS" state of Gu et al. 2020 (HiPPO), i.e. the coefficients
+
+        c_n(T) = INT_0^T sqrt(2n+1) * P_n(u/T) * f(u) du ,      n = 0..N-1
+
+    of the projection of f onto the Legendre polynomials of the segment.
+    It is fixed-size (N x C however long the segment is) and, unlike plain
+    averaging, it PRESERVES THE ORDER of the motion.
+
+    ---------------------------------------------------------------------------
+    WHY THIS IMPLEMENTATION (and what it replaces)
+    ---------------------------------------------------------------------------
+    The textbook HiPPO-LegS integrates the ODE
+
+        dc/dt = -(1/t) A c + (1/t) B f(t),   A[n,n] = -(2n+1),
+                                            A[n,k] = sqrt((2n+1)(2k+1)) for n > k,
+                                            B[n]   = sqrt(2n+1)
+
+    with a backward-Euler step (I + rA) c_new = c_old + r B f, r = dt/tau_new.
+
+    The previous version of this file used A[n,n] = n+1 (POSITIVE). That is NOT
+    the Legendre operator: the pooled state then deviated from the analytic
+    Legendre projection by 50% (ramp), 69% (constant) and 129% (3 Hz sine), so
+    the "order is preserved" claim was false -- the pool was really just a bank
+    of leaky integrators.
+
+    Copying the reference A matrix alone is NOT enough either: with this
+    backward-Euler step the matrix (I + rA) is SINGULAR exactly when
+    r = dt/tau = 1/(2n+1), and r decreases monotonically while a segment grows,
+    so a real segment's r-sequence hits those values (254 exact hits over a grid
+    of realistic fps x duration settings) and the state explodes
+    (||c|| ~ 1e26 .. 1e49 instead of ~1).
+
+    So instead of integrating the ODE we evaluate the SAME integral exactly.
+    A Legendre polynomial is a polynomial, so with P_n(v) = sum_k P[n,k] v^k:
+
+        c_n(T) = sqrt(2n+1) * sum_k P[n,k] * m_k(T) / T^k ,
+                 m_k(T) = INT_0^T u^k f(u) du
+
+    and the power moments m_k can be maintained EXACTLY, because on every step
+    f is held constant (zero-order hold) and then
+
+        m_k(T1) = m_k(T0) + f * (T1^(k+1) - T0^(k+1)) / (k+1)
+
+    is a closed form. We store the SCALED moments r_k = m_k / T^(k+1), which
+    stay O(1) -- no 1/T blow-up at the start of a segment and no growth with the
+    segment length -- and the readout is
+
+        c_n = T * sum_k LegMat[n,k] * r_k .
+
+    Properties we rely on (all covered by the smoke tests):
+      * the pooled state equals the analytic Legendre projection (closed-form
+        check against the identity INT P_n = (P_{n+1} - P_{n-1})/(2n+1)),
+      * dt == 0  =>  T unchanged and r unchanged  =>  EXACT no-op: lets us batch
+        segments of different length by padding with dt = 0,
+      * state is fixed-size (C channels x N coefficients) however long the segment,
+      * temporal order is preserved.
+
     c has shape (S, N, C): S segments, N Legendre orders, C channels.
     """
 
     def __init__(self, N: int):
         super().__init__()
-        A = torch.zeros(N, N)
-        for n in range(N):
-            for k in range(N):
-                if n > k:
-                    A[n, k] = math.sqrt((2 * n + 1) * (2 * k + 1))
-                elif n == k:
-                    A[n, k] = n + 1
-        self.register_buffer("A", A)
-        self.register_buffer("Bv", torch.sqrt(2.0 * torch.arange(N) + 1.0))
-        self.register_buffer("I", torch.eye(N))
         self.N = N
+        # LegMat[n,k] = sqrt(2n+1) * P[n,k]  (readout matrix, monomial basis)
+        LegMat = torch.zeros(N, N)
+        for n, row in enumerate(_legendre_monomial_coeffs(N)):
+            for k, v in enumerate(row):
+                LegMat[n, k] = math.sqrt(2 * n + 1) * v
+        self.register_buffer("LegMat", LegMat)
+        self.register_buffer("kp1", torch.arange(1, N + 1, dtype=torch.float32))
 
-    def step(self, c, f, dt, tau_new):
-        r = (dt / tau_new).view(-1, 1, 1)
-        M = self.I.unsqueeze(0) + r * self.A.unsqueeze(0)
-        rhs = c + r * self.Bv.view(1, -1, 1) * f.unsqueeze(1)
-        return torch.linalg.solve(M, rhs)
+    def step(self, c, f, dt, t_old, t_new=None):
+        """
+        Advance the scaled power moments from time t_old to t_new.
+
+          c      (S,N,C)  scaled moments r_k at t_old
+          f      (S,C)    the signal value, held constant over this step
+          dt     (S,)     length of the step
+          t_old  (S,)     elapsed time before the step
+          t_new  (S,)     elapsed time after the step (defaults to t_old + dt)
+
+        Returns (S,N,C).  dt == 0 is an exact no-op.
+        """
+        if t_new is None:
+            t_new = t_old + dt
+        t_old = t_old.reshape(-1)
+        t_new = t_new.reshape(-1)
+        ratio = torch.where(t_new > 1e-12,
+                            (t_old / t_new.clamp_min(1e-12)).clamp(0.0, 1.0),
+                            torch.zeros_like(t_new))
+        kp1 = self.kp1.view(1, -1)                                  # (1,N)
+        w = ratio.view(-1, 1) ** kp1                                # (S,N)  (T_old/T_new)^(k+1)
+        contrib = (1.0 - w) / kp1                                   # (S,N)
+        return c * w.unsqueeze(-1) + f.unsqueeze(1) * contrib.unsqueeze(-1)
+
+    def readout(self, c, T):
+        """
+        Turn the scaled moments into the Legendre coefficients of the segment.
+
+          c  (S,N,C)  scaled moments r_k at elapsed time T
+          T  (S,)     elapsed time
+
+        Returns (S,N,C) with c_n = T * sum_k LegMat[n,k] * r_k.
+        """
+        coef = torch.einsum("nk,skc->snc", self.LegMat, c)        # (S,N,C)
+        return coef * T.reshape(-1, 1, 1)
 
 
 # ==============================================================================
@@ -1335,17 +1521,20 @@ class YAP(nn.Module):
             extras[s, 2] = t[b, st_] - t[b, pre]
         F_ = F_ + CTX.unsqueeze(-1) * self.ctx_vec            # tell the pooling which poses are lead-in
         c = feat.new_zeros(S, cfg.hippo_order, C)
-        # tau tracks true elapsed time from segment start (begins at 0).
-        # hippo_t0_s is applied inside the step call via clamp_min so that
-        # 1/tau never blows up, without double-counting DT[:,0] in the ratio.
+        # tau tracks the true elapsed time from the segment start (begins at 0).
+        # The pool keeps the exact scaled power moments of the held signal; the
+        # Legendre coefficients are read out once, when the segment is complete.
         tau = feat.new_zeros(S)
         hold = F_[:, 0]
         for k in range(L):
             good = (Q[:, k] >= cfg.hold_quality).unsqueeze(-1)
             hold = torch.where(good, F_[:, k], hold)          # zero-order hold over unreliable poses
+            t_old = tau
             tau = tau + DT[:, k]
-            c = self.hippo.step(c, hold, DT[:, k], tau.clamp_min(cfg.hippo_t0_s))
-        flat = self.readout_norm(c.flatten(1))
+            c = self.hippo.step(c, hold, DT[:, k], t_old, tau)
+        # exact Legendre projection of the held signal onto P_0..P_{N-1}
+        legs = self.hippo.readout(c, tau.clamp_min(cfg.hippo_t0_s))
+        flat = self.readout_norm(legs.flatten(1))
         ent = self.readout(torch.cat([flat, torch.log1p(extras[:, 0:1]), extras[:, 1:2], torch.log1p(extras[:, 2:3])], dim=-1))
         return ent, extras
 
@@ -1508,18 +1697,32 @@ def soft_count_loss(end_logit, n_words, mask=None):
 
 
 def min_gap_penalty(end_logit, k: int, mask=None):
-    """Two cuts closer than k poses are implausible: penalise > 1 cut-probability mass in any k-window."""
+    """
+    Two cuts closer than k poses are implausible: penalise > 1 cut-probability mass in any k-window.
+    The window is padded at the END with zeros so that EVERY position of the sequence is
+    checked -- a plain k-wide convolution only sees the first L-k+1 windows and would never
+    look at the last k-1 frames, where a too-close pair of cuts can hide.
+    """
     q = torch.sigmoid(end_logit)
     if mask is not None:
         q = q * mask
-    win = F.avg_pool1d(q.unsqueeze(1), kernel_size=k, stride=1) * k          # window sums
+    if q.shape[-1] < 1:
+        return q.sum() * 0.0
+    k = max(1, int(k))
+    qpad = torch.cat([q, q.new_zeros(q.shape[0], k - 1)], dim=-1) if k > 1 else q
+    win = F.avg_pool1d(qpad.unsqueeze(1), kernel_size=k, stride=1) * k          # window sums, L of them
     return F.relu(win - 1.0).mean()
 
 
 def dip_prior_loss(end_logit, speed, mask=None):
-    """Prior: cuts belong where the hand slows down (end prob mass weighted by speed is penalised)."""
+    """
+    Prior: cuts belong where the hand slows down (end prob mass weighted by speed is penalised).
+    The speed is normalised PER SAMPLE (not per batch), so a slow clip cannot change the
+    penalty of a fast one.
+    """
     q = torch.sigmoid(end_logit)
-    return _masked_mean(q * speed / (speed.mean().clamp_min(1e-6)), mask)
+    scale = speed.mean(dim=-1, keepdim=True).clamp_min(1e-6)
+    return _masked_mean(q * speed / scale, mask)
 
 
 # ==============================================================================
@@ -1671,6 +1874,51 @@ def count_parameters(m: nn.Module) -> int:
 # ==============================================================================
 # __main__  : smoke tests (run `python yap_conformer.py`)
 # ==============================================================================
+def _legendre_eval(n: int, x: torch.Tensor) -> torch.Tensor:
+    """Evaluate the Legendre polynomial P_n at x (torch tensor) by the three-term recurrence."""
+    p0 = torch.ones_like(x)
+    if n == 0:
+        return p0
+    p1 = x
+    for m in range(1, n):
+        p0, p1 = p1, ((2 * m + 1) * x * p1 - m * p0) / (m + 1)
+    return p1
+
+
+def _analytic_legendre_coeffs(times: torch.Tensor, values: torch.Tensor, N: int) -> torch.Tensor:
+    """
+    Closed-form Legendre projection of a PIECEWISE-CONSTANT signal.
+
+        c_n = sqrt(2n+1) * sum_i f_i * INT_{t_i}^{t_{i+1}} P_n(u/T) du
+
+    The integral uses  INT P_n(v) dv = (P_{n+1}(v) - P_{n-1}(v)) / (2n+1)  (n >= 1)
+    and  INT P_0(v) dv = v.  This is an INDEPENDENT derivation (it never touches the
+    power-moment formula the pool uses), so it is a real check of the pool.
+
+    times  (M,)   step boundaries, times[0] = 0, times[-1] = T
+    values (M,C) the signal value on [times[i-1], times[i]) -> value i is used on
+                    [times[i-1], times[i]) with values[0] used on [0, times[0])
+    """
+    M, C = values.shape
+    T = float(times[-1])
+    out = torch.zeros(N, C)
+    for i in range(M):
+        a = float(times[i - 1]) if i > 0 else 0.0
+        b = float(times[i])
+        if b <= a:
+            continue
+        for n in range(N):
+            if n == 0:
+                integ = (b - a) / T
+            else:
+                va, vb = a / T, b / T
+                integ = ((_legendre_eval(n + 1, torch.tensor(vb)) - _legendre_eval(n - 1, torch.tensor(vb)))
+                         - (_legendre_eval(n + 1, torch.tensor(va)) - _legendre_eval(n - 1, torch.tensor(va)))) \
+                    / (2 * n + 1)
+            out[n] += math.sqrt(2 * n + 1) * integ * values[i]
+    return out
+
+
 def _fake_hand_template() -> torch.Tensor:
     """A rough 21-point hand: wrist at origin, five fingers pointing +y (just for testing)."""
     pts = torch.zeros(21, 3)
@@ -1755,6 +2003,80 @@ def _run_tests():
     clean = out["clean"]
     assert torch.isfinite(clean).all()
     print("[ok] YAP per-pose shapes, finite values; params =", count_parameters(model))
+
+    # ---------------- test 2b: the pooling is the EXACT Legendre projection ---------------
+    N = 8
+    hip = HiPPOLegS(N)
+    M = 40
+    dts = torch.tensor([1.0 / 30.0] * M)
+    times = torch.cat([torch.zeros(1), torch.cumsum(dts, 0)])
+    vals = torch.randn(M, 3)
+    c = torch.zeros(1, N, 3)
+    tau = torch.zeros(1)
+    for k in range(M):
+        t_old = tau
+        tau = tau + dts[k:k + 1]
+        c = hip.step(c, vals[k:k + 1], dts[k:k + 1], t_old, tau)
+    got = hip.readout(c, tau)
+    ref = _analytic_legendre_coeffs(times, vals, N)
+    err = (got[0] - ref).abs().max().item() / max(ref.abs().max().item(), 1e-9)
+    assert err < 1e-5, f"pool is not the Legendre projection: rel err {err:.3e}\ngot {got[0]}\nref {ref}"
+    print(f"[ok] pooling == exact Legendre projection (rel err {err:.2e}, "
+          f"independent closed-form reference)")
+
+    # dt == 0 must be an EXACT no-op (that is what lets segments of different length batch)
+    c2 = torch.randn(2, N, 3)
+    keep = c2.clone()
+    c2 = hip.step(c2, torch.randn(2, 3), torch.zeros(2), torch.tensor([0.5, 0.5]),
+                  torch.tensor([0.5, 0.5]))
+    assert torch.equal(c2, keep), "dt=0 is not an exact no-op"
+    print("[ok] pooling: dt == 0 is an exact no-op (batching of variable-length segments)")
+
+    # the pool must actually distinguish the ORDER of the motion
+    up = torch.cat([torch.linspace(0, 1, 20), torch.linspace(1, 0, 20)]).view(-1, 1)
+    dn = torch.cat([torch.linspace(1, 0, 20), torch.linspace(0, 1, 20)]).view(-1, 1)
+    ts = torch.cat([torch.zeros(1), torch.cumsum(torch.full((40,), 1 / 30.0), 0)])
+    legs = []
+    for sig in (up, dn):
+        cc = torch.zeros(1, N, 1)
+        tt = torch.zeros(1)
+        for k in range(40):
+            t_old = tt
+            tt = tt + 1 / 30.0
+            cc = hip.step(cc, sig[k:k + 1], torch.tensor([1 / 30.0]), t_old, tt)
+        legs.append(hip.readout(cc, tt))
+    d = (legs[0] - legs[1]).abs().max().item()
+    assert d > 1e-3, f"pool cannot tell 'up-then-down' from 'down-then-up' ({d:.2e})"
+    print(f"[ok] pooling preserves temporal ORDER (max coef difference {d:.4f})")
+
+    # ---------------- test 2c: the palm frame is orthonormal and detects edge-on ----------
+    hcfg = YAPConfig(parts=[hand_part("h")], d_model=32, summary_channels=8, hippo_order=4,
+                     entity_dim=32, n_mem_layers=1)
+    exp = FeatureExpander(hcfg)
+    B = 32
+    hp = torch.zeros(B, 21, 3)
+    hp[:, 0] = torch.tensor([0.0, 0.0, 0.0])
+    hp[:, 5] = torch.tensor([0.03, 0.10, 0.0])          # index MCP
+    hp[:, 17] = torch.tensor([-0.03, 0.10, 0.0])        # pinky MCP
+    hp += torch.randn(B, 21, 3) * 0.002
+    st = exp.init_state(B, "cpu")
+    with torch.no_grad():
+        st, core, rich, aux = exp.step(st, hp, hp, torch.zeros(B, 21, 3), torch.ones(B, 21),
+                                        torch.zeros(B, 21), torch.full((B,), 1 / 30.0))
+    assert torch.isfinite(core).all() and torch.isfinite(rich).all()
+    # an EDGE-ON palm (index and pinky MCP on the same ray from the wrist) must be detected
+    flat = hp.clone()
+    flat[:, 17] = flat[:, 5] * 1.0                    # palm triangle has zero area
+    st = exp.init_state(B, "cpu")
+    with torch.no_grad():
+        st, core_f, rich_f, _ = exp.step(st, flat, flat, torch.zeros(B, 21, 3), torch.ones(B, 21),
+                                          torch.zeros(B, 21), torch.full((B,), 1 / 30.0))
+    # palm_w is the second-to-last entry of the hand core block (before part_frac)
+    pw_ok = float(core[:, -3].abs().mean())            # a normal palm -> shape features alive
+    pw_flat = float(core_f[:, -3].abs().mean())
+    assert pw_flat < 0.05 < pw_ok, f"edge-on palm not detected: {pw_flat:.4f} vs {pw_ok:.4f}"
+    print(f"[ok] palm frame: edge-on palm fades out (palm_w {pw_ok:.3f} -> {pw_flat:.3f}), "
+          f"features finite")
 
     # ---------------- test 3: Conformer with ground-truth segments + all losses ---------------
     gt_spans = [[(0.3, 1.0), (1.2, 2.0)], [(0.4, 1.5)]]

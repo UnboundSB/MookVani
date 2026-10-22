@@ -482,6 +482,7 @@ def get_word_dataloaders(
     pin_memory: bool = False,
     seed: int = 42,
     split_manifest: Optional[dict] = None,
+    use_canonical_split: bool = True,
     save_meta_path: Optional[str] = None,
 ):
     """Build the word-level train / val dataloaders.
@@ -512,7 +513,17 @@ def get_word_dataloaders(
     # ---- the canonical manifest overrides the computed split ---------------
     # Every phase of the pipeline reads the SAME manifest, so a clip that is
     # training data in one phase is never validation data in another one.
-    if split_manifest is not None:
+    if use_canonical_split:
+        if split_manifest is None:
+            from .splits import load_canonical_split
+            try:
+                split_manifest = load_canonical_split()
+            except FileNotFoundError as exc:
+                print(f"[SPLIT] {exc}")
+                print("[SPLIT] Falling back to the computed split for this run.")
+                use_canonical_split = False
+
+    if use_canonical_split or split_manifest is not None:
         from .splits import split_items_from_manifest
         train_items, val_items, manifest_classes = split_items_from_manifest(
             split_manifest, class_to_idx)

@@ -56,7 +56,7 @@ def write_phase4_legacy():
     manifest = refresh_canonical_split(DATA_DIR, MIN_SAMPLES, MAX_SAMPLES, VAL_FRAC, SEED)
     classes = manifest["classes"]
     split = {"classes": classes, "train": manifest["train"], "val": manifest["val"],
-             "fingerprint": manifest["meta"]["fingerprint"]}
+             "fingerprint": split_fingerprint(manifest)}
 
     tot_tr = sum(len(v) for v in split["train"].values())
     tot_va = sum(len(v) for v in split["val"].values())

@@ -827,6 +827,48 @@ class TCNN(nn.Module):
         pad = (self.k - 1, 0) if causal else (self.k // 2, self.k // 2)
         return conv(F.pad(x, pad))
 
+class GRUExpander(nn.Module):
+    """A recurrent DECODER that expands a reduced sequence back to the frame rate.
+
+    The idea: the strided front-end compresses the timeline (T -> T/s) so the
+    self-attention becomes cheap, but a plain interpolation back to T frames
+    produces piecewise-linear artefacts that the CTC head reads as
+    half-frame motions.  A learned expansion produces a coherent trajectory
+    instead.
+
+    The decoder consumes the compressed sequence repeated at the TARGET rate
+    (nearest-neighbour alignment on the original timeline) and integrates it
+    recurrently, so every output frame carries the temporal context of the
+    compressed frames around it.
+
+    It is a decoder, not an encoder: it is unidirectional (the information
+    flows forward only) and it is the only recurrent part of the model, which
+    is exactly the price of the expansion.
+    """
+
+    def __init__(self, d, layers=1, dropout=0.0):
+        super().__init__()
+        self.gru = nn.GRU(d, d, num_layers=layers, batch_first=True,
+                          dropout=dropout if layers > 1 else 0.0)
+        self.layers = layers
+
+    def forward(self, x, target_len=None):
+        """x: (B, T', d) -> (B, T, d) with T = target_len (or T' when None)."""
+        B, Tp, d = x.shape
+        if target_len is None or target_len <= Tp:
+            # Nothing to expand: (optionally) compress to the target length.
+            if target_len is not None and target_len < Tp:
+                idx = torch.linspace(0, Tp - 1, target_len, device=x.device).round().long()
+                x = x[:, idx]
+            out, _ = self.gru(x)
+            return out
+
+        idx = torch.linspace(0, Tp - 1, target_len, device=x.device).round().long()
+        ctx = x[:, idx]                      # (B, T, d) aligned on the original timeline
+        out, _ = self.gru(ctx)
+        return out
+
+
 class PretrainedBackbone(nn.Module):
     """
     Extracts 256-dim frame features using Phase 6 pretrained weights:
@@ -838,19 +880,38 @@ class PretrainedBackbone(nn.Module):
     a frame can then be classified without waiting for the end of the clip.
     The offline model stays bidirectional (the default), because a bidirectional
     context is worth a lot of accuracy on a recorded clip.
+
+    ``gru_mode``
+        ``"residual"`` (the default, the historical behaviour) - the GRU
+        smooths the sequence and its output is ADDED to the input.
+        ``"expand"`` - the GRU is a DECODER that expands the (compressed)
+        sequence back to the frame rate, and the Transformer receives its
+        output directly instead of the projected features.
     """
 
-    def __init__(self, d=128, gru_layers=2, n_head=4, n_trans=2, drop=0.15, causal=False):
+    def __init__(self, d=128, gru_layers=2, n_head=4, n_trans=2, drop=0.15, causal=False,
+                 gru_mode="residual"):
         super().__init__()
         self.causal = causal
+        self.gru_mode = gru_mode
         self.proj  = nn.Sequential(
             nn.Linear(163, d), nn.LayerNorm(d), nn.Dropout(drop))
-        # A bidirectional GRU with hidden = d/2 emits d channels, a causal
-        # (unidirectional) one has to use hidden = d to emit the same width.
-        gru_hidden = d if causal else d // 2
-        self.gru   = nn.GRU(d, gru_hidden, gru_layers, batch_first=True,
-                            bidirectional=not causal,
-                            dropout=drop if gru_layers > 1 else 0.0)
+        # "expand"        : the GRU IS the decoder (the pretrained BiGRU is NOT used)
+        # "expand_keep"   : the pretrained BiGRU smooths AND a decoder expands
+        keep_gru = gru_mode != "expand"
+        if keep_gru:
+            # A bidirectional GRU with hidden = d/2 emits d channels, a causal
+            # (unidirectional) one has to use hidden = d to emit the same width.
+            gru_hidden = d if causal else d // 2
+            self.gru = nn.GRU(d, gru_hidden, gru_layers, batch_first=True,
+                              bidirectional=not causal,
+                              dropout=drop if gru_layers > 1 else 0.0)
+        else:
+            self.gru = None
+        if gru_mode != "residual":
+            self.expander = GRUExpander(d, layers=1, dropout=drop)
+        else:
+            self.expander = None
         self.gnorm = nn.LayerNorm(d)
         self.pe    = PosEnc(d)
         el = nn.TransformerEncoderLayer(d, n_head, d * 2, drop, "gelu", batch_first=True)
@@ -859,12 +920,34 @@ class PretrainedBackbone(nn.Module):
         self.t1    = TCNN(d, d, drop=drop, causal=causal)
         self.t2    = TCNN(d, d * 2, drop=drop, causal=causal)  # Output: 256 channels
 
-    def forward(self, x, mask=None, attn_mask=None):
+    def forward(self, x, mask=None, attn_mask=None, target_len=None, lengths=None):
         if hasattr(self.gru, "flatten_parameters"):
             self.gru.flatten_parameters()
         h = self.proj(x)
-        g, _ = self.gru(h)
-        h = self.gnorm(h + g)
+        if self.gru_mode == "expand":
+            # The GRU is a decoder: it expands the compressed sequence and the
+            # Transformer receives its output DIRECTLY.
+            h = self.expander(h, target_len)
+            h = self.gnorm(h)
+            if mask is None and lengths is not None:
+                # The mask has to be built at the EXPANDED resolution.
+                T = h.size(1)
+                ar = torch.arange(T, device=h.device).unsqueeze(0)
+                lens = lengths.to(h.device).clamp(min=1, max=T).unsqueeze(1)
+                mask = (ar < lens).to(h.dtype)
+        else:
+            g, _ = self.gru(h)
+            h = self.gnorm(h + g)
+            if self.gru_mode == "expand_keep":
+                # The pretrained BiGRU smooths, and a decoder expands the
+                # result: the Transformer receives the expanded tensors and the
+                # pretrained temporal model is KEPT.
+                h = self.expander(h, target_len)
+                if mask is None and lengths is not None:
+                    T = h.size(1)
+                    ar = torch.arange(T, device=h.device).unsqueeze(0)
+                    lens = lengths.to(h.device).clamp(min=1, max=T).unsqueeze(1)
+                    mask = (ar < lens).to(h.dtype)
         h = self.pe(h)
         # Padded frames must not be attended to by the valid frames.
         kpm = None if mask is None else (mask < 0.5)
@@ -1025,14 +1108,32 @@ class ISLHybridConformerCTC(nn.Module):
         A fully causal model (unidirectional GRU + causal attention mask).
         Required by a streaming recogniser, at the cost of the bidirectional
         context.
+
+    ``gru_expand``
+        Where the GRU (as a recurrent decoder) expands the compressed sequence
+        back to the frame rate:
+
+        ``"none"``   - the historical behaviour: the GRU smooths the sequence
+                      and its output is added to the input.  With ``stride=1``
+                      nothing is compressed, so nothing has to be expanded.
+        ``"before"`` - the GRU expands BEFORE the self-attention, so the
+                      Transformer receives the expanded tensors directly (the
+                      attention then runs at the FULL frame rate, i.e. no
+                      attention saving - the gain is a coherent trajectory).
+        ``"after"``  - the sequence is compressed, the attention runs on the
+                      compressed sequence (4x cheaper with stride 2) and the
+                      GRU expands the result back to the frame rate before the
+                      CTC head.  This is the Conformer-CTC design and it keeps
+                      the frame-level CTC alignment.
     """
     def __init__(self, num_classes, d=256, n_blocks=3, n_head=8, kernel=31, drop=0.1,
-                 stride=1, causal=False):
+                 stride=1, causal=False, gru_expand="none", aux_head=False):
         super().__init__()
         self.num_classes  = num_classes
         self.ctc_blank_id = num_classes
         self.stride       = int(stride)
         self.causal       = bool(causal)
+        self.gru_expand   = str(gru_expand)
 
         # 0. Optional strided convolution front-end
         self.front = None
@@ -1044,8 +1145,11 @@ class ISLHybridConformerCTC(nn.Module):
             in_dim = 163
 
         # 1. Pretrained Backbone (d_in -> d_out=256)
-        self.backbone = PretrainedBackbone(d=128, gru_layers=2, n_head=4, n_trans=2,
-                                           drop=0.15, causal=causal)
+        self.backbone = PretrainedBackbone(
+            d=128, gru_layers=2, n_head=4, n_trans=2, drop=0.15, causal=causal,
+            gru_mode=("expand" if self.gru_expand == "before" else
+                      "expand_keep" if self.gru_expand == "before_keep_gru" else
+                      "residual"))
         if self.front is not None:
             # The front-end replaces the first linear projection of the
             # backbone: the backbone then consumes the 256 channels it emits.
@@ -1059,11 +1163,26 @@ class ISLHybridConformerCTC(nn.Module):
             for _ in range(n_blocks)
         ])
 
-        # 3. Continuous CTC Head
+        # 3. The expansion AFTER the contextualizer (the Conformer-CTC design)
+        self.expander = None
+        if self.gru_expand == "after":
+            self.expander = GRUExpander(d, layers=1, dropout=drop)
+
+        # 4. Continuous CTC Head
         self.ctc_proj = nn.Sequential(
             nn.LayerNorm(d),
             nn.Linear(d, num_classes + 1)
         )
+
+        # 5. Optional auxiliary (deep supervision) head on the contextualizer
+        #    output.  It gives the intermediate layers a gradient of their own,
+        #    so the whole stack is trained instead of only the top of it.
+        self.aux_proj = None
+        if aux_head:
+            self.aux_proj = nn.Sequential(
+                nn.LayerNorm(d),
+                nn.Linear(d, num_classes + 1)
+            )
 
     # ------------------------------------------------------------------ #
     def output_lengths(self, lengths: torch.Tensor) -> torch.Tensor:
@@ -1081,12 +1200,15 @@ class ISLHybridConformerCTC(nn.Module):
         """Upper-triangular mask: a frame may only attend to the past."""
         return torch.triu(torch.ones(T, T, dtype=torch.bool, device=device), diagonal=1)
 
-    def forward(self, x, lengths=None):
+    def forward(self, x, lengths=None, return_aux=False):
         # x: (B, T, 163)
         # `lengths` is the true (unpadded) length of every sequence in the batch.  When it
         # is given, the padded frames are excluded from the BatchNorm statistics and from the
         # attention, so a batch of very different sentence lengths no longer poisons the
         # running estimates used at evaluation time.
+        B, T_in, _ = x.shape
+        in_lengths = lengths  # the lengths BEFORE the front-end
+
         # 0. Strided front-end (reduces the temporal resolution)
         if self.front is not None:
             x = self.front(x)
@@ -1101,11 +1223,41 @@ class ISLHybridConformerCTC(nn.Module):
 
         attn_mask = self._causal_mask(x.size(1), x.device) if self.causal else None
 
-        h = self.backbone(x, mask, attn_mask)  # (B, T', 256)
-        for block in self.conformer:
-            h = block(h, mask, attn_mask)      # (B, T', 256)
-        logits = self.ctc_proj(h)              # (B, T', vocab+1)
-        return F.log_softmax(logits, dim=-1)
+        if self.gru_expand in ("before", "before_keep_gru"):
+            # The GRU expands the compressed sequence and the Transformer
+            # receives the EXPANDED tensors directly.  The attention then runs
+            # at the original frame rate.
+            h = self.backbone(x, None, attn_mask, target_len=T_in, lengths=in_lengths)
+            T = h.size(1)
+            if lengths is not None:
+                ar = torch.arange(T, device=h.device).unsqueeze(0)
+                lens = in_lengths.to(h.device).clamp(min=1, max=T).unsqueeze(1)
+                mask = (ar < lens).to(h.dtype)
+            for block in self.conformer:
+                h = block(h, mask, attn_mask)
+        else:
+            h = self.backbone(x, mask, attn_mask)
+            for block in self.conformer:
+                h = block(h, mask, attn_mask)      # (B, T', 256)
+
+            if self.gru_expand == "after":
+                # Expand back to the frame rate before the CTC head, so the
+                # frame-level alignment of the CTC is preserved.
+                h_aux = h
+                h = self.expander(h, T_in)
+                if mask is not None:
+                    ar = torch.arange(h.size(1), device=h.device).unsqueeze(0)
+                    lens = in_lengths.to(h.device).clamp(min=1, max=h.size(1)).unsqueeze(1)
+                    mask = (ar < lens).to(h.dtype)
+            else:
+                h_aux = h
+
+        logits = self.ctc_proj(h)              # (B, T'', vocab+1)
+        log_probs = F.log_softmax(logits, dim=-1)
+        if self.aux_proj is not None and return_aux:
+            aux = self.aux_proj(h_aux)         # the contextualizer output
+            return log_probs, F.log_softmax(aux, dim=-1)
+        return log_probs
 
     def reseed_ctc_head(self, weights_path=PHASE6_WEIGHTS):
         """Re-initialise the CTC projection from the pretrained word classifier.
@@ -1171,8 +1323,12 @@ class ISLHybridConformerCTC(nn.Module):
                     continue  # Sinusoidal buffer: generated deterministically and extended dynamically
                 bb_sd[k] = v
 
-        missing, unexpected = self.backbone.load_state_dict(bb_sd, strict=False)
-        print(f"[BACKBONE] Loaded {len(bb_sd)} pretrained layers from {os.path.basename(weights_path)}")
+        # `load_flexible` drops the entries whose shape changed: with a strided
+        # front-end the first projection is replaced (163 -> 256 channels), so
+        # the pretrained `proj.*` no longer fits.
+        missing, unexpected = load_flexible(self.backbone, bb_sd, label="BACKBONE")
+        print(f"[BACKBONE] Loaded {len(bb_sd) - len(missing)} pretrained layers from "
+              f"{os.path.basename(weights_path)}")
         if missing: print(f"           Missing keys: {len(missing)}")
 
         # Transfer pretrained word classification weights into the CTC head.
