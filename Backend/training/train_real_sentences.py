@@ -97,8 +97,9 @@ from training.train_conformer_ctc import (
     MixedContinuousDataset, collate as collate_mixed
 )
 from utils.dataloader_sentence import remap_sentence_words
-from utils.dataloader_word import get_word_classes
+from utils.dataloader_word import FILL_MISSING_DEFAULT, get_word_classes
 from utils.checkpoint_utils import extract_state_dict, load_flexible
+from utils.pose_augmentation import fill_missing_temporal
 
 DEFAULT_DATA_DIR = os.path.join(BACKEND_DIR, "data", "tensors_sentence_level")
 DEFAULT_OUT_DIR = os.path.join(BACKEND_DIR, "models", "isl_real_sentences")
@@ -226,11 +227,12 @@ def split_items(index_file, val_split=0.10, seed=42, max_out_scope=1, max_words=
 
 class RealSentenceDataset(Dataset):
     def __init__(self, items, is_train, max_len=300, aug_strength=0.75, harmonize=True,
-                 domain_match=False):
+                 domain_match=False, fill_missing=FILL_MISSING_DEFAULT):
         self.items, self.is_train = items, is_train
         self.max_len, self.aug_strength = max_len, aug_strength
         self.harmonize = harmonize
         self.domain_match = domain_match
+        self.fill_missing = fill_missing
         self._cache = {}
 
     def __len__(self): return len(self.items)
@@ -247,6 +249,10 @@ class RealSentenceDataset(Dataset):
             if self.domain_match:
                 seq = match_pretraining_domain(seq)
             seq = _reclamp(seq.contiguous())
+            # Fill the drop-out holes with the last valid value (the flag of a
+            # filled frame is set, so the zero convention is not restored).
+            if self.fill_missing and self.fill_missing != "none":
+                seq = fill_missing_temporal(seq, mode=self.fill_missing)
             self._cache[p] = seq
         return self._cache[p]
 
@@ -605,16 +611,19 @@ def train_real_sentences(args):
                 print(f"        {classes[w]:<16} {c:>4} instances -> {eff:>6.1f} effective")
     else:
         train_ds = RealSentenceDataset(train_items, True, args.max_len, aug,
-                                       args.harmonize, args.domain_match)
+                                       args.harmonize, args.domain_match,
+                                       fill_missing=args.fill_missing)
         train_ld = DataLoader(train_ds, args.batch_size, shuffle=True,
                               collate_fn=collate_real, num_workers=args.num_workers)
 
     val_ds = RealSentenceDataset(val_items, False, args.max_len, 0.0,
-                                 args.harmonize, args.domain_match)
+                                 args.harmonize, args.domain_match,
+                                 fill_missing=args.fill_missing)
     probe_items = (train_items if len(train_items) <= 200
                    else random.Random(args.seed).sample(train_items, 200))
     probe_ds = RealSentenceDataset(probe_items, False, args.max_len, 0.0,
-                                   args.harmonize, args.domain_match)
+                                   args.harmonize, args.domain_match,
+                                   fill_missing=args.fill_missing)
     val_ld = DataLoader(val_ds, args.batch_size, shuffle=False,
                         collate_fn=collate_real, num_workers=args.num_workers)
     probe_ld = DataLoader(probe_ds, args.batch_size, shuffle=False,
@@ -974,6 +983,11 @@ def parse_args():
                         "larger, i.e. the geometry of the isolated-word corpus the backbone "
                         "was pretrained on (measured gap: wrist-to-neck 0.94 vs 2.96 "
                         "shoulder widths, hand extent 0.318 vs 0.463).")
+    p.add_argument("--fill_missing", type=str, default=FILL_MISSING_DEFAULT,
+                   choices=["none", "hold", "interpolate"],
+                   help="Fill the drop-out holes of a clip with the last valid value. "
+                        "'none' keeps the corpus convention (an undetected modality owns a "
+                        "zero block), which is what the backbone was pretrained on.")
     # --- mixed training ----------------------------------------------------
     p.add_argument("--mix", type=int, default=0,
                    help="Enable balanced mixed training from three sources: isolated word "

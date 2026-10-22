@@ -50,6 +50,7 @@ from torch.utils.data import DataLoader, Dataset
 
 try:
     from utils.dataloader_word import (
+        FILL_MISSING_DEFAULT,
         MAX_SAMPLES_PER_CLASS,
         MIN_SAMPLES_PER_CLASS,
         NOTHING_CLASS_NAME,
@@ -69,6 +70,7 @@ try:
     )
 except ImportError:  # pragma: no cover
     from dataloader_word import (  # type: ignore
+        FILL_MISSING_DEFAULT,
         MAX_SAMPLES_PER_CLASS,
         MIN_SAMPLES_PER_CLASS,
         NOTHING_CLASS_NAME,
@@ -258,7 +260,7 @@ class ISLSentenceTensorDataset(Dataset):
         max_len: int = DEFAULT_MAX_LEN,
         augment_config: Optional[AugmentConfig] = None,
         harmonize: bool = True,
-        fill_missing: str = "hold",
+        fill_missing: str = FILL_MISSING_DEFAULT,
     ):
         self.sentence_items = list(sentence_items)
         self.word_items = list(word_items)
@@ -274,17 +276,20 @@ class ISLSentenceTensorDataset(Dataset):
     # -- helpers ------------------------------------------------------- #
     def _prepare(self, clip: torch.Tensor, harmonize_offset) -> torch.Tensor:
         clip = as_sequence(clip)
-        # Fill the drop-out holes with the last valid value FIRST: a hand that
-        # MediaPipe lost for three frames would otherwise read as a jump to
-        # the origin, which is neither a real movement nor a useful signal.
-        if self.fill_missing and self.fill_missing != "none":
-            clip = fill_missing_temporal(clip, mode=self.fill_missing)
         if self.harmonize:
             # The word corpus IS the reference frame, so its clips are only
             # cleared of the dead face block (offset 0).  The continuous corpus
             # was extracted with a different anchor and needs the real
             # correction (NECK_OFFSET).
             clip = harmonize_features(clip, zero_face=True, offset=harmonize_offset)
+        # Fill the drop-out holes with the last valid value: a hand that
+        # MediaPipe lost for three frames would otherwise read as a jump to
+        # the origin, which is neither a real movement nor a useful signal.
+        # The fill runs AFTER the harmonisation and it sets the presence flag
+        # of the filled frames, so the zero convention of the corpus is not
+        # restored afterwards.
+        if self.fill_missing and self.fill_missing != "none":
+            clip = fill_missing_temporal(clip, mode=self.fill_missing)
         if self.is_train and self.augment_config is not None:
             clip = augment_pose_sequence(clip, self.augment_config)
         if clip.shape[0] > self.max_len:
@@ -348,7 +353,7 @@ def get_sentence_dataloaders(
     max_out_scope: int = 5,
     augment_config: Optional[AugmentConfig] = None,
     harmonize: bool = True,
-    fill_missing: str = "hold",
+    fill_missing: str = FILL_MISSING_DEFAULT,
     num_workers: int = 0,
     pin_memory: bool = False,
     seed: int = 42,

@@ -68,6 +68,7 @@ from utils.pose_augmentation import (  # noqa: E402
 )
 from utils.dataloader_word import MAX_SAMPLES_PER_CLASS  # noqa: E402
 from utils.checkpoint_utils import extract_state_dict, load_flexible  # noqa: E402
+from training.train_conformer_ctc import AntiCollapseCTCLoss, escape_local_minimum  # noqa: E402
 
 # Sentinel coordinates for absent hands
 MISSING_HAND_VALS = torch.tensor([-1.5, 3.0, 0.0], dtype=torch.float32)
@@ -496,6 +497,20 @@ def parse_args():
     parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint in output_dir")
     parser.add_argument("--checkpoint_path", type=str, default=None, help="Explicit checkpoint to resume from")
     parser.add_argument("--num_workers", type=int, default=0, help="DataLoader workers (0 for Windows)")
+    # Anti-collapse CTC knobs (see AntiCollapseCTCLoss in training/train_conformer_ctc.py)
+    parser.add_argument("--blank_target", type=float, default=0.97,
+                        help="Upper bound on the mean blank probability")
+    parser.add_argument("--blank_w", type=float, default=0.5, help="Weight of the blank cap")
+    parser.add_argument("--emission_w", type=float, default=1.0,
+                        help="Weight of the emission barrier (lower bound on the emitted frames)")
+    parser.add_argument("--min_frames_per_sign", type=float, default=10.0,
+                        help="Minimum frames a sign should occupy")
+    parser.add_argument("--spike_w", type=float, default=0.10,
+                        help="Weight of the isolated 1-frame non-blank penalty")
+    parser.add_argument("--escape_patience", type=int, default=6,
+                        help="Epochs without a val-WER improvement before the escape is triggered (0 disables)")
+    parser.add_argument("--escape_scale", type=float, default=0.02,
+                        help="Weight perturbation sigma used by the escape")
     return parser.parse_args()
 
 def train_phase1_sentence():
@@ -541,6 +556,8 @@ def train_phase1_sentence():
     start_epoch = 0
     best_wer = float("inf")
     best_loss = float("inf")
+    epochs_without_improvement = 0
+    escapes = 0
     history = {"train_loss": [], "val_loss": [], "wer": [], "acc": [], "f1": []}
 
     resume_path = None
@@ -589,9 +606,30 @@ def train_phase1_sentence():
         optimizer = optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=args.lr, weight_decay=1e-3)
         print(f"[FREEZE] Backbone frozen. Training only CTC Head (LR: {args.lr}).")
 
+    # Remember the base LR of every group: the local-minimum escape puts it back.
+    for g in optimizer.param_groups:
+        g["base_lr"] = g["lr"]
+
     total_epochs = start_epoch + args.epochs
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
-    criterion = nn.CTCLoss(blank=CTC_BLANK_ID, zero_infinity=True)
+    # The hardened anti-collapse CTC loss.  The plain `nn.CTCLoss(zero_infinity=True)`
+    # this trainer used before has a documented exploit: a model that never emits a
+    # blank makes the alignment of ANY target impossible, the per-sample loss
+    # becomes +inf and is silently replaced by 0, so the CTC term vanishes and
+    # the model learns to spam (or to emit nothing at all) without any penalty.
+    # AntiCollapseCTCLoss floors the log-probabilities (an impossible alignment
+    # stays finite and differentiable), adds an emission barrier (a LOWER bound
+    # on the number of frames that must carry a sign), a blank cap (an UPPER
+    # bound, so the model cannot spam non-blank tokens instead) and a spike
+    # penalty (a real sign lasts several frames, not one).
+    criterion = AntiCollapseCTCLoss(
+        blank_id=CTC_BLANK_ID,
+        blank_target=args.blank_target,
+        blank_w=args.blank_w,
+        emission_w=args.emission_w,
+        min_frames_per_sign=args.min_frames_per_sign,
+        spike_w=args.spike_w,
+    )
 
     # Datasets & DataLoaders
     train_ds = SyntheticSentenceDataset(args.data_dir, classes, samples_per_epoch=args.train_samples, is_train=True)
@@ -709,6 +747,25 @@ def train_phase1_sentence():
             best_loss = val_loss
             torch.save(model.state_dict(), BEST_MODEL_FILE)
             print(f"  * [NEW BEST CHECKPOINT] Saved to {BEST_MODEL_FILE} (WER: {val_wer * 100:.2f}%)")
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+        # --- local-minimum escape -------------------------------------------
+        # A CTC head that has settled on the blank token (or on one dominant
+        # word) cannot recover on its own: the LR anneals to zero and the phase
+        # spends the remaining epochs doing nothing.  After --escape_patience
+        # epochs without a WER improvement the CTC head is perturbed, the
+        # BatchNorm statistics are reset and the LR is put back to its base
+        # value (cosine warm restart).
+        if args.escape_patience > 0 and epochs_without_improvement >= args.escape_patience:
+            escapes += 1
+            print(f"  [ESCAPE] No val-WER improvement for {epochs_without_improvement} epochs "
+                  f"(WER {val_wer*100:.2f}%) - kicking the model out of the local minimum.")
+            print(f"  [ESCAPE] {escape_local_minimum(model, optimizer, scale=args.escape_scale)}")
+            for g in optimizer.param_groups:
+                g["lr"] = g.get("base_lr", g["lr"])
+            epochs_without_improvement = 0
 
         with open(HISTORY_FILE, "w") as f:
             json.dump(history, f, indent=2)

@@ -65,6 +65,11 @@ from utils.pose_augmentation import (  # noqa: E402
     AugmentConfig,
     augment_pose_sequence as augment_pose_sequence_canonical,
 )
+from utils.training_utils import (  # noqa: E402
+    build_warm_restart_scheduler,
+    escape_from_plateau,
+    unfreeze_and_extend,
+)
 
 # The augmentation set of this phase: mirror / tilt / bounded shift / scale.
 PHASE2_AUGMENT = AugmentConfig(
@@ -93,6 +98,9 @@ D_MODEL        = 128      # must match pretrained (pretrainer uses d_model=128)
 N_HEAD         = 4
 N_TRANSFORMER  = 2
 FREEZE_EPOCHS  = 5        # freeze backbone; train BiGRU+head only
+RESTART_EVERY = 20       # cosine warm restart every N epochs (plateau recovery)
+ESCAPE_PATIENCE = 10     # epochs without a val improvement -> escape the plateau
+ESCAPE_SCALE   = 0.02    # sigma of the weight perturbation of the escape
 
 
 # ==============================================================================
@@ -570,31 +578,37 @@ def train_phase2(epochs=40, batch_size=64, head_lr=5e-4, backbone_lr=5e-5,
     for p in model.backbone_parameters():
         p.requires_grad = False
     optimizer = optim.AdamW(model.new_parameters(), lr=head_lr, weight_decay=1e-4)
+    for g in optimizer.param_groups:
+        g["base_lr"] = g["lr"]
     print(f"[INFO] Epochs 1-{freeze_epochs}: backbone FROZEN — training BiGRU+head only")
 
     criterion = nn.CrossEntropyLoss(label_smoothing=0.06)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-6)
+    # Cosine WITH WARM RESTARTS: a plain cosine anneals the LR to zero and a
+    # phase that plateaus half-way through can never recover from it.
+    scheduler, restart_every = build_warm_restart_scheduler(
+        optimizer, total_epochs=epochs, restart_every=RESTART_EVERY, eta_min=1e-6)
 
     history = {k: [] for k in ['train_loss','train_acc','val_loss','val_acc',
                                 'val_precision','val_recall','val_f1','fps_per_epoch']}
     best_val_acc = 0.0
+    epochs_without_improvement = 0
+    escapes = 0
     best_path  = os.path.join(SAVE_DIR, 'best_phase2_model.pth')
     final_path = os.path.join(SAVE_DIR, 'final_phase2_model.pth')
 
-    print(f"\n[START] Phase 2 — {epochs} epochs, 1fps→25fps curriculum\n")
+    print(f"\n[START] Phase 2 — {epochs} epochs, 1fps→50fps curriculum, "
+          f"warm restart every {restart_every} epochs\n")
 
     for epoch in range(1, epochs + 1):
-        # Unfreeze backbone after warmup
+        # Unfreeze backbone after warmup.  The optimiser is EXTENDED, not
+        # recreated: the AdamW moments of the head are kept and the LR schedule
+        # is not thrown away.
         if epoch == freeze_epochs + 1:
             print(f"\n[UNFREEZE] Epoch {epoch}: releasing backbone @ backbone_lr={backbone_lr}")
-            for p in model.backbone_parameters():
-                p.requires_grad = True
-            optimizer = optim.AdamW([
-                {'params': model.backbone_parameters(), 'lr': backbone_lr},
-                {'params': model.new_parameters(),      'lr': head_lr * 0.5},
-            ], weight_decay=1e-4)
-            scheduler = optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=epochs - freeze_epochs, eta_min=1e-6)
+            unfreeze_and_extend(optimizer, model.backbone_parameters(),
+                                lr=backbone_lr, name="backbone", weight_decay=1e-4)
+            for g in optimizer.param_groups:
+                g["lr"] = g.get("base_lr", g["lr"])
 
         # Curriculum fps
         cur_fps = fps_for_epoch(epoch, epochs)
@@ -653,9 +667,25 @@ def train_phase2(epochs=40, batch_size=64, head_lr=5e-4, backbone_lr=5e-5,
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             torch.save(model.state_dict(), best_path)
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+        # --- plateau escape -------------------------------------------------
+        # A cosine schedule that has annealed to its floor cannot recover from a
+        # plateau: the phase would simply spend the remaining epochs at
+        # lr ~ 1e-6.  After ESCAPE_PATIENCE epochs without an improvement the
+        # weights are perturbed, the BatchNorm statistics are reset and the LR
+        # is put back to its base value.
+        if ESCAPE_PATIENCE > 0 and epochs_without_improvement >= ESCAPE_PATIENCE:
+            escapes += 1
+            print(f"  [ESCAPE] No val improvement for {epochs_without_improvement} epochs "
+                  f"(val acc {val_acc*100:.2f}%) - kicking the model out of the plateau.")
+            print(f"  [ESCAPE] {escape_from_plateau(model, optimizer, scale=ESCAPE_SCALE)}")
+            epochs_without_improvement = 0
 
     torch.save(model.state_dict(), final_path)
-    print(f"\n[DONE] Best Val Acc: {best_val_acc*100:.2f}%")
+    print(f"\n[DONE] Best Val Acc: {best_val_acc*100:.2f}% | escapes: {escapes}")
 
     with open(os.path.join(SAVE_DIR, 'classes.json'), 'w', encoding='utf-8') as f:
         json.dump(classes, f, indent=2)

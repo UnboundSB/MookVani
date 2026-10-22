@@ -876,7 +876,7 @@ class MultiHeadSelfAttn(nn.Module):
         pe[:, 0::2] = torch.sin(pos * div); pe[:, 1::2] = torch.cos(pos * div)
         self.register_buffer("pe", pe.unsqueeze(0))
 
-    def forward(self, x, mask=None):
+    def forward(self, x, mask=None, attn_mask=None):
         T = x.size(1)
         if T > self.pe.size(1):
             d = self.pe.size(-1)
@@ -887,7 +887,7 @@ class MultiHeadSelfAttn(nn.Module):
             self.pe = pe.unsqueeze(0).to(x.device)
         xn = self.norm(x) + self.pe[:, :T, :]
         kpm = None if mask is None else (mask < 0.5)
-        o, _ = self.attn(xn, xn, xn, key_padding_mask=kpm)
+        o, _ = self.attn(xn, xn, xn, key_padding_mask=kpm, attn_mask=attn_mask)
         return x + o
 
 class DepthwiseConv(nn.Module):
@@ -921,12 +921,51 @@ class ConformerBlock(nn.Module):
         self.ff2  = FeedForward(d, ff_exp, drop)
         self.norm = nn.LayerNorm(d)
 
-    def forward(self, x, mask=None):
+    def forward(self, x, mask=None, attn_mask=None):
         x = self.ff1(x)
-        x = self.mhsa(x, mask)
+        x = self.mhsa(x, mask, attn_mask)
         x = self.conv(x, mask)
         x = self.ff2(x)
         return self.norm(x)
+
+
+class StridedFrontEnd(nn.Module):
+    """The strided convolution stem of a Conformer ASR front-end.
+
+    The backbone used to run its Transformer over EVERY frame of a clip (up to
+    300), so the attention was O(T^2) and the model had to learn a
+    representation at the full frame rate.  A stack of stride-2 convolutions
+    halves (or quarters) the temporal resolution before the self-attention:
+    the attention cost drops by 4x (16x) and the sequence becomes 4x (16x)
+    cheaper to train.
+
+    The convolution is applied over the raw 163-dim landmark channels, so the
+    first layer keeps the geometry of the skeleton intact; only the temporal
+    resolution is reduced.
+    """
+
+    def __init__(self, in_dim=163, channels=256, stride=2, kernel=3, drop=0.1):
+        super().__init__()
+        assert stride in (1, 2, 4, 8), "the stride must be a power of two"
+        layers = []
+        c_in = in_dim
+        n_conv = {2: 1, 4: 2, 8: 3}[stride]
+        for _ in range(n_conv):
+            layers += [
+                nn.Conv1d(c_in, channels, kernel_size=kernel, stride=2, padding=kernel // 2),
+                nn.BatchNorm1d(channels),
+                nn.GELU(),
+                nn.Dropout(drop),
+            ]
+            c_in = channels
+        self.net = nn.Sequential(*layers)
+        self.out_dim = c_in
+        self.stride = stride
+
+    def forward(self, x):
+        # x: (B, T, 163) -> (B, T_out, out_dim)
+        h = self.net(x.transpose(1, 2))
+        return h.transpose(1, 2)
 
 class ISLHybridConformerCTC(nn.Module):
     """

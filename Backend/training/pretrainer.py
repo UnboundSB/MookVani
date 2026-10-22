@@ -42,81 +42,72 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-DATA_DIR = os.path.join(BACKEND_DIR, "data", "tensors_isl_csltr_word_level")
+from utils.dataloader_word import (  # noqa: E402
+    MAX_SAMPLES_PER_CLASS,
+    MIN_SAMPLES_PER_CLASS,
+    WORD_LEVEL_DIR_DEFAULT,
+    discover_word_classes,
+    split_word_classes,
+)
+from utils.pose_augmentation import (  # noqa: E402
+    AugmentConfig,
+    augment_pose_sequence as canonical_augment,
+    as_sequence,
+    fill_missing_temporal,
+)
+from utils.training_utils import (  # noqa: E402
+    build_warm_restart_scheduler,
+    escape_from_plateau,
+)
+
+# The pretraining corpus.  It used to be `tensors_isl_csltr_word_level`, which
+# holds ONE clip per class: the "validation" split was therefore the training
+# data, and the reported 98% validation accuracy was pure memorisation.  The
+# pretrainer now runs on the word corpus with a real file-level split.
+DATA_DIR = WORD_LEVEL_DIR_DEFAULT
 SAVE_DIR = os.path.join(BACKEND_DIR, "models", "pretrained_model")
 PLOTS_DIR = os.path.join(SAVE_DIR, "plots")
 os.makedirs(PLOTS_DIR, exist_ok=True)
 
-MEDIAN_LENGTH = 6  # Derived from ISL-CSLRT EDA distribution
+MEDIAN_LENGTH = 62   # median frames of the word corpus (matches the Phase-2 curriculum)
+MAX_SEQ_LEN = 256    # the learned positional embedding has to cover the longest clip
+RESTART_EVERY = 10   # cosine warm restart every N epochs
+ESCAPE_PATIENCE = 8  # epochs without a val improvement -> escape the plateau
+ESCAPE_SCALE = 0.02
+
+# The canonical augmentation set (Backend/utils/pose_augmentation.py).
+PRETRAIN_AUGMENT = AugmentConfig(
+    flip_prob=0.5,
+    tilt_prob=0.6,
+    tilt_deg=12.0,
+    shift_prob=0.5,
+    shift_dx=0.04,
+    shift_dy=0.02,
+    scale_prob=0.5,
+    scale_lo=0.92,
+    scale_hi=1.08,
+    speed_prob=0.5,
+    speed_lo=0.85,
+    speed_hi=1.15,
+    time_shift_prob=0.2,
+    time_shift_max=3,
+    mask_prob=0.1,
+    mask_max=3,
+    noise_std=0.006,
+)
 
 
 # ==============================================================================
-# 1. VECTORIZED POSE AUGMENTATION (APPLIED STRICTLY ON TRAIN SPLIT)
+# 1. POSE AUGMENTATION (APPLIED STRICTLY ON TRAIN SPLIT)
 # ==============================================================================
-
-def augment_pose_sequence(pose_seq, angle_deg_range=(-12.0, 12.0), scale_range=(0.92, 1.08),
-                          shift_range=(-0.04, 0.04), p_flip=0.5, noise_std=0.006):
-    """Vectorized, fast geometric and anatomical pose augmentation."""
-    seq = pose_seq.clone()
-    T, D = seq.shape
-
-    # 1. Vectorized 2D rotation in XY plane around (0, 0)
-    angle_deg = random.uniform(*angle_deg_range)
-    angle_rad = math.radians(angle_deg)
-    cos_a = math.cos(angle_rad)
-    sin_a = math.sin(angle_rad)
-
-    coords = seq[:, :159].view(T, 53, 3).clone()
-    x = coords[:, :, 0]
-    y = coords[:, :, 1]
-    new_x = x * cos_a - y * sin_a
-    new_y = x * sin_a + y * cos_a
-    coords[:, :, 0] = new_x
-    coords[:, :, 1] = new_y
-
-    # 2. Horizontal Flip with Anatomical Left/Right Swap
-    if random.random() < p_flip:
-        coords[:, :, 0] = -coords[:, :, 0]
-
-        # Left Hand (0..20) <-> Right Hand (21..41)
-        lh = coords[:, 0:21, :].clone()
-        rh = coords[:, 21:42, :].clone()
-        coords[:, 0:21, :] = rh
-        coords[:, 21:42, :] = lh
-
-        # Left Arm (42=l_sh, 44=l_elb) <-> Right Arm (43=r_sh, 45=r_elb)
-        l_arm = coords[:, [42, 44], :].clone()
-        r_arm = coords[:, [43, 45], :].clone()
-        coords[:, [42, 44], :] = r_arm
-        coords[:, [43, 45], :] = l_arm
-
-        # Left Face (46=l_eye, 49=l_chk) <-> Right Face (47=r_eye, 50=r_chk)
-        l_face = coords[:, [46, 49], :].clone()
-        r_face = coords[:, [47, 50], :].clone()
-        coords[:, [46, 49], :] = r_face
-        coords[:, [47, 50], :] = l_face
-
-        # Swap Hand presence flags [lh_flag=159, rh_flag=160]
-        lh_flag = seq[:, 159].clone()
-        rh_flag = seq[:, 160].clone()
-        seq[:, 159] = rh_flag
-        seq[:, 160] = lh_flag
-
-    # 3. Vectorized Scaling and Translation
-    scale = random.uniform(*scale_range)
-    shift_x = random.uniform(*shift_range)
-    shift_y = random.uniform(*shift_range)
-
-    coords[:, :, 0] = coords[:, :, 0] * scale + shift_x
-    coords[:, :, 1] = coords[:, :, 1] * scale + shift_y
-    coords[:, :, 2] = coords[:, :, 2] * scale
-
-    # 4. Gaussian Landmark Jitter Noise
-    if noise_std > 0:
-        coords += torch.randn_like(coords) * noise_std
-
-    seq[:, :159] = coords.view(T, 159)
-    return seq
+# The augmentation itself is the canonical one (Backend/utils/pose_augmentation.py):
+# the mirror swaps every left/right pair around the signer's own axis (the mouth
+# corners included), the tilt rotates around the neck and the shift is bounded.
+# The old local copy rotated around the ORIGIN (the corpus is anchor relative,
+# so the body sits at x ~ +3.5 shoulder widths) and never swapped the mouth.
+def augment_pose_sequence(pose_seq, config=PRETRAIN_AUGMENT):
+    """Geometric + temporal augmentation of one clip."""
+    return canonical_augment(pose_seq, config)
 
 
 def slash_to_target_length(pose_seq, target_len=6, is_train=False):
@@ -142,54 +133,50 @@ def slash_to_target_length(pose_seq, target_len=6, is_train=False):
 # 2. LEAK-FREE DATASET CLASSES (SPLIT FIRST, AUGMENT AFTER SPLIT)
 # ==============================================================================
 
-class TrainPoseDataset(Dataset):
-    """Training Dataset: Augmentations applied on-the-fly AFTER data split."""
-    def __init__(self, raw_samples, samples_per_class=20, median_len=6):
-        self.raw_samples = raw_samples
+class PretrainPoseDataset(Dataset):
+    """Pretraining dataset over the word clips of a REAL train/val split.
+
+    The previous version loaded ONE clip per class and used it for both the
+    train and the validation split, so the reported validation accuracy was the
+    accuracy on data the model had already memorised (98% on 114 clips).  The
+    split is now done on the FILE LIST through the shared selection rule of
+    ``utils/dataloader_word.py``, so no clip is ever seen twice.
+
+    Every clip is resampled to a fixed ``median_len`` frames, which keeps the
+    batch rectangular without a padding mask (the model pools over time).
+    """
+
+    def __init__(self, items, is_train=True, median_len=MEDIAN_LENGTH,
+                 samples_per_class=4, fill_missing="none"):
+        self.items = list(items)
+        self.is_train = is_train
         self.median_len = median_len
-        self.items = []
-        for class_idx in sorted(self.raw_samples.keys()):
-            for _ in range(samples_per_class):
-                self.items.append(class_idx)
+        self.samples_per_class = max(1, samples_per_class)
+        self.fill_missing = fill_missing
+        self.augment_config = PRETRAIN_AUGMENT if is_train else None
 
     def __len__(self):
-        return len(self.items)
+        return len(self.items) * self.samples_per_class
 
     def __getitem__(self, idx):
-        class_idx = self.items[idx]
-        raw_tensor = self.raw_samples[class_idx]
+        path, label = self.items[idx % len(self.items)]
+        try:
+            x = torch.load(path, weights_only=True)
+        except Exception as exc:  # pragma: no cover
+            print(f"  [WARN] could not load {path}: {exc}")
+            x = torch.zeros(self.median_len, 163)
+        x = x.float() if torch.is_tensor(x) else torch.from_numpy(x).float()
+        x = as_sequence(x)
 
-        # 1. Stochastic temporal variation around median (+/- 1)
-        target_len = random.choice([self.median_len - 1, self.median_len, self.median_len + 1])
-        target_len = max(3, target_len)
-        slashed = slash_to_target_length(raw_tensor, target_len=target_len, is_train=True)
+        if self.fill_missing and self.fill_missing != "none":
+            x = fill_missing_temporal(x, mode=self.fill_missing)
+        if self.augment_config is not None:
+            x = augment_pose_sequence(x, self.augment_config)
 
-        # 2. On-the-fly stochastic geometric & anatomical pose augmentation
-        augmented = augment_pose_sequence(slashed)
-
-        # 3. Standardize to uniform batch dimension of median_len
-        if augmented.shape[0] != self.median_len:
-            augmented = slash_to_target_length(augmented, target_len=self.median_len, is_train=False)
-
-        return augmented, class_idx
-
-
-class ValPoseDataset(Dataset):
-    """Validation Dataset: ZERO augmentation to prevent data leakage. Strictly clean ground-truth poses."""
-    def __init__(self, raw_samples, median_len=6):
-        self.raw_samples = raw_samples
-        self.median_len = median_len
-        self.items = sorted(self.raw_samples.keys())
-
-    def __len__(self):
-        return len(self.items)
-
-    def __getitem__(self, idx):
-        class_idx = self.items[idx]
-        raw_tensor = self.raw_samples[class_idx]
-
-        clean_pose = slash_to_target_length(raw_tensor, target_len=self.median_len, is_train=False)
-        return clean_pose, class_idx
+        # Fixed length: the model pools over time, so a uniform length avoids
+        # the padding mask entirely.
+        x = slash_to_target_length(x, target_len=self.median_len, is_train=self.is_train)
+        return x, label
 
 
 # ==============================================================================
@@ -289,31 +276,30 @@ class PoseTransformerTCNN(nn.Module):
 # 4. TRAINING & EVALUATION PIPELINE
 # ==============================================================================
 
-def train_pretrainer(epochs=25, batch_size=32, lr=1.5e-3, samples_per_class=20):
+def train_pretrainer(epochs=25, batch_size=32, lr=1.5e-3, samples_per_class=4,
+                     data_dir=DATA_DIR, val_fraction=0.2, fill_missing="none"):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Using device: {device}", flush=True)
 
-    classes = sorted([d for d in os.listdir(DATA_DIR) if os.path.isdir(os.path.join(DATA_DIR, d))])
+    # The vocabulary and the split come from the SHARED selection rule, so the
+    # pretrainer, the word phases and the sentence phases all speak the same
+    # class list, and the train/val split is done on the FILE LIST (no clip is
+    # ever in both partitions).
+    infos = discover_word_classes(data_dir, min_samples_per_class=MIN_SAMPLES,
+                                  max_samples_per_class=MAX_SAMPLES)
+    classes = [i.name for i in infos]
     num_classes = len(classes)
-    class_to_idx = {cls: idx for idx, cls in enumerate(classes)}
-    print(f"[INFO] Found {num_classes} classes in {DATA_DIR}", flush=True)
+    print(f"[INFO] Found {num_classes} classes in {data_dir}", flush=True)
 
-    raw_data = {}
-    for cls_name in classes:
-        cls_folder = os.path.join(DATA_DIR, cls_name)
-        pt_files = glob.glob(os.path.join(cls_folder, "*.pt"))
-        if pt_files:
-            try:
-                t = torch.load(pt_files[0], weights_only=True)
-                if isinstance(t, np.ndarray):
-                    t = torch.from_numpy(t).float()
-                raw_data[class_to_idx[cls_name]] = t.float()
-            except Exception as e:
-                print(f"[WARN] Error loading {pt_files[0]}: {e}", flush=True)
+    train_items, val_items = split_word_classes(infos, val_fraction=val_fraction, seed=42)
+    print(f"[LEAK-PREVENTION] File-level split: {len(train_items)} train clips / "
+          f"{len(val_items)} val clips, no overlap.", flush=True)
 
-    print(f"[LEAK-PREVENTION] Splitting clean data. Augmentations active ONLY on train split.", flush=True)
-    train_dataset = TrainPoseDataset(raw_data, samples_per_class=samples_per_class, median_len=MEDIAN_LENGTH)
-    val_dataset = ValPoseDataset(raw_data, median_len=MEDIAN_LENGTH)
+    train_dataset = PretrainPoseDataset(train_items, is_train=True, median_len=MEDIAN_LENGTH,
+                                         samples_per_class=samples_per_class,
+                                         fill_missing=fill_missing)
+    val_dataset = PretrainPoseDataset(val_items, is_train=False, median_len=MEDIAN_LENGTH,
+                                       samples_per_class=1, fill_missing=fill_missing)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
@@ -322,7 +308,7 @@ def train_pretrainer(epochs=25, batch_size=32, lr=1.5e-3, samples_per_class=20):
 
     model = PoseTransformerTCNN(
         input_dim=163, d_model=128, nhead=4, num_transformer_layers=2,
-        tcnn_channels=(128, 256), num_classes=num_classes
+        tcnn_channels=(128, 256), num_classes=num_classes, max_seq_len=MAX_SEQ_LEN
     ).to(device)
 
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -330,7 +316,12 @@ def train_pretrainer(epochs=25, batch_size=32, lr=1.5e-3, samples_per_class=20):
 
     criterion = nn.CrossEntropyLoss(label_smoothing=0.08)
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-5)
+    for g in optimizer.param_groups:
+        g["base_lr"] = g["lr"]
+    # Cosine WITH WARM RESTARTS so a plateau can be escaped instead of the LR
+    # annealing to zero for the rest of the run.
+    scheduler, restart_every = build_warm_restart_scheduler(
+        optimizer, total_epochs=epochs, restart_every=RESTART_EVERY, eta_min=1e-5)
 
     history = {
         "train_loss": [], "train_acc": [],
@@ -339,10 +330,13 @@ def train_pretrainer(epochs=25, batch_size=32, lr=1.5e-3, samples_per_class=20):
     }
 
     best_val_acc = 0.0
+    epochs_without_improvement = 0
+    escapes = 0
     best_model_path = os.path.join(SAVE_DIR, "best_pretrained_model.pth")
     final_model_path = os.path.join(SAVE_DIR, "final_pretrained_model.pth")
 
-    print("\n[START] Beginning Pretraining Loop...", flush=True)
+    print(f"\n[START] Beginning Pretraining Loop ({epochs} epochs, warm restart every "
+          f"{restart_every})...", flush=True)
     for epoch in range(1, epochs + 1):
         model.train()
         total_loss = 0.0
@@ -402,9 +396,21 @@ def train_pretrainer(epochs=25, batch_size=32, lr=1.5e-3, samples_per_class=20):
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             torch.save(model.state_dict(), best_model_path)
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+        # --- plateau escape -------------------------------------------------
+        if ESCAPE_PATIENCE > 0 and epochs_without_improvement >= ESCAPE_PATIENCE:
+            escapes += 1
+            print(f"  [ESCAPE] No val improvement for {epochs_without_improvement} epochs "
+                  f"(val acc {val_acc*100:.2f}%) - kicking the model out of the plateau.", flush=True)
+            print(f"  [ESCAPE] {escape_from_plateau(model, optimizer, scale=ESCAPE_SCALE)}", flush=True)
+            epochs_without_improvement = 0
 
     torch.save(model.state_dict(), final_model_path)
-    print(f"\n[SUCCESS] Pretraining finished! Best Val Acc: {best_val_acc*100:.2f}%", flush=True)
+    print(f"\n[SUCCESS] Pretraining finished! Best Val Acc: {best_val_acc*100:.2f}% "
+          f"| escapes: {escapes}", flush=True)
 
     with open(os.path.join(SAVE_DIR, "classes.json"), "w", encoding="utf-8") as f:
         json.dump(classes, f, indent=2)
@@ -502,4 +508,4 @@ def generate_evaluation_plots(history, targets, preds, classes):
 
 
 if __name__ == "__main__":
-    train_pretrainer(epochs=25, batch_size=32, lr=1.5e-3, samples_per_class=20)
+    train_pretrainer(epochs=25, batch_size=32, lr=1.5e-3, samples_per_class=4)

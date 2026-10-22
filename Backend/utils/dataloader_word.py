@@ -83,6 +83,20 @@ EXCLUDED_CLASS_NAMES = ("NONE", "[NOTHING]", "NOTHING")
 NOTHING_CLASS_NAME = "[NOTHING]"
 DEFAULT_MAX_LEN = 300          # frames
 
+# --------------------------------------------------------------------------- #
+# The hole-filling mode - ONE knob for the whole project.
+# --------------------------------------------------------------------------- #
+# "none"        : keep the corpus convention (an undetected modality owns a
+#                 ZERO block).  This is the default, because the backbone was
+#                 PRETRAINED on this encoding: filling the holes would change
+#                 the input distribution the pretrained weights expect.
+# "hold"        : carry the last valid value of the landmark forward.
+# "interpolate" : linear interpolation between the surrounding detections.
+#
+# The same value is used by the word loader AND by the word clips inside the
+# sentence loader, so a model never sees the same clip encoded two ways.
+FILL_MISSING_DEFAULT = "none"
+
 
 # --------------------------------------------------------------------------- #
 # Class discovery
@@ -322,7 +336,7 @@ class ISLWordTensorDataset(Dataset):
         augment_config: Optional[AugmentConfig] = None,
         nothing_indices: Sequence[int] = (),
         nothing_seed: int = 1234,
-        fill_missing: str = "none",
+        fill_missing: str = FILL_MISSING_DEFAULT,
     ):
         self.items = list(items)
         self.class_to_idx = dict(class_to_idx)
@@ -390,7 +404,7 @@ def get_word_dataloaders(
     include_nothing_class: bool = True,
     nothing_samples: int = 0,
     augment_config: Optional[AugmentConfig] = None,
-    fill_missing: str = "none",
+    fill_missing: str = FILL_MISSING_DEFAULT,
     num_workers: int = 0,
     pin_memory: bool = False,
     seed: int = 42,

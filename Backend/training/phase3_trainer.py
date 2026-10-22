@@ -57,6 +57,11 @@ from utils.pose_augmentation import (  # noqa: E402
     augment_pose_sequence as augment_pose_sequence_canonical,
 )
 from utils.checkpoint_utils import load_flexible  # noqa: E402
+from utils.training_utils import (  # noqa: E402
+    build_warm_restart_scheduler,
+    escape_from_plateau,
+    unfreeze_and_extend,
+)
 
 # =========================================================================
 # HYPER-PARAMETERS
@@ -74,6 +79,9 @@ N_TRANS     = 2
 GRU_LAYERS  = 2
 FREEZE_EP   = 5
 TOTAL_EP    = 40
+RESTART_EVERY  = 20        # cosine warm restart every N epochs (plateau recovery)
+ESCAPE_PATIENCE = 10       # epochs without a val improvement -> escape the plateau
+ESCAPE_SCALE    = 0.02     # sigma of the weight perturbation of the escape
 BATCH_SZ    = 64
 HEAD_LR     = 5e-4
 BB_LR       = 5e-5
@@ -394,26 +402,29 @@ def train_phase3():
 
     for p in model.backbone_params(): p.requires_grad = False
     opt = optim.AdamW(model.head_params(), lr=HEAD_LR, weight_decay=WD)
+    for g in opt.param_groups: g["base_lr"] = g["lr"]
     print(f"[INFO] Epochs 1-{FREEZE_EP}: backbone FROZEN")
 
     crit = nn.CrossEntropyLoss(label_smoothing=LS)
-    sch  = optim.lr_scheduler.CosineAnnealingLR(opt, T_max=TOTAL_EP, eta_min=1e-6)
+    # Cosine WITH WARM RESTARTS so a plateau can be escaped instead of the LR
+    # annealing to zero for the rest of the phase.
+    sch, restart_every = build_warm_restart_scheduler(
+        opt, total_epochs=TOTAL_EP, restart_every=RESTART_EVERY, eta_min=1e-6)
     hist = {k:[] for k in ["tl","ta","vl","va","vp","vr","vf1","fps"]}
-    best_acc=0.; best_p=os.path.join(SAVE_DIR,"best_phase3_model.pth")
+    best_acc=0.; epochs_without_improvement=0; escapes=0
+    best_p=os.path.join(SAVE_DIR,"best_phase3_model.pth")
     final_p=os.path.join(SAVE_DIR,"final_phase3_model.pth")
 
-    print(f"\n[START] Phase 3 -- {TOTAL_EP} epochs, 1->25fps curriculum\n")
+    print(f"\n[START] Phase 3 -- {TOTAL_EP} epochs, 1->50fps curriculum, "
+          f"warm restart every {restart_every} epochs\n")
 
     for ep in range(1, TOTAL_EP+1):
         if ep == FREEZE_EP+1:
             print(f"\n[UNFREEZE] Epoch {ep}: backbone released @ lr={BB_LR}")
-            for p in model.backbone_params(): p.requires_grad = True
-            opt = optim.AdamW([
-                {"params": model.backbone_params(), "lr": BB_LR},
-                {"params": model.head_params(),     "lr": HEAD_LR*.5}],
-                weight_decay=WD)
-            sch = optim.lr_scheduler.CosineAnnealingLR(
-                opt, T_max=TOTAL_EP-FREEZE_EP, eta_min=1e-6)
+            # The optimiser is EXTENDED, not recreated: the AdamW moments of the
+            # head are kept and the LR schedule is not thrown away.
+            unfreeze_and_extend(opt, model.backbone_params(), lr=BB_LR, name="backbone")
+            for g in opt.param_groups: g["lr"] = g.get("base_lr", g["lr"])
 
         fps = fps_for_epoch(ep, TOTAL_EP); T = target_T(fps)
         tr_ds.set_fps(fps); va_ds.set_fps(fps); hist["fps"].append(round(fps,2))
@@ -451,9 +462,20 @@ def train_phase3():
         if va > best_acc:
             best_acc=va; torch.save(model.state_dict(), best_p)
             print(f"  * New best: {best_acc*100:.2f}%")
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+        # --- plateau escape -------------------------------------------------
+        if ESCAPE_PATIENCE > 0 and epochs_without_improvement >= ESCAPE_PATIENCE:
+            escapes += 1
+            print(f"  [ESCAPE] No val improvement for {epochs_without_improvement} epochs "
+                  f"(val acc {va*100:.2f}%) - kicking the model out of the plateau.")
+            print(f"  [ESCAPE] {escape_from_plateau(model, opt, scale=ESCAPE_SCALE)}")
+            epochs_without_improvement = 0
 
     torch.save(model.state_dict(), final_p)
-    print(f"\n[DONE] Best Val Acc: {best_acc*100:.2f}%")
+    print(f"\n[DONE] Best Val Acc: {best_acc*100:.2f}% | escapes: {escapes}")
     with open(os.path.join(SAVE_DIR,"classes.json"),"w",encoding="utf-8") as f:
         json.dump(classes, f, indent=2)
     with open(os.path.join(SAVE_DIR,"history.json"),"w",encoding="utf-8") as f:

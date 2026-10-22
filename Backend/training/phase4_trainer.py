@@ -64,6 +64,7 @@ from utils.pose_augmentation import (  # noqa: E402
     tilt_pose as canonical_tilt,
 )
 from utils.checkpoint_utils import load_flexible  # noqa: E402
+from utils.training_utils import escape_from_plateau, unfreeze_and_extend  # noqa: E402
 
 # =========================================================================
 # HYPER-PARAMETERS
@@ -78,6 +79,8 @@ GRU_LAYERS       = 2
 
 TOTAL_EPOCHS     = 50
 FREEZE_EPOCHS    = 30          # transformer frozen for first 30
+ESCAPE_PATIENCE  = 10          # epochs without a val improvement -> escape the plateau
+ESCAPE_SCALE     = 0.02        # sigma of the weight perturbation of the escape
 BATCH_SIZE       = 64
 VAL_FRAC         = 0.20
 
@@ -499,6 +502,8 @@ def train_phase4():
         {"params": model.cnn_params(),  "lr": LR_RNN_CNN,   "name": "cnn"},
         {"params": model.head_params(), "lr": LR_HEAD_FROZEN,"name": "head"},
     ], weight_decay=WEIGHT_DECAY)
+    for g in opt_a.param_groups:
+        g["base_lr"] = g["lr"]
     sch_a  = optim.lr_scheduler.CosineAnnealingWarmRestarts(
         opt_a, T_0=15, T_mult=1, eta_min=1e-6)
 
@@ -508,6 +513,8 @@ def train_phase4():
     hist = {k: [] for k in ["tl","ta","vl","va","vp","vr","vf1",
                              "lr_rnn","lr_head","lr_trans"]}
     best_acc = 0.
+    epochs_without_improvement = 0
+    escapes = 0
     best_p   = os.path.join(SAVE_DIR, "best_phase4_model.pth")
     final_p  = os.path.join(SAVE_DIR, "final_phase4_model.pth")
 
@@ -526,15 +533,16 @@ def train_phase4():
         # -----------------------------------------------
         if ep == FREEZE_EPOCHS + 1:
             print(f"\n[UNFREEZE] Epoch {ep}: releasing transformer")
-            for p in model.transformer_params():
-                p.requires_grad = True
-            opt   = optim.AdamW([
-                {"params": model.transformer_params(), "lr": LR_TRANS_UNFREEZE,    "name": "trans"},
-                {"params": model.rnn_params(),         "lr": LR_RNN_CNN_UNFREEZE,  "name": "rnn_cnn"},
-                {"params": model.cnn_params(),         "lr": LR_RNN_CNN_UNFREEZE,  "name": "cnn"},
-                {"params": model.head_params(),        "lr": LR_HEAD_UNFREEZE,     "name": "head"},
-            ], weight_decay=WEIGHT_DECAY)
-            sch   = optim.lr_scheduler.CosineAnnealingLR(
+            # The optimiser is EXTENDED, not recreated: the AdamW moments of the
+            # RNN/CNN/head are kept, so the released transformer does not reset
+            # the momentum of the whole network.
+            unfreeze_and_extend(opt_a, model.transformer_params(),
+                                lr=LR_TRANS_UNFREEZE, name="trans",
+                                weight_decay=WEIGHT_DECAY)
+            for g in opt_a.param_groups:
+                g["base_lr"] = g["lr"]
+            opt = opt_a
+            sch = optim.lr_scheduler.CosineAnnealingLR(
                 opt, T_max=TOTAL_EPOCHS - FREEZE_EPOCHS, eta_min=1e-6)
         else:
             opt = opt_a; sch = sch_a
@@ -593,6 +601,17 @@ def train_phase4():
             best_acc = va
             torch.save(model.state_dict(), best_p)
             print(f"  * New best val acc: {best_acc*100:.2f}%")
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+        # --- plateau escape -------------------------------------------------
+        if ESCAPE_PATIENCE > 0 and epochs_without_improvement >= ESCAPE_PATIENCE:
+            escapes += 1
+            print(f"  [ESCAPE] No val improvement for {epochs_without_improvement} epochs "
+                  f"(val acc {va*100:.2f}%) - kicking the model out of the plateau.")
+            print(f"  [ESCAPE] {escape_from_plateau(model, opt, scale=ESCAPE_SCALE)}")
+            epochs_without_improvement = 0
 
     # --- Save ---
     torch.save(model.state_dict(), final_p)
