@@ -24,6 +24,7 @@ refresh_canonical_classes()
 
 ## Files
 - `classes.json`: Plain JSON list of the 228 class names, in the canonical order. The class index of a name is its position in that list; the CTC blank of a sentence model is `len(classes)`.
+- `word_lm.json`: The word-level **language model** of the continuous corpus (a smoothed unigram + bigram over 178 word types / 2 122 tokens, estimated on the TRAINING split only). It is what the prefix beam search rescores its hypotheses with (`--beam_alpha`). Regenerate it with `utils/word_lm.py`.
 
 ## Immediate Subdirectories
 - *(None)*

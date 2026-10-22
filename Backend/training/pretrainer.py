@@ -49,6 +49,11 @@ from utils.dataloader_word import (  # noqa: E402
     discover_word_classes,
     split_word_classes,
 )
+from utils.splits import (  # noqa: E402
+    load_canonical_split,
+    split_fingerprint,
+    split_items_from_manifest,
+)
 from utils.pose_augmentation import (  # noqa: E402
     AugmentConfig,
     augment_pose_sequence as canonical_augment,
@@ -281,20 +286,27 @@ def train_pretrainer(epochs=25, batch_size=32, lr=1.5e-3, samples_per_class=4,
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Using device: {device}", flush=True)
 
-    # The vocabulary and the split come from the SHARED selection rule, so the
-    # pretrainer, the word phases and the sentence phases all speak the same
-    # class list, and the train/val split is done on the FILE LIST (no clip is
-    # ever in both partitions).
+    # The vocabulary and the split come from the SHARED selection rule AND
+    # from the canonical manifest, so the pretrainer, the word phases and the
+    # sentence phases all speak the same class list and agree on which clip is
+    # training data and which one is validation data.
     infos = discover_word_classes(data_dir, min_samples_per_class=MIN_SAMPLES,
                                   max_samples_per_class=MAX_SAMPLES)
     classes = [i.name for i in infos]
     num_classes = len(classes)
     print(f"[INFO] Found {num_classes} classes in {data_dir}", flush=True)
 
-    train_items, val_items = split_word_classes(infos, val_fraction=val_fraction, seed=42)
-    print(f"[LEAK-PREVENTION] File-level split: {len(train_items)} train clips / "
-          f"{len(val_items)} val clips, no overlap.", flush=True)
-
+    manifest = load_canonical_split()
+    class_to_idx = {c: i for i, c in enumerate(classes)}
+    train_items, val_items, manifest_classes = split_items_from_manifest(manifest, class_to_idx)
+    if set(manifest_classes) != set(classes):
+        raise RuntimeError(
+            f"[SPLIT] The canonical manifest holds {len(manifest_classes)} classes but the "
+            f"corpus selection produced {len(classes)}.\n"
+            f"        Regenerate it:  python scripts/save_phase4_split.py --canonical"
+        )
+    print(f"[LEAK-PREVENTION] Canonical manifest: {len(train_items)} train clips / "
+          f"{len(val_items)} val clips, fingerprint {split_fingerprint(manifest)[:12]}.", flush=True)
     train_dataset = PretrainPoseDataset(train_items, is_train=True, median_len=MEDIAN_LENGTH,
                                          samples_per_class=samples_per_class,
                                          fill_missing=fill_missing)

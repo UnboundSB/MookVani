@@ -77,6 +77,7 @@ from utils.pose_augmentation import (  # noqa: E402
 )
 from utils.checkpoint_utils import load_flexible  # noqa: E402
 from utils.dataloader_word import get_word_classes  # noqa: E402
+from utils.splits import load_canonical_split, split_fingerprint  # noqa: E402
 
 # =========================================================================
 # HYPER-PARAMETERS (25 EPOCHS SQUEEZE)
@@ -661,16 +662,15 @@ def train_phase6():
     np.random.seed(42)
     torch.manual_seed(42)
 
-    # --- Load exact split ---
-    if not os.path.exists(SPLIT_JSON):
-        raise FileNotFoundError(
-            f"[ERROR] Split file not found: {SPLIT_JSON}\n"
-            "Ensure models/phase4_word_model/split_paths.json exists.")
-    with open(SPLIT_JSON, encoding="utf-8") as f:
-        split = json.load(f)
+    # --- Load the CANONICAL split (the same assignment as every other phase) ---
+    manifest = load_canonical_split()
+    split = {"classes": manifest["classes"], "train": manifest["train"], "val": manifest["val"]}
     classes = split["classes"]
     c2i = {c: i for i, c in enumerate(classes)}
     nc  = len(classes)
+    print(f"[SPLIT] Canonical manifest {split_fingerprint(manifest)[:12]}: "
+          f"{nc} classes, {sum(len(v) for v in split['train'].values())} train, "
+          f"{sum(len(v) for v in split['val'].values())} val")
 
     # The split defines the vocabulary of this phase, so it must match the
     # vocabulary of the word loader.  A stale split (from the old 262-class

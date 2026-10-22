@@ -252,6 +252,79 @@ def load_split_tensors(
 
 
 # --------------------------------------------------------------------------- #
+# The canonical split - ONE place, every phase reads it
+# --------------------------------------------------------------------------- #
+def canonical_split_items(
+    data_dir: str = WORD_LEVEL_DIR_DEFAULT,
+    min_samples_per_class: int = MIN_SAMPLES_PER_CLASS,
+    max_samples_per_class: int = MAX_SAMPLES_PER_CLASS,
+    path: Optional[str] = None,
+    classes: Optional[Sequence[str]] = None,
+    refresh: bool = False,
+) -> Tuple[List[Tuple[str, int]], List[Tuple[str, int]], List[str]]:
+    """The train/val items of the CANONICAL manifest.
+
+    Every phase of the pipeline calls this one function, so a clip that is
+    training data in one phase is never validation data in another one.  The
+    manifest is validated against the corpus: if the corpus changed (a class
+    was re-extracted, the clip budget changed), the mismatch is reported
+    instead of silently producing a different split.
+
+    Returns ``(train_items, val_items, classes)``.
+    """
+    from .splits import (
+        CANONICAL_SPLIT_PATH,
+        load_canonical_split,
+        refresh_canonical_split,
+        split_fingerprint,
+        split_items_from_manifest,
+    )
+
+    manifest_path = path or CANONICAL_SPLIT_PATH
+    if refresh or not os.path.exists(manifest_path):
+        manifest = refresh_canonical_split(
+            data_dir, min_samples_per_class, max_samples_per_class, path=manifest_path)
+    else:
+        manifest = load_canonical_split(manifest_path)
+
+    if classes is None:
+        infos = discover_word_classes(
+            data_dir, min_samples_per_class, max_samples_per_class
+        )
+        classes = [i.name for i in infos]
+
+    class_to_idx = {c: i for i, c in enumerate(classes)}
+    train_items, val_items, manifest_classes = split_items_from_manifest(
+        manifest, class_to_idx)
+
+    if set(manifest_classes) != set(classes):
+        raise RuntimeError(
+            f"[SPLIT] The canonical manifest holds {len(manifest_classes)} classes but the "
+            f"corpus selection produced {len(classes)}.\n"
+            f"        Regenerate it:  python scripts/save_phase4_split.py --canonical"
+        )
+
+    print(f"[SPLIT] Canonical manifest {split_fingerprint(manifest)[:12]}: "
+          f"{len(train_items)} train / {len(val_items)} val clips, {len(classes)} classes.")
+    return train_items, val_items, classes
+
+
+def load_word_split_tensors(
+    data_dir: str = WORD_LEVEL_DIR_DEFAULT,
+    min_samples_per_class: int = MIN_SAMPLES_PER_CLASS,
+    max_samples_per_class: int = MAX_SAMPLES_PER_CLASS,
+    path: Optional[str] = None,
+    refresh: bool = False,
+) -> Tuple[Dict[int, List[torch.Tensor]], Dict[int, List[torch.Tensor]], List[str]]:
+    """The canonical split, loaded into memory: ``(train_data, val_data, classes)``."""
+    train_items, val_items, classes = canonical_split_items(
+        data_dir, min_samples_per_class, max_samples_per_class, path=path, refresh=refresh)
+    return (load_split_tensors(train_items),
+            load_split_tensors(val_items),
+            classes)
+
+
+# --------------------------------------------------------------------------- #
 # The synthetic [NOTHING] idle class
 # --------------------------------------------------------------------------- #
 def generate_nothing_sample(
@@ -408,6 +481,7 @@ def get_word_dataloaders(
     num_workers: int = 0,
     pin_memory: bool = False,
     seed: int = 42,
+    split_manifest: Optional[dict] = None,
     save_meta_path: Optional[str] = None,
 ):
     """Build the word-level train / val dataloaders.
@@ -434,6 +508,22 @@ def get_word_dataloaders(
     idx_to_class = {i: name for i, name in enumerate(classes)}
 
     train_items, val_items = split_word_classes(infos, val_fraction=val_fraction, seed=seed)
+
+    # ---- the canonical manifest overrides the computed split ---------------
+    # Every phase of the pipeline reads the SAME manifest, so a clip that is
+    # training data in one phase is never validation data in another one.
+    if split_manifest is not None:
+        from .splits import split_items_from_manifest
+        train_items, val_items, manifest_classes = split_items_from_manifest(
+            split_manifest, class_to_idx)
+        if manifest_classes and set(manifest_classes) != set(classes):
+            raise RuntimeError(
+                f"[SPLIT] The canonical manifest holds {len(manifest_classes)} classes "
+                f"but the corpus selection produced {len(classes)}.\n"
+                f"        Regenerate the manifest:  python scripts/save_phase4_split.py --canonical"
+            )
+        print(f"[SPLIT] Using the canonical manifest "
+              f"({len(train_items)} train / {len(val_items)} val clips).")
 
     # ---- the synthetic idle class ------------------------------------- #
     nothing_label = None

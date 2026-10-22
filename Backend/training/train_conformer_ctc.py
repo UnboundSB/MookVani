@@ -42,6 +42,8 @@ if BACKEND_DIR not in sys.path:
 
 from utils.dataloader_word import get_word_classes  # noqa: E402
 from utils.checkpoint_utils import extract_state_dict, load_flexible  # noqa: E402
+from utils.ctc_decoder import batch_decode_with_lm  # noqa: E402
+from utils.word_lm import build_word_lm_from_index  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Canonical layout + the ONE implementation of the pose augmentations.
@@ -798,46 +800,66 @@ class MaskedBatchNorm1d(nn.BatchNorm1d):
 
 
 class TCNN(nn.Module):
-    def __init__(self, ic, oc, k=3, drop=0.1):
+    def __init__(self, ic, oc, k=3, drop=0.1, causal=False):
         super().__init__()
-        p = k // 2
-        self.c1 = nn.Conv1d(ic, oc, k, padding=p)
+        self.k = k
+        self.causal = causal
+        self.c1 = nn.Conv1d(ic, oc, k, padding=0)
         self.b1 = MaskedBatchNorm1d(oc)
         self.g1 = nn.GELU()
         self.d1 = nn.Dropout(drop)
-        self.c2 = nn.Conv1d(oc, oc, k, padding=p)
+        self.c2 = nn.Conv1d(oc, oc, k, padding=0)
         self.b2 = MaskedBatchNorm1d(oc)
         self.g2 = nn.GELU()
         self.d2 = nn.Dropout(drop)
         self.res = nn.Conv1d(ic, oc, 1) if ic != oc else nn.Identity()
 
-    def forward(self, x, mask=None):
+    def forward(self, x, mask=None, causal=False):
+        causal = causal or self.causal
         r = self.res(x)
-        o = self.d1(self.g1(self.b1(self.c1(x), mask)))
-        o = self.d2(self.g2(self.b2(self.c2(o), mask)))
+        o = self.d1(self.g1(self.b1(self._conv(self.c1, x, causal), mask)))
+        o = self.d2(self.g2(self.b2(self._conv(self.c2, o, causal), mask)))
         return o + r
+
+    def _conv(self, conv, x, causal):
+        # A left padding of k-1 makes the convolution causal without changing
+        # the output length.
+        pad = (self.k - 1, 0) if causal else (self.k // 2, self.k // 2)
+        return conv(F.pad(x, pad))
 
 class PretrainedBackbone(nn.Module):
     """
     Extracts 256-dim frame features using Phase 6 pretrained weights:
     InputProj -> BiGRU -> Transformer -> TCNN Stack (output 256 channels).
     Poolings and word classification head are stripped.
+
+    ``causal=True`` makes the whole stack causal (a unidirectional GRU and a
+    causal attention mask), which is what a live, streaming recogniser needs:
+    a frame can then be classified without waiting for the end of the clip.
+    The offline model stays bidirectional (the default), because a bidirectional
+    context is worth a lot of accuracy on a recorded clip.
     """
-    def __init__(self, d=128, gru_layers=2, n_head=4, n_trans=2, drop=0.15):
+
+    def __init__(self, d=128, gru_layers=2, n_head=4, n_trans=2, drop=0.15, causal=False):
         super().__init__()
+        self.causal = causal
         self.proj  = nn.Sequential(
             nn.Linear(163, d), nn.LayerNorm(d), nn.Dropout(drop))
-        self.gru   = nn.GRU(d, d // 2, gru_layers, batch_first=True, bidirectional=True,
+        # A bidirectional GRU with hidden = d/2 emits d channels, a causal
+        # (unidirectional) one has to use hidden = d to emit the same width.
+        gru_hidden = d if causal else d // 2
+        self.gru   = nn.GRU(d, gru_hidden, gru_layers, batch_first=True,
+                            bidirectional=not causal,
                             dropout=drop if gru_layers > 1 else 0.0)
         self.gnorm = nn.LayerNorm(d)
         self.pe    = PosEnc(d)
         el = nn.TransformerEncoderLayer(d, n_head, d * 2, drop, "gelu", batch_first=True)
         self.trans = nn.TransformerEncoder(el, n_trans, enable_nested_tensor=False)
         self.tnorm = nn.LayerNorm(d)
-        self.t1    = TCNN(d, d, drop=drop)
-        self.t2    = TCNN(d, d * 2, drop=drop)  # Output: 256 channels
+        self.t1    = TCNN(d, d, drop=drop, causal=causal)
+        self.t2    = TCNN(d, d * 2, drop=drop, causal=causal)  # Output: 256 channels
 
-    def forward(self, x, mask=None):
+    def forward(self, x, mask=None, attn_mask=None):
         if hasattr(self.gru, "flatten_parameters"):
             self.gru.flatten_parameters()
         h = self.proj(x)
@@ -846,7 +868,7 @@ class PretrainedBackbone(nn.Module):
         h = self.pe(h)
         # Padded frames must not be attended to by the valid frames.
         kpm = None if mask is None else (mask < 0.5)
-        h = self.trans(h, src_key_padding_mask=kpm)
+        h = self.trans(h, src_key_padding_mask=kpm, mask=attn_mask)
         h = self.tnorm(h)
         h = h.transpose(1, 2)  # (B, 128, T)
         h = self.t1(h, mask)
@@ -894,37 +916,45 @@ class DepthwiseConv(nn.Module):
     def __init__(self, d, kernel=31, drop=0.1):
         super().__init__()
         assert kernel % 2 == 1, "kernel must be odd"
+        self.kernel = kernel
         self.norm = nn.LayerNorm(d)
         self.pw1  = nn.Conv1d(d, 2*d, 1)
-        self.dw   = nn.Conv1d(d, d, kernel, padding=kernel//2, groups=d)
+        self.dw   = nn.Conv1d(d, d, kernel, padding=0, groups=d)
         self.bn   = MaskedBatchNorm1d(d)
         self.act  = nn.SiLU()
         self.pw2  = nn.Conv1d(d, d, 1)
         self.drop = nn.Dropout(drop)
 
-    def forward(self, x, mask=None):
+    def forward(self, x, mask=None, causal=False):
         r = x
         x = self.norm(x).transpose(1, 2)
         x = self.pw1(x)
         x = x[:, :x.size(1)//2] * torch.sigmoid(x[:, x.size(1)//2:])
+        # The padding decides whether the convolution is causal: with a left
+        # padding of kernel-1 an output frame only ever sees the PAST.
+        if causal:
+            x = F.pad(x, (self.kernel - 1, 0))
+        else:
+            x = F.pad(x, (self.kernel // 2, self.kernel // 2))
         x = self.dw(x)
         x = self.act(self.bn(x, mask))
         x = self.drop(self.pw2(x))
         return r + x.transpose(1, 2)
 
 class ConformerBlock(nn.Module):
-    def __init__(self, d, n_head=8, kernel=31, ff_exp=4, drop=0.1):
+    def __init__(self, d, n_head=8, kernel=31, ff_exp=4, drop=0.1, causal=False):
         super().__init__()
         self.ff1  = FeedForward(d, ff_exp, drop)
         self.mhsa = MultiHeadSelfAttn(d, n_head, drop)
         self.conv = DepthwiseConv(d, kernel, drop)
         self.ff2  = FeedForward(d, ff_exp, drop)
         self.norm = nn.LayerNorm(d)
+        self.causal = causal
 
     def forward(self, x, mask=None, attn_mask=None):
         x = self.ff1(x)
         x = self.mhsa(x, mask, attn_mask)
-        x = self.conv(x, mask)
+        x = self.conv(x, mask, causal=self.causal)
         x = self.ff2(x)
         return self.norm(x)
 
@@ -944,15 +974,22 @@ class StridedFrontEnd(nn.Module):
     resolution is reduced.
     """
 
-    def __init__(self, in_dim=163, channels=256, stride=2, kernel=3, drop=0.1):
+    def __init__(self, in_dim=163, channels=256, stride=2, kernel=3, drop=0.1, causal=False):
         super().__init__()
         assert stride in (1, 2, 4, 8), "the stride must be a power of two"
         layers = []
         c_in = in_dim
         n_conv = {2: 1, 4: 2, 8: 3}[stride]
         for _ in range(n_conv):
+            if causal:
+                # A LEFT padding of kernel-1 keeps the output length identical
+                # while making every output frame depend on the past only.
+                layers.append(nn.ConstantPad1d((kernel - 1, 0), 0.0))
+                layers.append(nn.Conv1d(c_in, channels, kernel_size=kernel, stride=2, padding=0))
+            else:
+                layers.append(nn.Conv1d(c_in, channels, kernel_size=kernel, stride=2,
+                                        padding=kernel // 2))
             layers += [
-                nn.Conv1d(c_in, channels, kernel_size=kernel, stride=2, padding=kernel // 2),
                 nn.BatchNorm1d(channels),
                 nn.GELU(),
                 nn.Dropout(drop),
@@ -970,21 +1007,55 @@ class StridedFrontEnd(nn.Module):
 class ISLHybridConformerCTC(nn.Module):
     """
     Unified Architecture:
-    [Pretrained Phase 6 BiGRU+Transformer+TCNN] -> (B, T, 256)
-        -> [Conformer Blocks (MHSA + DWConv k=31)] -> (B, T, 256)
-        -> [CTC Projection Head] -> (B, T, vocab+1)
+    [StridedFrontEnd (optional)] ->
+    [Pretrained Phase 6 BiGRU+Transformer+TCNN] -> (B, T', 256)
+        -> [Conformer Blocks (MHSA + DWConv k=31)] -> (B, T', 256)
+        -> [CTC Projection Head] -> (B, T', vocab+1)
+
+    ``stride``
+        The temporal resolution of the front-end.  ``stride=1`` (the default)
+        keeps the historical behaviour: one output frame per input frame.
+        ``stride=2`` halves the resolution before the self-attention, which
+        cuts the attention cost by 4x and the sequence cost by 2x.  The CTC
+        head then works on T/2 frames, so the number of frames a sign must
+        occupy (``min_frames_per_sign``) and the minimum duration of a decoded
+        burst have to be divided by the stride as well.
+
+    ``causal``
+        A fully causal model (unidirectional GRU + causal attention mask).
+        Required by a streaming recogniser, at the cost of the bidirectional
+        context.
     """
-    def __init__(self, num_classes, d=256, n_blocks=3, n_head=8, kernel=31, drop=0.1):
+    def __init__(self, num_classes, d=256, n_blocks=3, n_head=8, kernel=31, drop=0.1,
+                 stride=1, causal=False):
         super().__init__()
         self.num_classes  = num_classes
         self.ctc_blank_id = num_classes
+        self.stride       = int(stride)
+        self.causal       = bool(causal)
 
-        # 1. Pretrained Backbone (d_in=163 -> d_out=256)
-        self.backbone = PretrainedBackbone(d=128, gru_layers=2, n_head=4, n_trans=2, drop=0.15)
+        # 0. Optional strided convolution front-end
+        self.front = None
+        if self.stride > 1:
+            self.front = StridedFrontEnd(163, channels=256, stride=self.stride, drop=drop,
+                                         causal=causal)
+            in_dim = self.front.out_dim
+        else:
+            in_dim = 163
+
+        # 1. Pretrained Backbone (d_in -> d_out=256)
+        self.backbone = PretrainedBackbone(d=128, gru_layers=2, n_head=4, n_trans=2,
+                                           drop=0.15, causal=causal)
+        if self.front is not None:
+            # The front-end replaces the first linear projection of the
+            # backbone: the backbone then consumes the 256 channels it emits.
+            self.backbone.proj = nn.Sequential(
+                nn.Linear(in_dim, 128), nn.LayerNorm(128), nn.Dropout(0.15))
 
         # 2. Conformer Contextualizer Stack
         self.conformer = nn.ModuleList([
-            ConformerBlock(d, n_head=n_head, kernel=kernel, ff_exp=4, drop=drop)
+            ConformerBlock(d, n_head=n_head, kernel=kernel, ff_exp=4, drop=drop,
+                           causal=causal)
             for _ in range(n_blocks)
         ])
 
@@ -994,22 +1065,46 @@ class ISLHybridConformerCTC(nn.Module):
             nn.Linear(d, num_classes + 1)
         )
 
+    # ------------------------------------------------------------------ #
+    def output_lengths(self, lengths: torch.Tensor) -> torch.Tensor:
+        """The number of OUTPUT frames of every clip (after the strided front-end).
+
+        The CTC alignment is defined on the output frames, so the CTC loss and
+        the decoder have to use these lengths, not the input lengths.
+        """
+        if self.stride <= 1 or lengths is None:
+            return lengths
+        return torch.div(lengths + self.stride - 1, self.stride, rounding_mode="floor")
+
+    @staticmethod
+    def _causal_mask(T: int, device) -> torch.Tensor:
+        """Upper-triangular mask: a frame may only attend to the past."""
+        return torch.triu(torch.ones(T, T, dtype=torch.bool, device=device), diagonal=1)
+
     def forward(self, x, lengths=None):
         # x: (B, T, 163)
         # `lengths` is the true (unpadded) length of every sequence in the batch.  When it
-        # is given, the padded frames are excluded from the BatchNorm statistics and from
-        # the attention, so a batch of very different sentence lengths no longer poisons
-        # the running estimates used at evaluation time.
+        # is given, the padded frames are excluded from the BatchNorm statistics and from the
+        # attention, so a batch of very different sentence lengths no longer poisons the
+        # running estimates used at evaluation time.
+        # 0. Strided front-end (reduces the temporal resolution)
+        if self.front is not None:
+            x = self.front(x)
+            lengths = self.output_lengths(lengths)
+
         mask = None
         if lengths is not None:
-            B, T = x.shape[0], x.shape[1]
+            T = x.size(1)
             ar = torch.arange(T, device=x.device).unsqueeze(0)
             lens = lengths.to(x.device).clamp(min=1, max=T).unsqueeze(1)
             mask = (ar < lens).to(x.dtype)          # 1.0 = real frame, 0.0 = padding
-        h = self.backbone(x, mask)        # (B, T, 256)
+
+        attn_mask = self._causal_mask(x.size(1), x.device) if self.causal else None
+
+        h = self.backbone(x, mask, attn_mask)  # (B, T', 256)
         for block in self.conformer:
-            h = block(h, mask)             # (B, T, 256)
-        logits = self.ctc_proj(h)         # (B, T, vocab+1)
+            h = block(h, mask, attn_mask)      # (B, T', 256)
+        logits = self.ctc_proj(h)              # (B, T', vocab+1)
         return F.log_softmax(logits, dim=-1)
 
     def reseed_ctc_head(self, weights_path=PHASE6_WEIGHTS):
@@ -1477,7 +1572,9 @@ def save_plots(history, plots_dir, stage):
 # 9. RUN EPOCH
 # =============================================================================
 def run_epoch(model, loader, criterion, optimizer, device, blank_id,
-              is_train=True, ema=None, max_norm=1.0, mask_padding=True):
+              is_train=True, ema=None, max_norm=1.0, mask_padding=True, min_dur=3,
+              beam_width=0, beam_lm=None, beam_alpha=0.0, beam_beta=0.0,
+              beam_topk=5, id_to_word=None):
     model.train() if is_train else model.eval()
     total_loss = 0.0
     all_preds, all_refs = [], []
@@ -1495,7 +1592,13 @@ def run_epoch(model, loader, criterion, optimizer, device, blank_id,
             # attended to and pollute the BatchNorm statistics).
             lp = model(xs, lengths) if mask_padding else model(xs)
             lp_t = lp.transpose(0, 1)            # (T, B, C)
-            loss = criterion(lp_t, targets, lengths, target_lengths)
+
+            # The CTC alignment lives on the OUTPUT frames: with a strided
+            # front-end there are fewer of them than there are input frames.
+            out_lengths = (model.output_lengths(lengths)
+                           if hasattr(model, "output_lengths") else lengths)
+
+            loss = criterion(lp_t, targets, out_lengths, target_lengths)
 
             if is_train:
                 loss.backward()
@@ -1504,7 +1607,17 @@ def run_epoch(model, loader, criterion, optimizer, device, blank_id,
                 if ema is not None: ema.update(model)
 
             total_loss += loss.item()
-            decoded = batch_decode(lp, lengths, blank_id)
+
+            if beam_width and beam_width > 0:
+                # Prefix beam search (optionally rescored by the word-level LM).
+                decoded = batch_decode_with_lm(
+                    lp, out_lengths, blank_id, id_to_word=id_to_word, lm=beam_lm,
+                    alpha=beam_alpha, beta=beam_beta, beam_width=beam_width,
+                    topk_labels=beam_topk,
+                    min_dur=max(1, min_dur // max(1, getattr(model, "stride", 1))))
+            else:
+                decoded = batch_decode(lp, out_lengths, blank_id,
+                                       min_dur=max(1, min_dur // max(1, getattr(model, "stride", 1))))
             refs    = batch_targets(targets, target_lengths)
             all_preds.extend(decoded); all_refs.extend(refs)
             pbar.set_postfix({"loss": f"{loss.item():.3f}"})
@@ -1544,6 +1657,13 @@ def parse_args():
     p.add_argument("--n_head",          type=int, default=8)
     p.add_argument("--kernel",          type=int, default=31)
     p.add_argument("--dropout",         type=float, default=0.1)
+    p.add_argument("--stride",          type=int, default=1, choices=[1, 2, 4, 8],
+                   help="Temporal stride of the convolution front-end (1 = the historical "
+                        "behaviour, one output frame per input frame).  stride=2 halves "
+                        "the resolution before the self-attention: 4x cheaper attention.")
+    p.add_argument("--causal",          type=int, default=0,
+                   help="Causal model (unidirectional GRU + causal attention mask) for "
+                        "streaming inference.  0 = the bidirectional offline model.")
     # Learning rates
     p.add_argument("--backbone_lr",     type=float, default=1.0e-5, help="LR for pretrained BiGRU+Trans+TCNN")
     p.add_argument("--conformer_lr",    type=float, default=1.5e-4, help="LR for Conformer blocks & CTC head")
@@ -1568,6 +1688,21 @@ def parse_args():
                    help="Epochs without val-WER improvement before an escape is triggered (0 disables)")
     p.add_argument("--escape_scale",     type=float, default=0.02,
                    help="Weight perturbation sigma used by the escape")
+    # Prefix beam search + word-level language model
+    p.add_argument("--beam_width",       type=int, default=0,
+                   help="Width of the CTC prefix beam search (0 = the greedy decoder)")
+    p.add_argument("--beam_topk",        type=int, default=5,
+                   help="How many labels per frame the beam search expands")
+    p.add_argument("--beam_alpha",       type=float, default=0.0,
+                   help="Weight of the word-level language model in the beam rescoring "
+                        "(0 = pure acoustic)")
+    p.add_argument("--beam_beta",        type=float, default=0.0,
+                   help="Insertion penalty of the beam rescoring")
+    p.add_argument("--lm_index",         type=str,
+                   default=os.path.join(BACKEND_DIR, "data", "tensors_sentence_level", "index.json"),
+                   help="Sentence index the word-level language model is estimated from")
+    p.add_argument("--lm_file",          type=str, default=None,
+                   help="Save / load the language model at this path")
     p.add_argument("--mask_padding", type=int, default=1,
                    help="Exclude the padded frames from the attention and from the "
                         "BatchNorm statistics (0 = legacy behaviour, the padded frames "
@@ -1622,9 +1757,15 @@ def main():
     HIST_FILE  = os.path.join(args.output_dir, f"stage{stage}_history.json")
 
     # Build model
-    model = ISLHybridConformerCTC(num_classes, args.d_model, args.n_blocks, args.n_head, args.kernel, args.dropout).to(device)
+    model = ISLHybridConformerCTC(num_classes, args.d_model, args.n_blocks, args.n_head,
+                                   args.kernel, args.dropout,
+                                   stride=args.stride, causal=bool(args.causal)).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Total Parameters: {n_params:,}")
+    if args.stride > 1:
+        print(f"[FRONT-END] Stride {args.stride}: the CTC head works on T/{args.stride} frames.")
+    if args.causal:
+        print("[FRONT-END] Causal model: streaming capable (no future context).")
 
     # Initialize pretrained backbone (the word classifier is transferred BY CLASS
     # NAME, because the vocabulary is not the one the checkpoint was trained on).
@@ -1699,7 +1840,9 @@ def main():
         blank_target=args.blank_target,
         blank_w=args.blank_w,
         emission_w=args.emission_w,
-        min_frames_per_sign=args.min_frames_per_sign,
+        # The emission barrier counts OUTPUT frames, so with a strided
+        # front-end the requirement has to be divided by the stride.
+        min_frames_per_sign=max(1.0, args.min_frames_per_sign / max(1, args.stride)),
         spike_w=args.connectivity_w,
         entropy_w=args.entropy_w,
         deficit_w=args.deficit_w,
@@ -1720,6 +1863,25 @@ def main():
     train_ld = DataLoader(train_ds, args.batch_size, shuffle=True,  collate_fn=collate, num_workers=args.num_workers)
     val_ld   = DataLoader(val_ds,   args.batch_size, shuffle=False, collate_fn=collate, num_workers=args.num_workers)
 
+    # ---- word-level language model (optional) -----------------------------
+    # The LM is estimated on the TRAINING split of the continuous corpus only:
+    # the validation sentences must stay unseen, otherwise the tuning of
+    # --beam_alpha would be meaningless.
+    beam_lm = None
+    if args.beam_width and args.beam_width > 0:
+        if args.lm_file and os.path.exists(args.lm_file):
+            from utils.word_lm import WordLM
+            beam_lm = WordLM.load(args.lm_file)
+            print(f"[LM] Loaded the language model from {args.lm_file}")
+        elif os.path.exists(args.lm_index):
+            beam_lm = build_word_lm_from_index(args.lm_index, classes=classes)
+            print(f"[LM] Word-level LM built from {args.lm_index}: "
+                  f"{len(beam_lm.unigram)} word types, {sum(beam_lm.unigram.values())} tokens")
+            if args.lm_file:
+                beam_lm.save(args.lm_file)
+        else:
+            print(f"[LM] {args.lm_index} not found - the beam search will be purely acoustic.")
+
     # Training Loop
     total_eps = start_ep + epochs
     epochs_without_improvement = 0
@@ -1733,9 +1895,21 @@ def main():
             cur_max = max(cfg["min_w"], min(cfg["max_w"], int(1 + progress * (cfg["max_w"] - 1))))
             train_ds.max_words = cur_max
 
-        tl, wer, acc, f1 = run_epoch(model, train_ld, criterion, optimizer, device, CTC_BLANK_ID, True, ema, mask_padding=args.mask_padding)
-        vl, vwer, vacc, vf1 = run_epoch(model, val_ld, criterion, optimizer, device, CTC_BLANK_ID, False, mask_padding=args.mask_padding)
-        ema_vl, ema_wer, _, _ = run_epoch(ema.model, val_ld, criterion, None, device, CTC_BLANK_ID, False, mask_padding=args.mask_padding)
+        tl, wer, acc, f1 = run_epoch(model, train_ld, criterion, optimizer, device, CTC_BLANK_ID, True, ema,
+                                     mask_padding=args.mask_padding,
+                                     beam_width=args.beam_width, beam_lm=beam_lm,
+                                     beam_alpha=args.beam_alpha, beam_beta=args.beam_beta,
+                                     beam_topk=args.beam_topk, id_to_word=classes)
+        vl, vwer, vacc, vf1 = run_epoch(model, val_ld, criterion, optimizer, device, CTC_BLANK_ID, False,
+                                        mask_padding=args.mask_padding,
+                                        beam_width=args.beam_width, beam_lm=beam_lm,
+                                        beam_alpha=args.beam_alpha, beam_beta=args.beam_beta,
+                                        beam_topk=args.beam_topk, id_to_word=classes)
+        ema_vl, ema_wer, _, _ = run_epoch(ema.model, val_ld, criterion, None, device, CTC_BLANK_ID, False,
+                                          mask_padding=args.mask_padding,
+                                          beam_width=args.beam_width, beam_lm=beam_lm,
+                                          beam_alpha=args.beam_alpha, beam_beta=args.beam_beta,
+                                          beam_topk=args.beam_topk, id_to_word=classes)
 
         history["train_loss"].append(tl); history["val_loss"].append(vl); history["val_loss_ema"].append(ema_vl)
         history["wer"].append(vwer); history["wer_ema"].append(ema_wer)

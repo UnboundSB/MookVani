@@ -106,6 +106,28 @@ def decode_words(log_probs, blank_id, min_conf=0.5, min_dur=1):
     return out
 
 
+def decode_words_beam(log_probs, blank_id, id_to_word=None, lm=None, alpha=0.0,
+                      beta=0.0, beam_width=25, topk_labels=5):
+    """Prefix beam search -> [(token, peak_prob, 0, T)].
+
+    Same output format as :func:`decode_words`, so the live stabilisation logic
+    works unchanged.  The beam search does not expose an alignment, so the
+    frame range of every word is the whole segment; the confidence is the
+    highest frame probability of the decoded label.
+    """
+    from utils.ctc_decoder import decode_with_lm
+
+    ids = decode_with_lm(log_probs, blank_id, id_to_word=id_to_word, lm=lm,
+                         alpha=alpha, beta=beta, beam_width=beam_width,
+                         topk_labels=topk_labels)
+    probs = log_probs.exp()
+    out = []
+    for tok in ids:
+        conf = float(probs[:, tok].max()) if 0 <= tok < probs.shape[1] else 0.0
+        out.append((tok, conf, 0, log_probs.shape[0]))
+    return out
+
+
 def common_prefix(seqs):
     out = []
     for items in zip(*seqs):
@@ -152,11 +174,16 @@ class LiveRecognizer:
       ("discard", reason)                too little hand activity to be a sentence
       ("reset", None)                    caller should reset its feature-extractor carry-over state
     """
-    def __init__(self, model, classes, device, cfg=None, blank_penalty=0.0):
+    def __init__(self, model, classes, device, cfg=None, blank_penalty=0.0,
+                 beam_width=0, beam_lm=None, beam_alpha=0.0, beam_beta=0.0):
         self.model, self.classes, self.device = model, classes, device
         self.cfg = cfg or Config()
         self.blank = len(classes)
         self.blank_penalty = blank_penalty
+        self.beam_width = beam_width
+        self.beam_lm = beam_lm
+        self.beam_alpha = beam_alpha
+        self.beam_beta = beam_beta
         self.stab = AgreementStabilizer(self.cfg.agree_n)
         self.lead = deque()           # recent idle frames, trimmed by time in push()
         self.history = deque(maxlen=4)
@@ -191,7 +218,17 @@ class LiveRecognizer:
         if self.blank_penalty:
             lp = lp.clone(); lp[:, self.blank] -= self.blank_penalty
             lp = torch.log_softmax(lp, dim=-1)
-        words = decode_words(lp, self.blank, self.cfg.min_conf, self.cfg.min_dur)
+        # With a strided front-end the model emits one frame per STRIDE input
+        # frames, so the minimum duration of a sign has to be scaled as well.
+        stride = max(1, int(getattr(self.model, "stride", 1)))
+        if self.beam_width and self.beam_width > 0:
+            # Prefix beam search (optionally rescored by the word-level LM).
+            words = decode_words_beam(
+                lp, self.blank, id_to_word=self.classes, lm=self.beam_lm,
+                alpha=self.beam_alpha, beta=self.beam_beta, beam_width=self.beam_width)
+        else:
+            words = decode_words(lp, self.blank, self.cfg.min_conf,
+                                 max(1, self.cfg.min_dur // stride))
         self.last_infer_ms = 1000 * (time.perf_counter() - t0)
         return words
 
@@ -532,6 +569,13 @@ def parse_args():
     p.add_argument("--no_display", action="store_true")
     p.add_argument("--no_mirror", action="store_true", help="do not mirror the preview window")
     p.add_argument("--blank_penalty", type=float, default=0.0, help="subtract from blank log-prob (>0 = fewer deletions)")
+    p.add_argument("--beam_width", type=int, default=0,
+                   help="Width of the CTC prefix beam search (0 = the greedy decoder)")
+    p.add_argument("--beam_alpha", type=float, default=0.0,
+                   help="Weight of the word-level language model in the beam rescoring (0 = pure acoustic)")
+    p.add_argument("--beam_beta", type=float, default=0.0, help="Insertion penalty of the beam rescoring")
+    p.add_argument("--lm_file", default=None,
+                   help="Language model file (JSON). Build it with utils/word_lm.py")
     for name in ["fps", "idle_sec", "still_sec", "still_speed", "lead_sec", "tail_sec", "min_sign_sec",
                  "max_sec", "infer_every_sec", "min_conf"]:
         p.add_argument(f"--{name}", type=float, default=getattr(d, name))
@@ -545,7 +589,16 @@ def main():
     device = torch.device(a.device or ("cuda" if torch.cuda.is_available() else "cpu"))
     model, classes = load_model(a.ckpt, a.classes, device)
     print(f"[LOAD] {os.path.basename(a.ckpt)} | {len(classes)} classes | device {device}")
-    rec = LiveRecognizer(model, classes, device, cfg, a.blank_penalty)
+
+    beam_lm = None
+    if a.beam_width and a.beam_width > 0 and a.lm_file and os.path.exists(a.lm_file):
+        from utils.word_lm import WordLM
+        beam_lm = WordLM.load(a.lm_file)
+        print(f"[LM] {a.lm_file} loaded ({len(beam_lm.unigram)} word types)")
+
+    rec = LiveRecognizer(model, classes, device, cfg, a.blank_penalty,
+                         beam_width=a.beam_width, beam_lm=beam_lm,
+                         beam_alpha=a.beam_alpha, beam_beta=a.beam_beta)
     if a.simulate:
         simulate_tensor(rec, a.simulate, cfg.fps)
     else:

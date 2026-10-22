@@ -59,6 +59,7 @@ if BACKEND_DIR not in sys.path:
 from utils.dataloader_word import (  # noqa: E402
     discover_word_classes,
     load_split_tensors,
+    load_word_split_tensors,
     split_word_classes,
 )
 from utils.pose_augmentation import (  # noqa: E402
@@ -445,13 +446,13 @@ def load_and_split(data_dir: str, min_samples: int, val_frac: float = 0.2):
         data_dir, min_samples_per_class=min_samples, max_samples_per_class=MAX_SAMPLES
     )
     classes = [i.name for i in infos]
-    class_to_idx = {c: i for i, c in enumerate(classes)}
-    num_classes = len(classes)
-    print(f"[INFO] {num_classes} classes loaded (each capped at {MAX_SAMPLES} samples).")
+    print(f"[INFO] {len(classes)} classes loaded (each capped at {MAX_SAMPLES} samples).")
 
-    train_items, val_items = split_word_classes(infos, val_fraction=val_frac, seed=42)
-    train_data = load_split_tensors(train_items)
-    val_data = load_split_tensors(val_items)
+    # The canonical manifest decides which clip is training data and which one
+    # is validation data - the SAME assignment every other phase uses.
+    train_data, val_data, classes = load_word_split_tensors(
+        data_dir, min_samples, MAX_SAMPLES)
+    num_classes = len(classes)
 
     total_train = sum(len(v) for v in train_data.values())
     total_val = sum(len(v) for v in val_data.values())

@@ -456,6 +456,99 @@ class BalancedMixedDataset(Dataset):
 
 
 # =============================================================================
+# THE LABEL PRIOR OF THE TRAINING MIX
+# =============================================================================
+def report_word_prior(classes, real_items, word_items=None, mix_weights=(0.40, 0.35, 0.25),
+                      real_word_cap=0, class_cap=0):
+    """Print the label prior of every source and of the mixture.
+
+    The continuous corpus is dominated by a handful of pronouns; the WORD and
+    the SYNTHETIC source draw their classes uniformly.  The mixture is
+    therefore a de-skewing mechanism, and this report shows by how much.
+    """
+    from utils.word_distribution import (
+        collapse_metrics,
+        counts_to_distribution,
+        format_distribution_report,
+        mixed_distribution,
+        uniform_distribution,
+        word_instance_counts,
+    )
+
+    n = len(classes)
+    if n == 0:
+        return
+
+    print("\n" + "=" * 74)
+    print("LABEL PRIOR OF THE TRAINING SOURCES")
+    print("=" * 74)
+
+    # ---- the real (continuous) source ---------------------------------------
+    real_counts = word_instance_counts(real_items)
+    real_dist = counts_to_distribution(real_counts, n)
+    print(format_distribution_report(real_dist, class_names=classes, top=8,
+                                     title="REAL (continuous sentences)"))
+
+    if real_word_cap:
+        # The cap keeps a clip with probability min over its words of
+        # cap / count(word): the expectation of the effective instance count
+        # is what the report shows.
+        eff = Counter()
+        for it in real_items:
+            ws = set(it.get("in_scope_indices", []) or [])
+            if not ws:
+                continue
+            p = 1.0
+            for w in ws:
+                p = min(p, min(1.0, real_word_cap / max(1, real_counts.get(w, 1))))
+            for w in ws:
+                eff[w] += p
+        capped_dist = counts_to_distribution(eff, n)
+        print(format_distribution_report(capped_dist, class_names=classes, top=8,
+                                         title=f"REAL after --mix_word_cap {real_word_cap}"))
+        real_dist = capped_dist
+
+    # ---- the word and the synthetic source ----------------------------------
+    # Both draw their classes UNIFORMLY, so their prior is flat by
+    # construction.  (The synthetic source samples the classes with
+    # random.sample over the class list; the word source with random.choice.)
+    flat = uniform_distribution(n)
+    if word_items:
+        word_counts = word_instance_counts(word_items)
+        word_dist = counts_to_distribution(word_counts, n)
+        print(format_distribution_report(word_dist, class_names=classes, top=6,
+                                         title="WORD (isolated sign clips)"))
+    else:
+        word_dist = flat
+        print(format_distribution_report(flat, class_names=classes, top=6,
+                                         title="WORD (isolated sign clips, assumed flat)"))
+
+    if class_cap:
+        print(f"  [NOTE] --mix_cap {class_cap} trims the over-represented classes of the "
+              f"SYNTHETIC source, which makes ITS prior flatter than uniform.")
+
+    # ---- the mixture ---------------------------------------------------------
+    w_word, w_syn, w_real = mix_weights
+    mixed = mixed_distribution([(w_word, word_dist), (w_syn, flat), (w_real, real_dist)])
+    print(format_distribution_report(mixed, class_names=classes, top=8,
+                                     title="MIX (what the model actually sees)"))
+
+    m_real = collapse_metrics(real_dist)
+    m_mix = collapse_metrics(mixed)
+    print(f"\n  The effective support of the prior rises from "
+          f"{m_real['effective_support']:.1f} (real only) to "
+          f"{m_mix['effective_support']:.1f} classes (the mix).")
+    print(f"  The most frequent word goes from {m_real['top1_share']*100:.1f}% to "
+          f"{m_mix['top1_share']*100:.1f}%.")
+    print("  Measured WER of this repository: no cap 75.0% | --mix_word_cap 60 87.2% "
+          "| --class_balance_alpha 0.5 98.9%.")
+    print("  -> The caps are OFF by default on purpose: capping the REAL source drops")
+    print("     ~40% of the only real continuous data, and the loss-level re-weighting")
+    print("     breaks the CTC alignment.  Balance the MIXTURE, not the corpus.")
+    print("=" * 74 + "\n")
+
+
+# =============================================================================
 # TRAINING HELPERS
 # =============================================================================
 def set_bn_eval(model):
@@ -609,6 +702,25 @@ def train_real_sentences(args):
             for w, c in top:
                 eff = c * min(1.0, args.mix_word_cap / max(1, c))
                 print(f"        {classes[w]:<16} {c:>4} instances -> {eff:>6.1f} effective")
+
+        # ---- THE LABEL PRIOR OF THE MIX -------------------------------------
+        # The three sources have very different priors: the WORD and the
+        # SYNTHETIC source draw their classes UNIFORMLY (flat), the REAL source
+        # follows the corpus (six pronouns = 64% of the word instances).  This
+        # report makes the EFFECTIVE prior of the training mix measurable, so
+        # the frequency cap can be chosen on numbers instead of on intuition.
+        # The historical measurements of this repo are why the caps are OFF by
+        # default: capping the real source DROPS ~40% of the only real data
+        # (75.0% -> 87.2% WER), and fixing the prior in the LOSS destroys the
+        # CTC alignment (75.0% -> 98.9% WER).
+        report_word_prior(
+            classes=classes,
+            real_items=train_items,
+            word_items=word_items,
+            mix_weights=tuple(args.mix_weights),
+            real_word_cap=args.mix_word_cap,
+            class_cap=args.mix_cap,
+        )
     else:
         train_ds = RealSentenceDataset(train_items, True, args.max_len, aug,
                                        args.harmonize, args.domain_match,
