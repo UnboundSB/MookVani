@@ -59,7 +59,7 @@ if BACKEND_DIR not in sys.path:
 from utils.dataloader_word import (  # noqa: E402
     discover_word_classes,
     load_split_tensors,
-    load_word_split_tensors,
+    load_word_split_paths,
     split_word_classes,
 )
 from utils.pose_augmentation import (  # noqa: E402
@@ -181,11 +181,14 @@ def augment_pose_sequence(pose_seq: torch.Tensor, **kwargs) -> torch.Tensor:
 
 class Phase2TrainDataset(Dataset):
     def __init__(self, class_samples: dict, init_fps: float = START_FPS):
+        # class_samples: {class_index: [clip PATH, ...]} - the DataLoader workers
+        # load and augment in parallel, and the corpus is never copied into a
+        # worker (which is what forced num_workers=0 before).
         self.class_samples = class_samples
         self.current_fps   = init_fps
         self.items = [(cls, i)
-                      for cls, tensors in class_samples.items()
-                      for i in range(len(tensors))]
+                      for cls, paths in class_samples.items()
+                      for i in range(len(paths))]
 
     def set_fps(self, fps: float):
         self.current_fps = fps
@@ -195,7 +198,8 @@ class Phase2TrainDataset(Dataset):
 
     def __getitem__(self, idx):
         cls_idx, s_idx = self.items[idx]
-        raw = self.class_samples[cls_idx][s_idx]
+        raw = torch.load(self.class_samples[cls_idx][s_idx],
+                         map_location="cpu", weights_only=True).float()
         sampled   = sample_and_normalize(raw, self.current_fps)
         augmented = augment_pose_sequence(sampled)
         return augmented, cls_idx
@@ -206,8 +210,8 @@ class Phase2ValDataset(Dataset):
         self.class_samples = class_samples
         self.current_fps   = init_fps
         self.items = [(cls, i)
-                      for cls, tensors in class_samples.items()
-                      for i in range(len(tensors))]
+                      for cls, paths in class_samples.items()
+                      for i in range(len(paths))]
 
     def set_fps(self, fps: float):
         self.current_fps = fps
@@ -217,7 +221,8 @@ class Phase2ValDataset(Dataset):
 
     def __getitem__(self, idx):
         cls_idx, s_idx = self.items[idx]
-        raw = self.class_samples[cls_idx][s_idx]
+        raw = torch.load(self.class_samples[cls_idx][s_idx],
+                         map_location="cpu", weights_only=True).float()
         return sample_and_normalize(raw, self.current_fps), cls_idx
 
 
@@ -452,7 +457,7 @@ def load_and_split(data_dir: str, min_samples: int):
     classes = [i.name for i in infos]
     print(f"[INFO] {len(classes)} classes loaded (each capped at {MAX_SAMPLES} samples).")
 
-    train_data, val_data, classes = load_word_split_tensors(
+    train_data, val_data, classes = load_word_split_paths(
         data_dir, min_samples, MAX_SAMPLES)
     num_classes = len(classes)
 
@@ -558,7 +563,15 @@ def generate_plots(history: dict, targets: list, preds: list, classes: list):
 # ==============================================================================
 
 def train_phase2(epochs=40, batch_size=64, head_lr=5e-4, backbone_lr=5e-5,
-                 freeze_epochs=FREEZE_EPOCHS, val_frac=0.20):
+                 freeze_epochs=FREEZE_EPOCHS, val_frac=0.20, num_workers=2,
+                 data_dir=None, save_dir=None):
+    global SAVE_DIR, PLOTS_DIR, DATA_DIR
+    if data_dir:
+        DATA_DIR = data_dir
+    if save_dir:
+        SAVE_DIR = save_dir
+        PLOTS_DIR = os.path.join(SAVE_DIR, "plots")
+        os.makedirs(PLOTS_DIR, exist_ok=True)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"[INFO] Device: {device}")
 
@@ -569,8 +582,8 @@ def train_phase2(epochs=40, batch_size=64, head_lr=5e-4, backbone_lr=5e-5,
 
     train_ds = Phase2TrainDataset(train_data, init_fps=START_FPS)
     val_ds   = Phase2ValDataset(val_data,   init_fps=START_FPS)
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  drop_last=True,  num_workers=0)
-    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=0)
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  drop_last=True,  num_workers=num_workers, persistent_workers=num_workers>0)
+    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=num_workers>0)
 
     # Build model with pretrained backbone
     model = build_model(num_classes, PRETRAINED_PATH).to(device)
@@ -710,24 +723,46 @@ def train_phase2(epochs=40, batch_size=64, head_lr=5e-4, backbone_lr=5e-5,
     full_acc = accuracy_score(ft, fp)
     print(f"[EVAL] Full-fps Val Acc: {full_acc*100:.2f}%")
     report = classification_report(ft, fp, target_names=classes, zero_division=0)
+    # the (true, predicted) pairs: the confusion matrix needs them
+    try:
+        import json as _json
+        with open(os.path.join(SAVE_DIR, 'predictions.json'), 'w', encoding='utf-8') as _pf:
+            _json.dump({'y_true': [int(v) for v in ft],
+                        'y_pred': [int(v) for v in fp],
+                        'classes': list(classes)}, _pf)
+        print('  [SAVED] predictions -> ' + os.path.join(SAVE_DIR, 'predictions.json'))
+    except Exception as _pe:
+        print('  [WARN] could not save the predictions:', _pe)
     with open(os.path.join(SAVE_DIR, 'classification_report.txt'), 'w', encoding='utf-8') as f:
         f.write(f"Full 25-fps Evaluation\n{'='*60}\n{report}")
 
     generate_plots(history, ft, fp, classes)
+
+    # ---- the standard report (utils/plotting) ------------------------------
+    # The same figures for every model family: the loss, the accuracy, the
+    # F1/precision/recall, the WER, the learning rate, the confusion matrix
+    # (with a readable text report next to it) and the per-class metrics.
+    try:
+        from utils.plotting import write_report as _write_report
+        _written = _write_report(
+            history, os.path.join(SAVE_DIR, "plots"),
+            title="phase2", chance=1.0 / max(1, len(classes)), prefix="standard_",
+            y_true=ft, y_pred=fp, class_names=list(classes))
+        for _p in _written:
+            print(f"  [SAVED] {_p}")
+    except Exception as _e:
+        print(f"  [WARN] the standard report failed: {_e}")
+
     print(f"\n[SAVED] Model → {SAVE_DIR}")
     print(f"[SAVED] Plots  → {PLOTS_DIR}")
 
 
-# ==============================================================================
-# 9. ENTRY POINT
-# ==============================================================================
+if __name__ == "__main__":
+    import argparse
+    from training.common_cli import add_common_args
 
-if __name__ == '__main__':
-    train_phase2(
-        epochs        = 40,
-        batch_size    = 64,
-        head_lr       = 5e-4,
-        backbone_lr   = 5e-5,
-        freeze_epochs = FREEZE_EPOCHS,
-        val_frac      = 0.20,
-    )
+    _p = argparse.ArgumentParser(description="Phase 2: BiGRU+Transformer+TCNN word model")
+    add_common_args(_p, epochs=40, batch_size=64, data_dir=DATA_DIR, out_dir=SAVE_DIR)
+    _a = _p.parse_args()
+    train_phase2(epochs=_a.epochs, batch_size=_a.batch_size, num_workers=_a.num_workers,
+                 data_dir=_a.data_dir, save_dir=_a.out_dir)

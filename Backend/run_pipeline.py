@@ -49,6 +49,19 @@ def accuracy_steps():
         ("phase5", ["training/phase5_trainer.py"]),
         ("phase6", ["training/phase6_trainer.py"]),
 
+        # --- the gesture segmentor (YAP) -----------------------------------
+        # The segmentor is what will decide WHERE a gesture starts and ends, so
+        # the recogniser only has to decide WHAT it is.  Stage 1 (the noise
+        # filter) has to be trained before stage 2, which initialises from it.
+        ("yap_convert", ["scripts/convert_word_corpus_for_yap.py"]),
+        ("yap_stage1", ["segmentor/train_noise_filter.py",
+                         "--data_dirs", "Backend/data/yap_word_level",
+                         "--jitter_std", "0.015",
+                         "--noise_scale_min", "0.0", "--noise_scale_max", "1.5",
+                         "--noise_prob", "0.9"]),
+        ("yap_stage2", ["segmentor/train_segmentor.py",
+                         "--init", "Backend/segmentor/models/yap_stage1/yap_noise_robust.pth"]),
+
         # --- the sentence model --------------------------------------------
         # NO student-teacher distillation here on purpose: the only candidate
         # teacher is the Phase-6 word classifier (81.9% top-1, word-only, and
@@ -92,11 +105,16 @@ def fast_steps():
         ("phase4", ["training/phase4_trainer.py"]),
         ("phase5", ["training/phase5_trainer.py"]),
         ("phase6", ["training/phase6_trainer.py"]),
+        ("yap_convert", ["scripts/convert_word_corpus_for_yap.py"]),
+        ("yap_stage1", ["segmentor/train_noise_filter.py",
+                         "--data_dirs", "Backend/data/yap_word_level"]),
+        ("yap_stage2", ["segmentor/train_segmentor.py",
+                         "--init", "Backend/segmentor/models/yap_stage1/yap_noise_robust.pth"]),
         ("ctc", ["training/train_conformer_ctc.py", "--stage", "1",
                  "--stride", "2", "--gru_expand", "after"]),
         ("sentence", ["training/train_synthetic_sentences.py"]),
         ("real", ["training/train_real_sentences.py", "--mix", "1",
-                  "--max_out_scope", "5", "--word_cap", "15"]),
+                  "--max_out_scope", "8", "--word_cap", "20"]),
     ]
 
 

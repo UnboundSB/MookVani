@@ -365,27 +365,36 @@ def simulate_tensor(rec, path, fps):
 # =============================================================================
 # YAP-COMPATIBLE COORDINATE EXTRACTOR
 # =============================================================================
-# Layout: J=42  ->  left_hand [0:21] + right_hand [21:42], each 21-pt MediaPipe hand.
-# conf = MediaPipe hand landmark presence score (approximated as 1.0 when hand detected,
-#        0.0 when absent). valid = True only for joints whose hand was detected this frame.
-# These match the YAPConfig default (two hand_parts) and feed directly into YAPStream.push().
-_YAP_J = 42   # 2 hands × 21 joints
+# Layout: J=53  ->  the EXACT landmark order of our 163-dim tensors:
+#     0..20  left_hand   (21 MediaPipe HandLandmarker points)
+#    21..41  right_hand  (21 MediaPipe HandLandmarker points)
+#    42..45  upper_body  (MediaPipe Pose: p[11] L shoulder, p[12] R shoulder,
+#                        p[13] L elbow, p[14] R elbow)
+#    46..52  face        (MediaPipe FaceMesh: f[159] L eye, f[386] R eye, f[4] nose tip,
+#                         f[234] L cheek, f[454] R cheek, f[61] L mouth corner,
+#                         f[291] R mouth corner)
+# conf = the landmark presence score (1.0 when the part was detected, 0.0 when it
+#        was not). valid = True only for the joints whose part was found.
+# This matches YAPConfig.corpus() - the layout the segmentor is trained with.
+_YAP_J = 53   # 21 + 21 + 4 + 7
 _YAP_MIN_CONF = 0.05  # mirrors YAPConfig.min_conf default
 
 
-def extract_yap_frame(hands_result) -> tuple:
+def extract_yap_frame(hands_result, pose_result=None, face_result=None) -> tuple:
     """
     Extract YAP-compatible (pose, conf, valid) from a MediaPipe HandLandmarker result.
 
     Returns
     -------
-    pose  : np.ndarray (42, 3) float32  — left_hand[0:21] + right_hand[21:42] in raw
-            MediaPipe image-normalised coords (x, y in [0,1], z relative depth).
-            Missing hands are zeroed; the corresponding valid flags are False.
-    conf  : np.ndarray (42,)   float32  — landmark-level confidence. Set to 1.0 when
-            the hand is detected (MediaPipe does not expose per-landmark confidence in
-            the Tasks API), 0.0 when the hand is absent.
-    valid : np.ndarray (42,)   bool     — True only for joints whose hand was found.
+    pose  : np.ndarray (53, 3) float32  — left_hand[0:21] + right_hand[21:42] +
+            upper_body[42:46] + face[46:53], in raw MediaPipe image-normalised
+            coords (x, y in [0,1], z relative depth).  This is the landmark
+            order of our 163-dim tensors.  A part that was not detected is
+            zeroed and its valid flags are False.
+    conf  : np.ndarray (53,)   float32  — landmark-level confidence. Set to 1.0 when
+            the part is detected (MediaPipe does not expose per-landmark confidence
+            in the Tasks API), 0.0 when it is absent.
+    valid : np.ndarray (53,)   bool     — True only for the joints whose part was found.
 
     These arrays are ready to be converted to tensors and passed to YAPStream.push():
         pose_t  = torch.from_numpy(pose)
@@ -397,6 +406,7 @@ def extract_yap_frame(hands_result) -> tuple:
     conf  = np.zeros(_YAP_J,      dtype=np.float32)
     valid = np.zeros(_YAP_J,      dtype=bool)
 
+    # --- the two hands (21 points each) ----------------------------------
     if hands_result and hands_result.hand_landmarks:
         for i, handedness in enumerate(hands_result.handedness):
             label = handedness[0].category_name   # "Left" or "Right"
@@ -410,6 +420,24 @@ def extract_yap_frame(hands_result) -> tuple:
                 pose[offset + j]  = [lm.x, lm.y, lm.z]
                 conf[offset + j]  = hand_conf
                 valid[offset + j] = True
+
+    # --- the upper body: the 2 shoulders + the 2 elbows (PoseLandmarker) ---
+    if pose_result and pose_result.pose_landmarks:
+        plm = pose_result.pose_landmarks[0]
+        for j, idx in enumerate((11, 12, 13, 14)):     # L/R shoulder, L/R elbow
+            lm = plm[idx]
+            pose[42 + j]  = [lm.x, lm.y, lm.z]
+            conf[42 + j]  = 1.0
+            valid[42 + j] = True
+
+    # --- the face: 2 eyes, the nose tip, 2 cheeks, 2 mouth corners ----------
+    if face_result and face_result.face_landmarks:
+        flm = face_result.face_landmarks[0]
+        for j, idx in enumerate((159, 386, 4, 234, 454, 61, 291)):
+            lm = flm[idx]
+            pose[46 + j]  = [lm.x, lm.y, lm.z]
+            conf[46 + j]  = 1.0
+            valid[46 + j] = True
 
     return pose, conf, valid
 
@@ -500,7 +528,8 @@ def run_camera(rec, source, display=True, mirror_view=True, on_yap_frame=None):
             # ── YAP-compatible raw coordinates (separate from the 163-dim CTC features) ──
             # pose_yap (42,3), conf_yap (42,), valid_yap (42,) — left_hand[0:21] + right_hand[21:42]
             # in raw MediaPipe image-normalised coords, ready for YAPStream.push().
-            pose_yap, conf_yap, valid_yap = extract_yap_frame(hands)
+            pose_yap, conf_yap, valid_yap = extract_yap_frame(
+                hands, pose, face)
             if on_yap_frame is not None:
                 on_yap_frame(pose_yap, conf_yap, valid_yap, t)
 

@@ -282,7 +282,13 @@ class PoseTransformerTCNN(nn.Module):
 # ==============================================================================
 
 def train_pretrainer(epochs=25, batch_size=32, lr=1.5e-3, samples_per_class=4,
-                     data_dir=DATA_DIR, val_fraction=0.2, fill_missing="none"):
+                     data_dir=DATA_DIR, val_fraction=0.2, fill_missing="none",
+                     num_workers=2, save_dir=None):
+    global SAVE_DIR, PLOTS_DIR
+    if save_dir:
+        SAVE_DIR = save_dir
+        PLOTS_DIR = os.path.join(SAVE_DIR, "plots")
+        os.makedirs(PLOTS_DIR, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Using device: {device}", flush=True)
 
@@ -313,8 +319,12 @@ def train_pretrainer(epochs=25, batch_size=32, lr=1.5e-3, samples_per_class=4,
     val_dataset = PretrainPoseDataset(val_items, is_train=False, median_len=MEDIAN_LENGTH,
                                        samples_per_class=1, fill_missing=fill_missing)
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    # The workers load AND augment the clips in parallel, so the CPU stops being
+    # the bottleneck (the corpus is held as PATHS, so nothing is copied).
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True,
+                              num_workers=num_workers, persistent_workers=num_workers > 0)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False,
+                            num_workers=num_workers, persistent_workers=num_workers > 0)
 
     print(f"[INFO] Dataset sizes: {len(train_dataset)} train samples, {len(val_dataset)} val samples.", flush=True)
 
@@ -448,6 +458,22 @@ def train_pretrainer(epochs=25, batch_size=32, lr=1.5e-3, samples_per_class=4,
     # Generate Evaluation Visualizations
     generate_evaluation_plots(history, final_targets, final_preds, classes)
 
+    # ---- the standard report (utils/plotting) ------------------------------
+    # The same figures for every model family: the loss, the accuracy, the
+    # F1/precision/recall, the WER, the learning rate, the confusion matrix
+    # (with a readable text report next to it) and the per-class metrics.
+    try:
+        from utils.plotting import write_report as _write_report
+        _written = _write_report(
+            hist, os.path.join(SAVE_DIR, "plots"),
+            title="pretrainer", chance=1.0 / max(1, len(classes)), prefix="standard_",
+            y_true=final_targets, y_pred=final_preds, class_names=list(classes))
+        for _p in _written:
+            print(f"  [SAVED] {_p}")
+    except Exception as _e:
+        print(f"  [WARN] the standard report failed: {_e}")
+
+
 
 def generate_evaluation_plots(history, targets, preds, classes):
     """Generates Accuracy vs Loss, Confusion Matrix, and Precision/Recall/F1 curves."""
@@ -520,4 +546,11 @@ def generate_evaluation_plots(history, targets, preds, classes):
 
 
 if __name__ == "__main__":
-    train_pretrainer(epochs=25, batch_size=32, lr=1.5e-3, samples_per_class=4)
+    import argparse
+    from training.common_cli import add_common_args
+
+    _p = argparse.ArgumentParser(description="Pretrainer: Transformer + TCNN on isolated words")
+    add_common_args(_p, epochs=25, batch_size=32, data_dir=DATA_DIR, out_dir=SAVE_DIR)
+    _a = _p.parse_args()
+    train_pretrainer(epochs=_a.epochs, batch_size=_a.batch_size, num_workers=_a.num_workers,
+                     data_dir=_a.data_dir, save_dir=_a.out_dir)

@@ -227,8 +227,8 @@ def train_real_sentences_phase2(epochs=30, batch_size=4, lr_backbone=1.5e-5, lr_
     ds = RealSentenceDatasetPhase2(items, is_train=True)
     val_ds = RealSentenceDatasetPhase2(items, is_train=False)
 
-    train_ld = DataLoader(ds, batch_size=batch_size, shuffle=True, collate_fn=collate_real_phase2)
-    val_ld = DataLoader(val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate_real_phase2)
+    train_ld = DataLoader(ds, batch_size=batch_size, shuffle=True, collate_fn=collate_real_phase2, num_workers=args.num_workers, persistent_workers=args.num_workers>0)
+    val_ld = DataLoader(val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate_real_phase2, num_workers=args.num_workers, persistent_workers=args.num_workers>0)
 
     # Differential learning rates with weight decay regularization
     param_groups = [
@@ -386,6 +386,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch_size", type=int, default=4)
+    parser.add_argument("--num_workers", type=int, default=2, help="DataLoader workers: they load and augment the clips in parallel")
     parser.add_argument("--init_ckpt", type=str, default=None)
     args = parser.parse_args()
     train_real_sentences_phase2(epochs=args.epochs, batch_size=args.batch_size, init_ckpt=args.init_ckpt)

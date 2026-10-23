@@ -47,10 +47,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
-# ── local imports (run from the repo root or add segmentor to sys.path) ─────
+# -- local imports (run from the repo root or add segmentor to sys.path) -----
+# The Windows console is cp1252: a stray box-drawing character would
+# crash the run at the LAST print.
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))  # Backend/
 from utils.checkpoint_utils import load_flexible
+from utils.pose_augmentation import AugmentConfig, augment_hands_batch
 
 from yap_conformer import (
     YAPConfig, YAPCore, YAP, YAPpingConformer, ConformerConfig,
@@ -58,8 +68,10 @@ from yap_conformer import (
     make_segments, frame_dts,
 )
 from noise_aug import add_noise
+from tqdm import tqdm
+from utils.plotting import plot_training_curves, write_report
 
-# ── defaults ─────────────────────────────────────────────────────────────────
+# -- defaults -----------------------------------------------------------------
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DATA_DIRS = [
     os.path.join(BACKEND_DIR, "data", "tensors_include50_word_level"),
@@ -69,6 +81,28 @@ DEFAULT_OUT = os.path.join(BACKEND_DIR, "segmentor", "models", "yap_stage1")
 # The published vocabulary of the project (the top-most frequent classes of the
 # word corpus) - the same list every other trainer uses.
 CLASSES_PATH = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
+
+# The canonical augmentation set (the same one the word and sentence models
+# use).  It is applied to the CLEAN clip, so the teacher and the student see
+# the same augmented clip and the only difference between them is the noise.
+AUG_CFG = AugmentConfig(
+    flip_prob=0.5,
+    tilt_prob=0.5,
+    tilt_deg=12.0,
+    shift_prob=0.5,
+    shift_dx=0.05,
+    shift_dy=0.02,
+    scale_prob=0.4,
+    scale_lo=0.90,
+    scale_hi=1.10,
+    speed_prob=0.4,
+    speed_lo=0.85,
+    speed_hi=1.15,
+    time_shift_prob=0.2,
+    time_shift_max=3,
+    mask_prob=0.0,
+    noise_std=0.0,
+)
 
 
 # ==============================================================================
@@ -206,13 +240,26 @@ def train(args):
     random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    # ── model config ──────────────────────────────────────────────────────────
-    ycfg = YAPConfig(d_model=args.d_model, n_mem_layers=args.n_mem_layers,
-                     summary_channels=args.summary_channels, hippo_order=args.hippo_order,
-                     entity_dim=args.entity_dim)
+    # -- model config ----------------------------------------------------------
+    # The body layout must match the corpus: our tensors store the 2 hands, the
+    # 2 shoulders + the 2 elbows and 7 face points (J = 53).  The hands-only
+    # preset (J=42) throws the shoulders away (and with them the body frame),
+    # and the holistic preset (J=79) asks for points the corpus does not have.
+    _layout = getattr(args, "layout", "corpus")
+    _cfg_kwargs = dict(d_model=args.d_model, n_mem_layers=args.n_mem_layers,
+                       summary_channels=args.summary_channels,
+                       hippo_order=args.hippo_order, entity_dim=args.entity_dim)
+    if _layout == "corpus":
+        ycfg = YAPConfig.corpus(**_cfg_kwargs)
+    elif _layout == "holistic":
+        ycfg = YAPConfig.holistic(**_cfg_kwargs)
+    else:
+        ycfg = YAPConfig(**_cfg_kwargs)
+    print(f"[LAYOUT] {_layout}: J = {ycfg.total_joints} "
+          f"({', '.join(f'{p.name}={p.num_joints}' for p in ycfg.parts)})")
     J = ycfg.total_joints
 
-    # ── data ──────────────────────────────────────────────────────────────────
+    # -- data ------------------------------------------------------------------
     with open(args.classes) as f:
         classes = json.load(f)
     num_classes = len(classes)
@@ -226,10 +273,10 @@ def train(args):
 
     train_ds = WordClipDataset(train_clips, J, args.max_len)
     val_ds   = WordClipDataset(val_clips,   J, args.max_len)
-    train_ld = DataLoader(train_ds, args.batch_size, shuffle=True,  collate_fn=_collate, num_workers=0)
-    val_ld   = DataLoader(val_ds,   args.batch_size, shuffle=False, collate_fn=_collate, num_workers=0)
+    train_ld = DataLoader(train_ds, args.batch_size, shuffle=True,  collate_fn=_collate, num_workers=args.num_workers)
+    val_ld   = DataLoader(val_ds,   args.batch_size, shuffle=False, collate_fn=_collate, num_workers=args.num_workers)
 
-    # ── two model instances in memory ─────────────────────────────────────────
+    # -- two model instances in memory -----------------------------------------
     # teacher: receives CLEAN clips, no grad (reference signal)
     # student: receives NOISY clips, gradients flow through it
     # They share NO weights. The student is what we train and save.
@@ -259,21 +306,43 @@ def train(args):
     os.makedirs(args.out_dir, exist_ok=True)
     best_loss = float("inf")
     rng = random.Random(args.seed)
+    history = {"train_loss": [], "lr": []}
 
-    for ep in range(args.epochs):
+    for ep in tqdm(range(args.epochs), desc="Stage 1 epochs", leave=True):
         student.train(); teacher.eval(); cls_head.train()
         ep_loss = 0.0; n_ok = 0
 
-        for pose, conf, valid, labels, t, lengths in train_ld:
+        micro = 0
+        steps_done = 0
+        pbar = tqdm(train_ld, desc=f"Ep {ep+1:02d}/{args.epochs}", leave=False)
+        for pose, conf, valid, labels, t, lengths in pbar:
             pose, conf, valid, labels, t, lengths = (
                 pose.to(device), conf.to(device), valid.to(device),
                 labels.to(device), t.to(device), lengths.to(device))
 
-            # ── build noisy batch ─────────────────────────────────────────────
+            # -- build noisy batch ---------------------------------------------
+            # -- the canonical augmentation (mirror / tilt / shift / speed) --
+            # It is applied ONCE, to the clean clip, and the teacher and the
+            # student then see the SAME augmented clip: the only difference
+            # between them is the noise.  (If the two saw different
+            # augmentations the consistency loss would punish the student for
+            # the augmentation instead of for the noise.)
+            if args.aug:
+                pose = augment_hands_batch(pose, lengths, AUG_CFG.scaled(args.aug_strength),
+                                           rng=rng)
+
+            # -- build noisy batch --
+            # The noise INTENSITY is drawn at random for every batch, so the
+            # student learns to be robust across the whole range of corruption
+            # levels instead of only at the nominal one.
+            scale = 0.0
+            if rng.random() < args.noise_prob:
+                scale = rng.uniform(args.noise_scale_min, args.noise_scale_max)
             pose_n_list, conf_n_list, valid_n_list, len_n = [], [], [], []
             for b in range(pose.shape[0]):
                 ln = int(lengths[b])
-                pn, cn, vn = add_noise(pose[b, :ln], conf[b, :ln], valid[b, :ln], ycfg, rng=rng)
+                pn, cn, vn = add_noise(pose[b, :ln], conf[b, :ln], valid[b, :ln], ycfg,
+                                        jitter_std=args.jitter_std, scale=scale, rng=rng)
                 pose_n_list.append(pn); conf_n_list.append(cn); valid_n_list.append(vn)
                 len_n.append(pn.shape[0])
             T_n = max(len_n)
@@ -291,14 +360,14 @@ def train(args):
                 t_n[b, :ln]     = torch.arange(ln, dtype=t.dtype, device=device) / 30.0
                 t_n[b, ln:]     = t_n[b, ln - 1]
 
-            # ── teacher (clean, no grad) ───────────────────────────────────────
+            # -- teacher (clean, no grad) ---------------------------------------
             with torch.no_grad():
                 out_t = teacher(pose, conf, valid, t, lengths)
 
-            # ── student (noisy, gradients) ────────────────────────────────────
+            # -- student (noisy, gradients) ------------------------------------
             out_s = student(pose_n, conf_n, valid_n, t_n, lengths_n)
 
-            # ── losses ────────────────────────────────────────────────────────
+            # -- losses --------------------------------------------------------
             yap_t, yap_s = out_t["yap"], out_s["yap"]
             # presence KL (student must agree with teacher on when gesture happens)
             # Both have shape (B, T_clean) and (B, T_noisy); use min length
@@ -331,19 +400,44 @@ def train(args):
 
             loss = l_pres + l_end + args.ent_w * l_ent + args.cls_w * l_cls
             if torch.isfinite(loss):
-                optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(student.parameters(), 1.0)
-                optimizer.step()
-                # EMA teacher update (exponential moving average of student)
-                with torch.no_grad():
-                    for tp, sp in zip(teacher.parameters(), student.parameters()):
-                        tp.data.mul_(args.ema_decay).add_(sp.data, alpha=1 - args.ema_decay)
+                # The gradient is ACCUMULATED over --grad_accum micro-batches:
+                # the effective batch stays the same while the memory stays low.
+                (loss / args.grad_accum).backward()
+                micro += 1
+                if micro % args.grad_accum == 0:
+                    torch.nn.utils.clip_grad_norm_(student.parameters(), 1.0)
+                    optimizer.step()
+                    optimizer.zero_grad(set_to_none=True)
+                    steps_done += 1
+                    # EMA teacher update (exponential moving average of student)
+                    with torch.no_grad():
+                        for tp, sp in zip(teacher.parameters(), student.parameters()):
+                            tp.data.mul_(args.ema_decay).add_(sp.data, alpha=1 - args.ema_decay)
                 ep_loss += loss.item(); n_ok += 1
+                pbar.set_postfix(loss=f"{ep_loss/max(1,n_ok):.4f}",
+                                 lr=f"{scheduler.get_last_lr()[0]:.2e}")
 
+        pbar.close()
+
+        if micro % args.grad_accum != 0 and steps_done > 0:
+            # flush the last partial accumulation
+            torch.nn.utils.clip_grad_norm_(student.parameters(), 1.0)
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            steps_done += 1
+            with torch.no_grad():
+                for tp, sp in zip(teacher.parameters(), student.parameters()):
+                    tp.data.mul_(args.ema_decay).add_(sp.data, alpha=1 - args.ema_decay)
+
+        if device.type == "cuda":
+            mem = torch.cuda.max_memory_allocated() / (1024 ** 3)
+            print(f"    [MEM] peak GPU memory {mem:.2f} GB (batch {args.batch_size} x accum {args.grad_accum})")
         scheduler.step()
         print(f"[Ep {ep+1:02d}/{args.epochs}] loss {ep_loss/max(1,n_ok):.4f} "
-              f"| lr {scheduler.get_last_lr()[0]:.2e}")
+              f"| lr {scheduler.get_last_lr()[0]:.2e} | {steps_done} optimiser steps "
+              f"(effective batch {args.batch_size * args.grad_accum})")
+        history["train_loss"].append(ep_loss / max(1, n_ok))
+        history["lr"].append(scheduler.get_last_lr()[0])
 
         if (ep + 1) % 5 == 0 or ep + 1 == args.epochs:
             # Save checkpoint
@@ -353,7 +447,23 @@ def train(args):
             if ep_loss < best_loss:
                 best_loss = ep_loss
                 torch.save(student.state_dict(), os.path.join(args.out_dir, "yap_noise_robust.pth"))
-                print(f"  ★ new best -> yap_noise_robust.pth")
+                print(f"  * new best -> yap_noise_robust.pth")
+
+    # ---- training history + plots ----------------------------------------
+    import json as _json
+    with open(os.path.join(args.out_dir, "history.json"), "w", encoding="utf-8") as _f:
+        _json.dump(history, _f, indent=2)
+    plot_training_curves(
+        history, args.out_dir,
+        title="Stage 1 - noise filtration (YAPpingConformer)",
+        tag="stage1_",
+    )
+    write_report(
+        history, args.out_dir,
+        title="Stage 1 - noise filtration (YAPpingConformer)",
+        tag="stage1_",
+    )
+    print(f"[PLOTS] training curves and report written to {args.out_dir}")
 
     print(f"\nDone. Robust YAP saved to {os.path.join(args.out_dir, 'yap_noise_robust.pth')}")
 
@@ -366,7 +476,35 @@ def parse_args():
     p.add_argument("--init",      default=None, help="Pretrained YAPpingConformer weights")
     p.add_argument("--resume",    action="store_true")
     p.add_argument("--epochs",    type=int,   default=30)
-    p.add_argument("--batch_size",type=int,   default=8)
+    p.add_argument("--batch_size", type=int,   default=4,
+                   help="Micro-batch size.  The YAP stage 1 runs the teacher AND "
+                        "the student at the same time, so the memory is about twice "
+                        "a normal forward pass: keep it low (4) and raise "
+                        "--grad_accum to keep the effective batch.")
+    p.add_argument("--grad_accum",  type=int,   default=2,
+                   help="Accumulate N micro-batches before the optimiser steps "
+                        "(the effective batch = batch_size * grad_accum)")
+    p.add_argument("--layout",         type=str,   default="corpus",
+                   choices=["corpus", "holistic", "hands"],
+                   help="The body layout: corpus (J=53: the hands + the 2 "
+                        "shoulders + the 2 elbows + the 7 face points), holistic "
+                        "(J=79) or hands only (J=42)")
+    p.add_argument("--num_workers",  type=int,   default=2, help="DataLoader workers: they load and augment the clips in parallel")
+    # --- the noise: its intensity is drawn at RANDOM for every batch -------- #
+    p.add_argument("--jitter_std",       type=float, default=0.015,
+                   help="Base Gaussian jitter of the coordinates (in the normalised units)")
+    p.add_argument("--noise_scale_min",  type=float, default=0.0,
+                   help="Lowest noise intensity drawn per batch (0 = a clean clip)")
+    p.add_argument("--noise_scale_max",  type=float, default=1.0,
+                   help="Highest noise intensity drawn per batch")
+    p.add_argument("--noise_prob",       type=float, default=0.9,
+                   help="Probability that a batch gets any noise at all")
+    # --- the canonical augmentation ---------------------------------------- #
+    p.add_argument("--aug",              type=int, default=1,
+                   help="Apply the canonical augmentation (mirror / tilt / shift / speed) "
+                        "to the clean clip before the teacher/student split")
+    p.add_argument("--aug_strength",     type=float, default=1.0,
+                   help="Scales the magnitude of the augmentation")
     p.add_argument("--lr",        type=float, default=3e-4)
     p.add_argument("--ema_decay", type=float, default=0.99, help="Teacher EMA decay")
     p.add_argument("--cls_w",     type=float, default=1.0,  help="Word-label loss weight")

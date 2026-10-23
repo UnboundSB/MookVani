@@ -40,9 +40,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
+# The Windows console is cp1252: a stray box-drawing character would
+# crash the run at the LAST print.
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.checkpoint_utils import load_flexible
+from utils.pose_augmentation import AugmentConfig, augment_hands_batch
 
 from yap_conformer import (
     YAPConfig, YAPpingConformer, ConformerConfig,
@@ -51,14 +61,36 @@ from yap_conformer import (
     sentence_ctc_loss, count_parameters,
 )
 from noise_aug import add_noise
+from tqdm import tqdm
+from utils.plotting import plot_training_curves, write_report
 
-# ── defaults ─────────────────────────────────────────────────────────────────
+# -- defaults -----------------------------------------------------------------
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DATA_DIR = os.path.join(BACKEND_DIR, "data", "tensors_include50_word_level")
 # The published vocabulary of the project (the top-most frequent classes of the
 # word corpus) - the same list every other trainer uses.
 DEFAULT_CLASSES  = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
 DEFAULT_OUT      = os.path.join(BACKEND_DIR, "segmentor", "models", "yap_stage2")
+
+# The canonical augmentation set, SPATIAL ONLY.  The temporal augmentations
+# (speed / time shift / frame masking) would move or delete frames, and the
+# ground-truth gesture boundaries of the synthetic sentences would stop being
+# the truth.
+AUG_CFG = AugmentConfig(
+    flip_prob=0.5,
+    tilt_prob=0.5,
+    tilt_deg=12.0,
+    shift_prob=0.5,
+    shift_dx=0.05,
+    shift_dy=0.02,
+    scale_prob=0.4,
+    scale_lo=0.90,
+    scale_hi=1.10,
+    speed_prob=0.0,
+    time_shift_prob=0.0,
+    mask_prob=0.0,
+    noise_std=0.0,
+)
 
 
 # ==============================================================================
@@ -225,9 +257,22 @@ def train(args):
     print(f"[DATA] {sum(len(v) for v in clips_by_class.values())} clips across "
           f"{len(clips_by_class)} classes | {num_classes} total classes")
 
-    ycfg = YAPConfig(d_model=args.d_model, n_mem_layers=args.n_mem_layers,
-                     summary_channels=args.summary_channels, hippo_order=args.hippo_order,
-                     entity_dim=args.entity_dim)
+    # The body layout must match the corpus: our tensors store the 2 hands, the
+    # 2 shoulders + the 2 elbows and 7 face points (J = 53).  The hands-only
+    # preset (J=42) throws the shoulders away (and with them the body frame),
+    # and the holistic preset (J=79) asks for points the corpus does not have.
+    _layout = getattr(args, "layout", "corpus")
+    _cfg_kwargs = dict(d_model=args.d_model, n_mem_layers=args.n_mem_layers,
+                       summary_channels=args.summary_channels,
+                       hippo_order=args.hippo_order, entity_dim=args.entity_dim)
+    if _layout == "corpus":
+        ycfg = YAPConfig.corpus(**_cfg_kwargs)
+    elif _layout == "holistic":
+        ycfg = YAPConfig.holistic(**_cfg_kwargs)
+    else:
+        ycfg = YAPConfig(**_cfg_kwargs)
+    print(f"[LAYOUT] {_layout}: J = {ycfg.total_joints} "
+          f"({', '.join(f'{p.name}={p.num_joints}' for p in ycfg.parts)})")
     ccfg = ConformerConfig(num_words=num_classes, d_model=args.d_model,
                            heads=args.heads, layers=args.layers)
     J = ycfg.total_joints
@@ -254,20 +299,34 @@ def train(args):
                                          max_len=args.max_len, max_words=args.max_words, seed=args.seed)
     val_ds   = SyntheticSentenceDataset(clips_by_class, classes, args.val_sentences,   J,
                                          max_len=args.max_len, max_words=args.max_words, aug=False, seed=args.seed + 1)
-    train_ld = DataLoader(train_ds, args.batch_size, shuffle=True,  collate_fn=_sent_collate, num_workers=0)
-    val_ld   = DataLoader(val_ds,   args.batch_size, shuffle=False, collate_fn=_sent_collate, num_workers=0)
+    train_ld = DataLoader(train_ds, args.batch_size, shuffle=True,  collate_fn=_sent_collate, num_workers=args.num_workers)
+    val_ld   = DataLoader(val_ds,   args.batch_size, shuffle=False, collate_fn=_sent_collate, num_workers=args.num_workers)
 
     os.makedirs(args.out_dir, exist_ok=True)
     best_wer = float("inf")
+    rng = random.Random(args.seed)
+    history = {"train_loss": [], "val_wer": [], "lr": []}
 
     for ep in range(args.epochs):
         model.train()
         ep_loss = 0.0; n_ok = 0
 
-        for pose, conf, valid, t, lengths, spans_list, word_ids_list in train_ld:
+        pbar = tqdm(train_ld, desc=f"Ep {ep+1:02d}/{args.epochs} train", leave=False)
+        for pose, conf, valid, t, lengths, spans_list, word_ids_list in pbar:
             pose, conf, valid, t, lengths = (pose.to(device), conf.to(device),
                                               valid.to(device), t.to(device), lengths.to(device))
             B = pose.shape[0]
+
+            # ---- the canonical augmentation (spatial only) ----------------
+            # The SPATIAL augmentations (mirror / tilt / shift / scale) are safe
+            # here: they move the landmarks without touching the time axis, so
+            # the KNOWN spans (the ground-truth gesture boundaries) stay valid.
+            # The TEMPORAL ones (speed, time shift, frame masking) are NOT
+            # applied: they would move or delete frames and the boundaries
+            # would no longer be the truth.
+            if args.aug:
+                pose = augment_hands_batch(pose, lengths, AUG_CFG.scaled(args.aug_strength),
+                                           rng=rng)
 
             # Build ground-truth segments from labelled spans (teacher forcing Stage 2)
             gt_segments = [make_segments(t[b, :int(lengths[b])].tolist(), spans_list[b], ycfg)
@@ -326,17 +385,23 @@ def train(args):
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 optimizer.step()
                 ep_loss += loss.item(); n_ok += 1
+                pbar.set_postfix(loss=f"{ep_loss/max(1,n_ok):.4f}",
+                                 lr=f"{scheduler.get_last_lr()[0]:.2e}")
 
+        pbar.close()
         scheduler.step()
         print(f"[Ep {ep+1:02d}/{args.epochs}] loss {ep_loss/max(1,n_ok):.4f} "
               f"| lr {scheduler.get_last_lr()[0]:.2e}")
+        history["train_loss"].append(ep_loss / max(1, n_ok))
+        history["lr"].append(scheduler.get_last_lr()[0])
 
         if (ep + 1) % 5 == 0 or ep + 1 == args.epochs:
             # Quick val: greedy decoding WER on synthetic val set
             model.eval()
             total_s, total_d, total_i, total_n = 0, 0, 0, 0
             with torch.no_grad():
-                for pose, conf, valid, t, lengths, spans_list, word_ids_list in val_ld:
+                vbar = tqdm(val_ld, desc="    Val", leave=False)
+                for pose, conf, valid, t, lengths, spans_list, word_ids_list in vbar:
                     pose, conf, valid, t, lengths = (pose.to(device), conf.to(device),
                                                       valid.to(device), t.to(device), lengths.to(device))
                     res = model(pose, conf, valid, t, lengths)
@@ -349,14 +414,32 @@ def train(args):
                         import editdistance
                         ed = editdistance.eval(ref, hyp)
                         total_n += len(ref); total_s += ed
+                vbar.close()
             val_wer = total_s / max(1, total_n)
+            history["val_wer"].append(val_wer)
             print(f"  val WER {val_wer*100:.1f}%")
             torch.save({"epoch": ep + 1, "model": model.state_dict()},
                        os.path.join(args.out_dir, "yap_seg_ckpt.pth"))
             if val_wer < best_wer:
                 best_wer = val_wer
                 torch.save(model.state_dict(), os.path.join(args.out_dir, "yap_seg_best.pth"))
-                print(f"  ★ new best WER {best_wer*100:.1f}% -> yap_seg_best.pth")
+                print(f"  * new best WER {best_wer*100:.1f}% -> yap_seg_best.pth")
+
+    # ---- training history + plots ----------------------------------------
+    import json as _json
+    with open(os.path.join(args.out_dir, "history.json"), "w", encoding="utf-8") as _f:
+        _json.dump(history, _f, indent=2)
+    plot_training_curves(
+        history, args.out_dir,
+        title="Stage 2 - synthetic sentence segmentation (YAPpingConformer)",
+        tag="stage2_",
+    )
+    write_report(
+        history, args.out_dir,
+        title="Stage 2 - synthetic sentence segmentation (YAPpingConformer)",
+        tag="stage2_",
+    )
+    print(f"[PLOTS] training curves and report written to {args.out_dir}")
 
     print(f"\nDone. Best val WER {best_wer*100:.1f}%")
     print(f"Stage 2 weights: {os.path.join(args.out_dir, 'yap_seg_best.pth')}")
@@ -372,6 +455,17 @@ def parse_args():
     p.add_argument("--resume",         action="store_true")
     p.add_argument("--epochs",         type=int,   default=60)
     p.add_argument("--batch_size",     type=int,   default=4)
+    p.add_argument("--layout",         type=str,   default="corpus",
+                   choices=["corpus", "holistic", "hands"],
+                   help="The body layout: corpus (J=53: the hands + the 2 "
+                        "shoulders + the 2 elbows + the 7 face points), holistic "
+                        "(J=79) or hands only (J=42)")
+    p.add_argument("--num_workers",  type=int,   default=2, help="DataLoader workers: they load and augment the clips in parallel")
+    p.add_argument("--aug",         type=int,   default=1,
+                   help="Apply the canonical SPATIAL augmentation (mirror / tilt / shift / "
+                        "scale) to the synthetic sentences")
+    p.add_argument("--aug_strength",type=float, default=1.0,
+                   help="Scales the magnitude of the augmentation")
     p.add_argument("--lr",             type=float, default=1e-4)
     p.add_argument("--ctc_w",          type=float, default=1.0)
     p.add_argument("--train_sentences",type=int,   default=4000)

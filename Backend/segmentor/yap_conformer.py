@@ -345,6 +345,57 @@ def face_part(name: str = "face") -> PartSpec:
                     landmark_indices=list(FACE_LANDMARKS))
 
 
+# --- THE CORPUS LAYOUT ------------------------------------------------------
+# What our 163-dim tensor actually stores (Backend/scripts/extraction.py):
+#   landmarks  0..20  the left hand   (MediaPipe HandLandmarker, 21 points)
+#   landmarks 21..41  the right hand  (MediaPipe HandLandmarker, 21 points)
+#   landmarks 42..45  the upper body  (MediaPipe PoseLandmarker, 4 points)
+#   landmarks 46..52  the face         (MediaPipe FaceLandmarker, 7 points)
+#
+# MediaPipe PoseLandmarker indices: 11 = left shoulder, 12 = right shoulder,
+# 13 = left elbow, 14 = right elbow, 15/16 = the wrists, 23/24 = the hips,
+# 0 = the nose tip.
+CORPUS_UPPER_BODY_LANDMARKS = [11, 12, 13, 14]
+
+# MediaPipe FaceLandmarker indices: 159 = the left eye, 386 = the right eye,
+# 4 = the nose tip, 234 = the left cheek, 454 = the right cheek,
+# 61 = the left mouth corner, 291 = the right mouth corner.
+CORPUS_FACE_LANDMARKS = [159, 386, 4, 234, 454, 61, 291]
+
+#: The order of the parts inside the pose vector MUST be the order of the
+#: landmarks in our corpus: left hand, right hand, upper body, face.
+CORPUS_PART_ORDER = ("left_hand", "right_hand", "upper_body", "face")
+
+#: J of the corpus layout: 21 + 21 + 4 + 7.
+CORPUS_JOINTS = 53
+
+
+def upper_body_corpus_part(name: str = "upper_body") -> PartSpec:
+    """Preset: the 4 body points our corpus has - the 2 shoulders + the 2 elbows.
+
+    The elbows hang from the shoulders, so the part has real BONES (the
+    bone-length / bone-direction / joint-angle features).  The anchor is the
+    left shoulder and the size unit is the shoulder width.
+    """
+    return PartSpec(name, 4, "generic", parents=[-1, -1, 0, 1], anchor=0,
+                    scale_pair=(0, 1), motion=True,
+                    landmark_indices=list(CORPUS_UPPER_BODY_LANDMARKS))
+
+
+def face_corpus_part(name: str = "face") -> PartSpec:
+    """Preset: the 7 face points our corpus has.
+
+    The order is the corpus order: left eye, right eye, nose tip, left cheek,
+    right cheek, left mouth corner, right mouth corner.  The face is a SURFACE,
+    not a skeleton, so it has no bones (like the 28-point face subset).  The
+    anchor is the nose tip and the size unit is the distance between the two
+    eyes.
+    """
+    return PartSpec(name, len(CORPUS_FACE_LANDMARKS), "generic", parents=None,
+                    anchor=2, scale_pair=(0, 1), motion=False,
+                    landmark_indices=list(CORPUS_FACE_LANDMARKS))
+
+
 def _default_parts() -> List[PartSpec]:
     return [hand_part("left_hand"), hand_part("right_hand")]
 
@@ -460,6 +511,23 @@ class YAPConfig:
     def joint_index(self, part: str, j: int) -> int:
         """Global index of joint j of the named part."""
         return self.part_offsets()[part] + j
+
+    @classmethod
+    def corpus(cls, **kw) -> "YAPConfig":
+        """Preset: the body layout OUR DATASET stores (J = 53).
+
+        left hand (21) + right hand (21) + upper body (4: the shoulders and the
+        elbows) + face (7), in the order of the landmarks in the 163-dim
+        tensor, with the shoulders as the body frame.
+
+        This is the preset the segmentor has to be trained with: the default
+        (J=42, hands only) throws the shoulders away, and the holistic preset
+        (J=79) asks for 9 body points and 28 face points that the corpus does
+        not have.
+        """
+        return cls(parts=[hand_part("left_hand"), hand_part("right_hand"),
+                           upper_body_corpus_part(), face_corpus_part()],
+                   body_ref=(("upper_body", 0), ("upper_body", 1)), **kw)
 
     @classmethod
     def holistic(cls, **kw) -> "YAPConfig":

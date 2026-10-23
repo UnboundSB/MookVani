@@ -242,14 +242,29 @@ def split_word_classes(
     return train_items, val_items
 
 
+def split_paths_by_class(items: Sequence[Tuple[str, int]]) -> Dict[int, List[str]]:
+    """Group the clip PATHS of a split by class index.
+
+    The phase trainers used to preload the whole corpus into RAM, which forced
+    ``num_workers=0`` (a DataLoader worker would have to receive a COPY of the
+    corpus on Windows) and left the CPU pegged at a single core while the
+    augmentation ran in the main process.  Holding only the paths lets the
+    workers load AND augment in parallel, and nothing is ever copied.
+    """
+    out: Dict[int, List[str]] = {}
+    for path, label in items:
+        out.setdefault(label, []).append(path)
+    return out
+
+
 def load_split_tensors(
     items: Sequence[Tuple[str, int]],
     map_location: str = "cpu",
 ) -> Dict[int, List[torch.Tensor]]:
     """Load the clips of a split into memory: ``{class_index: [clip, ...]}``.
 
-    Used by the phase trainers, which keep the whole (small) word corpus in RAM
-    and apply their own temporal curriculum on top of it.
+    Only used when the whole corpus genuinely has to be resident (the phase
+    trainers use :func:`split_paths_by_class` instead).
     """
     out: Dict[int, List[torch.Tensor]] = {}
     for path, label in items:
@@ -318,6 +333,24 @@ def canonical_split_items(
     print(f"[SPLIT] Canonical manifest {split_fingerprint(manifest)[:12]}: "
           f"{len(train_items)} train / {len(val_items)} val clips, {len(classes)} classes.")
     return train_items, val_items, classes
+
+
+def load_word_split_paths(
+    data_dir: str = WORD_LEVEL_DIR_DEFAULT,
+    min_samples_per_class: int = MIN_SAMPLES_PER_CLASS,
+    max_samples_per_class: int = MAX_SAMPLES_PER_CLASS,
+    path: Optional[str] = None,
+    refresh: bool = False,
+) -> Tuple[Dict[int, List[str]], Dict[int, List[str]], List[str]]:
+    """The canonical split as PATHS: ``(train_paths, val_paths, classes)``.
+
+    The path-based variant is what the phase trainers use: the DataLoader
+    workers then load AND augment the clips in parallel (2-3 cores instead of
+    one) and the corpus is never copied into a worker.
+    """
+    train_items, val_items, classes = canonical_split_items(
+        data_dir, min_samples_per_class, max_samples_per_class, path=path, refresh=refresh)
+    return split_paths_by_class(train_items), split_paths_by_class(val_items), classes
 
 
 def load_word_split_tensors(

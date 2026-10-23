@@ -1891,7 +1891,7 @@ def parse_args():
     p.add_argument("--val_samples",     type=int, default=240)
     p.add_argument("--resume",          action="store_true")
     p.add_argument("--weights",         type=str, default=None)
-    p.add_argument("--num_workers",     type=int, default=0)
+    p.add_argument("--num_workers",     type=int, default=2)
     # Word-corpus selection (shared with utils/dataloader_word.py)
     p.add_argument("--min_samples_per_class", type=int, default=14,
                    help="A class with fewer clips than this is eliminated from the vocabulary")

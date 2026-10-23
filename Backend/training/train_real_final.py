@@ -192,8 +192,8 @@ def train_final(epochs=25, batch_size=4, lr_backbone=8e-6, lr_head=3.5e-5, data_
     ds = RealSentenceDatasetFinal(items, is_train=True)
     val_ds = RealSentenceDatasetFinal(items, is_train=False)
 
-    train_ld = DataLoader(ds, batch_size=batch_size, shuffle=True, collate_fn=collate_final)
-    val_ld = DataLoader(val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate_final)
+    train_ld = DataLoader(ds, batch_size=batch_size, shuffle=True, collate_fn=collate_final, num_workers=args.num_workers, persistent_workers=args.num_workers>0)
+    val_ld = DataLoader(val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate_final, num_workers=args.num_workers, persistent_workers=args.num_workers>0)
 
     param_groups = [
         {"params": model.backbone.parameters(), "lr": lr_backbone, "weight_decay": 5e-4},
@@ -340,5 +340,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=25)
     parser.add_argument("--batch_size", type=int, default=4)
+    parser.add_argument("--num_workers", type=int, default=2, help="DataLoader workers: they load and augment the clips in parallel")
     args = parser.parse_args()
     train_final(epochs=args.epochs, batch_size=args.batch_size)

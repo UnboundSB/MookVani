@@ -655,7 +655,18 @@ def evaluate(model, loader, crit, device, dataset_len):
 # 9. MAIN TRAINING LOOP
 # =========================================================================
 
-def train_phase6():
+def train_phase6(epochs=None, batch_size=None, num_workers=2, data_dir=None, save_dir=None):
+    global SAVE_DIR, PLOTS_DIR, TOTAL_EPOCHS, BATCH_SIZE
+    # (this phase reads the canonical split, not a data dir)
+
+    if save_dir:
+        SAVE_DIR = save_dir
+        PLOTS_DIR = os.path.join(SAVE_DIR, 'plots')
+        os.makedirs(PLOTS_DIR, exist_ok=True)
+    if epochs is not None:
+        TOTAL_EPOCHS = epochs
+    if batch_size is not None:
+        BATCH_SIZE = batch_size
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Using Device: {device}")
     random.seed(42)
@@ -690,9 +701,9 @@ def train_phase6():
     tr_ds = TrainDS(split, c2i)
     va_ds = ValDS(split, c2i)
     tr_ld = DataLoader(tr_ds, BATCH_SIZE, shuffle=True, drop_last=True,
-                       num_workers=0, collate_fn=collate_pad)
+                       num_workers=num_workers, collate_fn=collate_pad)
     va_ld = DataLoader(va_ds, BATCH_SIZE, shuffle=False,
-                       num_workers=0, collate_fn=collate_pad)
+                       num_workers=num_workers, collate_fn=collate_pad)
 
     # --- Model Setup ---
     model = build_model(nc).to(device)
@@ -871,6 +882,16 @@ def train_phase6():
         json.dump(hist, f, indent=2)
 
     rep_b = classification_report(ft_b, fp_b, target_names=classes, zero_division=0)
+    # the (true, predicted) pairs: the confusion matrix needs them
+    try:
+        import json as _json
+        with open(os.path.join(SAVE_DIR, 'predictions.json'), 'w', encoding='utf-8') as _pf:
+            _json.dump({'y_true': [int(v) for v in ft_b],
+                        'y_pred': [int(v) for v in fp_b],
+                        'classes': list(classes)}, _pf)
+        print('  [SAVED] predictions -> ' + os.path.join(SAVE_DIR, 'predictions.json'))
+    except Exception as _pe:
+        print('  [WARN] could not save the predictions:', _pe)
     rep_e = classification_report(ft_e, fp_e, target_names=classes, zero_division=0)
     with open(os.path.join(SAVE_DIR, "classification_report.txt"), "w", encoding="utf-8") as f:
         f.write(f"Phase 6 — Best Standard Model (Val Acc: {final_std_va*100:.2f}%)\n{'='*60}\n{rep_b}\n\n")
@@ -878,6 +899,22 @@ def train_phase6():
 
     # Generate all plots
     gen_plots(hist, ft_b, fp_b, classes, ft_e, fp_e)
+
+    # ---- the standard report (utils/plotting) ------------------------------
+    # The same figures for every model family: the loss, the accuracy, the
+    # F1/precision/recall, the WER, the learning rate, the confusion matrix
+    # (with a readable text report next to it) and the per-class metrics.
+    try:
+        from utils.plotting import write_report as _write_report
+        _written = _write_report(
+            hist, os.path.join(SAVE_DIR, "plots"),
+            title="phase6", chance=1.0 / max(1, len(classes)), prefix="standard_",
+            y_true=ft_b, y_pred=fp_b, class_names=list(classes))
+        for _p in _written:
+            print(f"  [SAVED] {_p}")
+    except Exception as _e:
+        print(f"  [WARN] the standard report failed: {_e}")
+
 
     print(f"\n[SAVED] Checkpoints -> {SAVE_DIR}")
     print(f"[SAVED] Diagnostic Plots -> {PLOTS_DIR}")
@@ -888,4 +925,14 @@ def train_phase6():
 # =========================================================================
 
 if __name__ == "__main__":
-    train_phase6()
+    import argparse
+    from training.common_cli import add_common_args
+
+    _p = argparse.ArgumentParser(description="phase6_trainer.py")
+    add_common_args(_p, epochs=25, batch_size=48,
+                   data_dir=None,
+                   out_dir=SAVE_DIR)
+    _a = _p.parse_args()
+    train_phase6(epochs=_a.epochs, batch_size=_a.batch_size, num_workers=_a.num_workers,
+            data_dir=_a.data_dir, save_dir=_a.out_dir)
+

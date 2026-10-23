@@ -13,6 +13,9 @@ extraction / diagnostic / plotting utilities.
 - `benchmark_expansion.py`: Controlled comparison of the temporal-expansion architectures (baseline / compressed / expanded-before / expanded-after) on the same data, seed, loss and epoch budget: parameters, latency, epoch time and the WER per epoch.
 - `augment.py`: Spatial and temporal augmentation methods for sign keypoints and videos.
 - `augment_extract_sentence.py`: Augmentation and feature extraction pipeline for sentence sequences.
+- `benchmark_expansion.py`: Controlled comparison of the temporal-expansion architectures (baseline / compressed / expanded-before / expanded-after) on the same data, seed, loss and epoch budget: parameters, latency, epoch time and the WER per epoch.
+- `build_word_lm.py`: Builds the word-level language model of the continuous corpus (the training split only) into `models/word_vocabulary/word_lm.json`. It is what the prefix beam search rescores its hypotheses with.
+- `convert_word_corpus_for_yap.py`: **Adapts the word corpus to the format the YAP segmentor expects.** The segmentor was written against `.npy` clips of `(T, J*3)` with J=42 (the two MediaPipe hands), while our corpus is `.pt` tensors of `(T, 163)` (hands + 4 arm points + 7 face points + 4 flags) — without this the segmentor finds no data at all and trains on an empty dataset. It writes `data/yap_word_level/<class>/<clip>.npy` with the 53 corpus landmarks copied verbatim (the hands, the 2 shoulders + the 2 elbows and the 7 face points) - exactly the layout of `YAPConfig.corpus()`.
 - `check_ckpt.py`: Diagnostic utility to inspect PyTorch checkpoint keys and weights.
 - `check_collapse.py`: Diagnostic utility auditing CTC blank collapse, burst durations, and emission health.
 - `check_real_sentence_collapse.py`: Audits real continuous human sign video predictions, burst length, and blank ratios. Applies the same feature pipeline as the training (`harmonize_features` + `_reclamp`), because the three tensor corpora use three different anchors and a harmonisation-trained model otherwise looks collapsed on raw tensors.
@@ -27,14 +30,14 @@ extraction / diagnostic / plotting utilities.
 - `generate_synthetic_poses.py`: Generates interpolated synthetic pose sequences for data augmentation.
 - `live_progress.py`: Terminal progress monitor for long-running batch extraction jobs.
 - `organize_directories.py`: Reorganizes model checkpoints, metrics, and plots into designated folders.
+- `plot_model_report.py`: Builds the **full plotting report** of a trained model from what the trainers write: the loss / accuracy / F1 / WER curves, the learning rate, the confusion matrix (with its readable text report) and the per-class metrics. `--model_dir models/phase6_word_model --predictions models/phase6_word_model/predictions.json`.
 - `plot_confusion_matrix.py`: Script to plot and save confusion matrix figures.
 - `plotter.py`: Sentence dataset vocabulary coverage and distribution plotter analyzing ISL-CSLRT and iSign datasets. `match_sentence_tokens()` returns the in-scope words in SIGNING ORDER — multi-word glosses are matched in place (the previous version pushed every compound phrase to the front, which mis-ordered the CTC target of 18 of the 1579 extracted clips).
-- `save_phase4_split.py`: Writes the Phase-4 train/val split (file paths) consumed by Phase 5 and Phase 6. It uses the shared selection rule, so the split has to be REGENERATED whenever the vocabulary changes (`python scripts/save_phase4_split.py`).
+- `save_phase4_split.py`: Writes the **canonical train/val manifest** (`models/word_vocabulary/split.json`) that EVERY phase of the word pipeline reads, plus the legacy Phase-4 file consumed by Phase 5 and Phase 6. The split is per class and file-level, so a clip can never be in both partitions. `--canonical` writes only the manifest.
 - `structure.md`: Directory structure documentation for scripts.
 - `test_eval.py`: Evaluation script testing model inferences against validation sets.
 - `test_phase6_word_model.py`: Diagnostic audit script verifying Phase 6 word model classification accuracy on raw tensors without blanks.
 - `track_extraction_progress.py`: Real-time progress monitor displaying extraction percentage, dataset breakdown, and storage metrics.
-- `utils.py`: Shared utilities for path handling, file I/O, and data conversions.
 
 ## Immediate Subdirectories
 - `isign_pipeline/`: Dedicated processing scripts for unpacking and extracting iSign dataset videos.

@@ -1091,7 +1091,7 @@ def parse_args():
                    help="Let BatchNorm running stats update (default: frozen)")
     p.add_argument("--overfit", type=int, default=0,
                    help="Train+val on N sentences, no aug/freeze (pipeline sanity test)")
-    p.add_argument("--num_workers", type=int, default=0)
+    p.add_argument("--num_workers",     type=int, default=2)
     p.add_argument("--seed", type=int, default=42)
     # --- Anti blank-collapse loss ---
     p.add_argument("--blank_target", type=float, default=0.97,

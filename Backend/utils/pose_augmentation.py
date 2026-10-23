@@ -550,6 +550,137 @@ class TemporalPoseTracker:
 
 
 # --------------------------------------------------------------------------- #
+# The hands-only layout used by the YAP segmentor
+# --------------------------------------------------------------------------- #
+# The segmentor works on the two MediaPipe hands alone: (T, 42, 3) = 21
+# landmarks per hand.  The augmentations below reuse the SAME primitives as
+# the 163-dim pipeline (so there is only ONE implementation of "mirror",
+# "tilt", "shift" and "speed"), by lifting the hands into the canonical
+# layout, augmenting there and dropping them back.
+
+def hands_to_canonical(pose: torch.Tensor) -> torch.Tensor:
+    """(T, 42, 3) hands -> (T, 163) with the hands in place and the flags set."""
+    x = pose.new_zeros(pose.shape[0], 163)
+    x[:, :63] = pose[:, :21].reshape(pose.shape[0], 63)
+    x[:, 63:126] = pose[:, 21:42].reshape(pose.shape[0], 63)
+    x[:, 159] = 1.0     # the left hand is present
+    x[:, 160] = 1.0     # the right hand is present
+    return x
+
+
+def canonical_to_hands(x: torch.Tensor) -> torch.Tensor:
+    """(T, 163) -> (T, 42, 3): the two hands, in MediaPipe order."""
+    T = x.shape[0]
+    return torch.cat([x[:, :63].reshape(T, 21, 3), x[:, 63:126].reshape(T, 21, 3)], dim=1)
+
+
+# --------------------------------------------------------------------------- #
+# The corpus layout used by the segmentor (J = 53)
+# --------------------------------------------------------------------------- #
+# landmarks  0..20  the left hand  | 21..41 the right hand
+#            42..45  the shoulders + the elbows | 46..52 the face
+CORPUS_JOINT_SLICES = {
+    "left_hand": (0, 21),
+    "right_hand": (21, 42),
+    "upper_body": (42, 46),
+    "face": (46, 53),
+}
+
+
+def pose_to_canonical(pose: torch.Tensor) -> torch.Tensor:
+    """(T, J, 3) -> (T, 163) for J = 42 (the hands) or J = 53 (the corpus).
+
+    The corpus layout of J = 53 is EXACTLY the part order of
+    ``YAPConfig.corpus()``, so the landmarks are copied verbatim.
+    """
+    T, J = pose.shape[0], pose.shape[1]
+    x = pose.new_zeros(T, 163)
+    if J == 53:
+        x[:, :63] = pose[:, 0:21].reshape(T, 63)
+        x[:, 63:126] = pose[:, 21:42].reshape(T, 63)
+        x[:, 126:138] = pose[:, 42:46].reshape(T, 12)
+        x[:, 138:159] = pose[:, 46:53].reshape(T, 21)
+        x[:, 159:163] = 1.0          # all four modalities are present
+    else:                            # the hands only
+        x[:, :63] = pose[:, 0:21].reshape(T, 63)
+        x[:, 63:126] = pose[:, 21:42].reshape(T, 63)
+        x[:, 159] = 1.0
+        x[:, 160] = 1.0
+    return x
+
+
+def canonical_to_pose(x: torch.Tensor, n_joints: int = 53) -> torch.Tensor:
+    """(T, 163) -> (T, n_joints, 3): the corpus landmarks, in the corpus order."""
+    T = x.shape[0]
+    if n_joints == 53:
+        return torch.cat([
+            x[:, :63].reshape(T, 21, 3),
+            x[:, 63:126].reshape(T, 21, 3),
+            x[:, 126:138].reshape(T, 4, 3),
+            x[:, 138:159].reshape(T, 7, 3),
+        ], dim=1)
+    return torch.cat([x[:, :63].reshape(T, 21, 3), x[:, 63:126].reshape(T, 21, 3)], dim=1)
+
+
+def augment_hands_pose(
+    pose: torch.Tensor,
+    cfg: Optional[AugmentConfig] = None,
+    rng: Optional[random.Random] = None,
+) -> torch.Tensor:
+    """The canonical augmentation set applied to a hands-only (or corpus) pose.
+
+    ``pose``: (T, 42, 3) — the two hands — or (T, 53, 3) — the corpus layout.
+    Returns the same shape.  The rotation pivots on the centroid of the visible
+    landmarks (there are no shoulder points in the hands-only layout), and the
+    mirror swaps the two hands and reflects the X axis around that centroid.
+    """
+    cfg = cfg or DEFAULT_AUGMENT
+    rng = rng or random
+    n_joints = pose.shape[1]
+    x = pose_to_canonical(pose)
+    x = augment_pose_sequence(x, cfg, rng=rng)
+    return canonical_to_pose(x, n_joints)
+
+
+def augment_hands_batch(
+    pose: torch.Tensor,
+    lengths: torch.Tensor,
+    cfg: Optional[AugmentConfig] = None,
+    rng: Optional[random.Random] = None,
+) -> torch.Tensor:
+    """The canonical augmentation applied to a padded batch of hands-only poses.
+
+    ``pose``: (B, T, J, 3), ``lengths``: (B,) the valid length of every clip.
+    Every clip is augmented on its own (the padded frames are dropped and put
+    back) and the length is RESTORED afterwards: the temporal augmentations
+    (speed, time shift) change the number of frames, and a padded batch needs
+    every clip to keep its slot.
+    """
+    cfg = cfg or DEFAULT_AUGMENT
+    rng = rng or random
+    B, T = pose.shape[0], pose.shape[1]
+    out = pose.clone()
+    for b in range(B):
+        n = int(lengths[b].item()) if lengths is not None else T
+        n = max(1, min(n, T))
+        aug = augment_hands_pose(pose[b, :n], cfg, rng=rng)
+        if aug.shape[0] != n:
+            aug = _resample_time(aug, n)
+        out[b, :n] = aug
+    return out
+
+
+def _resample_time(x: torch.Tensor, n: int) -> torch.Tensor:
+    """Resample a (T, ...) clip to n frames (linear on the coordinates)."""
+    T = x.shape[0]
+    if T == n:
+        return x
+    flat = x.reshape(T, -1).T.unsqueeze(0)                 # (1, C, T)
+    out = F.interpolate(flat, size=n, mode="linear", align_corners=True)
+    return out.squeeze(0).T.reshape(n, *x.shape[1:])
+
+
+# --------------------------------------------------------------------------- #
 # Augmentation configuration + composite pipeline
 # --------------------------------------------------------------------------- #
 @dataclass

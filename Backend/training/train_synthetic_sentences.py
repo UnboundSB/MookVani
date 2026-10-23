@@ -496,7 +496,7 @@ def parse_args():
     parser.add_argument("--unfreeze_backbone", action="store_true", help="Unfreeze all backbone parameters for end-to-end training")
     parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint in output_dir")
     parser.add_argument("--checkpoint_path", type=str, default=None, help="Explicit checkpoint to resume from")
-    parser.add_argument("--num_workers", type=int, default=0, help="DataLoader workers (0 for Windows)")
+    parser.add_argument("--num_workers",     type=int, default=2, help="DataLoader workers (0 for Windows)")
     # Anti-collapse CTC knobs (see AntiCollapseCTCLoss in training/train_conformer_ctc.py)
     parser.add_argument("--blank_target", type=float, default=0.97,
                         help="Upper bound on the mean blank probability")

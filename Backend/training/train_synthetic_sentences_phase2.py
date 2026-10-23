@@ -590,7 +590,7 @@ def parse_args():
     parser.add_argument("--blank_penalty", type=float, default=0.01, help="Regularization penalty on blank token probability")
     parser.add_argument("--ema_decay", type=float, default=0.999, help="Exponential moving average decay factor")
     parser.add_argument("--resume", action="store_true", help="Resume training within the current target phase if checkpoint exists")
-    parser.add_argument("--num_workers", type=int, default=0, help="DataLoader workers (0 for Windows)")
+    parser.add_argument("--num_workers",     type=int, default=2, help="DataLoader workers (0 for Windows)")
     return parser.parse_args()
 
 def run_phase_training():

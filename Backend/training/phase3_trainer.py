@@ -50,7 +50,7 @@ if BACKEND_DIR not in sys.path:
 from utils.dataloader_word import (  # noqa: E402
     discover_word_classes,
     load_split_tensors,
-    load_word_split_tensors,
+    load_word_split_paths,
     split_word_classes,
 )
 from utils.pose_augmentation import (  # noqa: E402
@@ -164,7 +164,8 @@ class TrainDS(Dataset):
     def __len__(self): return len(self.items)
     def __getitem__(self, idx):
         c, i = self.items[idx]
-        return augment(sample_norm(self.data[c][i], self.fps)), c
+        raw = torch.load(self.data[c][i], map_location="cpu", weights_only=True).float()
+        return augment(sample_norm(raw, self.fps)), c
 
 class ValDS(Dataset):
     def __init__(self, data, fps=END_FPS):
@@ -174,7 +175,8 @@ class ValDS(Dataset):
     def __len__(self): return len(self.items)
     def __getitem__(self, idx):
         c, i = self.items[idx]
-        return sample_norm(self.data[c][i], self.fps), c
+        raw = torch.load(self.data[c][i], map_location="cpu", weights_only=True).float()
+        return sample_norm(raw, self.fps), c
 
 # =========================================================================
 # 4. MODEL  (identical to Phase2Reconformer)
@@ -292,7 +294,7 @@ def load_data(data_dir, max_per=MAX_SAMPLES):
 
     # The canonical manifest decides which clip is training data and which one
     # is validation data - the SAME assignment every other phase uses.
-    tr, va, classes = load_word_split_tensors(data_dir, MIN_SAMPLES, max_per)
+    tr, va, classes = load_word_split_paths(data_dir, MIN_SAMPLES, max_per)
     tot_tr = sum(len(v) for v in tr.values())
     tot_va = sum(len(v) for v in va.values())
     print(f"[INFO] Split: {tot_tr} train | {tot_va} val | {len(classes)} classes")
@@ -380,7 +382,18 @@ def gen_plots(h, yt, yp, classes):
 # 8. TRAINING
 # =========================================================================
 
-def train_phase3():
+def train_phase3(epochs=None, batch_size=None, num_workers=2, data_dir=None, save_dir=None):
+    global SAVE_DIR, PLOTS_DIR, TOTAL_EP, BATCH_SZ
+    if data_dir and 'DATA_DIR':
+        DATA_DIR = data_dir
+    if save_dir:
+        SAVE_DIR = save_dir
+        PLOTS_DIR = os.path.join(SAVE_DIR, 'plots')
+        os.makedirs(PLOTS_DIR, exist_ok=True)
+    if epochs is not None:
+        TOTAL_EP = epochs
+    if batch_size is not None:
+        BATCH_SZ = batch_size
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Device: {device}")
     random.seed(42); np.random.seed(42); torch.manual_seed(42)
@@ -395,8 +408,8 @@ def train_phase3():
         raise RuntimeError("Training dataset is empty after split. "
                            "Check data or reduce VAL_FRAC.")
 
-    tr_ld = DataLoader(tr_ds, BATCH_SZ, shuffle=True,  drop_last=True,  num_workers=0)
-    va_ld = DataLoader(va_ds, BATCH_SZ, shuffle=False, num_workers=0)
+    tr_ld = DataLoader(tr_ds, BATCH_SZ, shuffle=True,  drop_last=True,  num_workers=num_workers)
+    va_ld = DataLoader(va_ds, BATCH_SZ, shuffle=False, num_workers=num_workers)
 
     model = build_model(nc, PHASE2_CKPT).to(device)
     print(f"[INFO] Phase3Model: {sum(p.numel() for p in model.parameters()):,} params | {nc} classes")
@@ -494,10 +507,36 @@ def train_phase3():
     fa=accuracy_score(ft2,fp2)
     print(f"[EVAL] Full-fps Val Acc: {fa*100:.2f}%")
     rep=classification_report(ft2,fp2,target_names=classes,zero_division=0)
+    # the (true, predicted) pairs: the confusion matrix needs them
+    try:
+        import json as _json
+        with open(os.path.join(SAVE_DIR, 'predictions.json'), 'w', encoding='utf-8') as _pf:
+            _json.dump({'y_true': [int(v) for v in ft2],
+                        'y_pred': [int(v) for v in fp2],
+                        'classes': list(classes)}, _pf)
+        print('  [SAVED] predictions -> ' + os.path.join(SAVE_DIR, 'predictions.json'))
+    except Exception as _pe:
+        print('  [WARN] could not save the predictions:', _pe)
     with open(os.path.join(SAVE_DIR,"classification_report.txt"),"w",encoding="utf-8") as f:
         f.write(f"Phase 3 Full 25fps Eval\n{'='*60}\n{rep}")
 
     gen_plots(hist, ft2, fp2, classes)
+
+    # ---- the standard report (utils/plotting) ------------------------------
+    # The same figures for every model family: the loss, the accuracy, the
+    # F1/precision/recall, the WER, the learning rate, the confusion matrix
+    # (with a readable text report next to it) and the per-class metrics.
+    try:
+        from utils.plotting import write_report as _write_report
+        _written = _write_report(
+            hist, os.path.join(SAVE_DIR, "plots"),
+            title="phase3", chance=1.0 / max(1, len(classes)), prefix="standard_",
+            y_true=ft2, y_pred=fp2, class_names=list(classes))
+        for _p in _written:
+            print(f"  [SAVED] {_p}")
+    except Exception as _e:
+        print(f"  [WARN] the standard report failed: {_e}")
+
     print(f"\n[SAVED] {SAVE_DIR}")
     print(f"[SAVED] {PLOTS_DIR}")
 
@@ -506,4 +545,14 @@ def train_phase3():
 # =========================================================================
 
 if __name__ == "__main__":
-    train_phase3()
+    import argparse
+    from training.common_cli import add_common_args
+
+    _p = argparse.ArgumentParser(description="phase3_trainer.py")
+    add_common_args(_p, epochs=40, batch_size=64,
+                   data_dir=DATA_DIR,
+                   out_dir=SAVE_DIR)
+    _a = _p.parse_args()
+    train_phase3(epochs=_a.epochs, batch_size=_a.batch_size, num_workers=_a.num_workers,
+            data_dir=_a.data_dir, save_dir=_a.out_dir)
+
