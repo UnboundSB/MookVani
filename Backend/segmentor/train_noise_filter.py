@@ -38,7 +38,7 @@ The teacher weights are discarded (they are just the EMA / clean reference).
 """
 from __future__ import annotations
 
-import argparse, json, os, random, sys
+import argparse, json, os, random, sys, gc
 from pathlib import Path
 
 import numpy as np
@@ -136,6 +136,22 @@ class WordClipDataset(Dataset):
         valid = torch.ones(T, self.J, dtype=torch.bool)
         t = torch.arange(T, dtype=torch.float32) / 30.0
         return pose, conf, valid, item["label"], t
+
+
+def _macro_f1(preds, labels, num_classes: int) -> float:
+    """Macro F1 without sklearn dependency."""
+    f1s = []
+    for c in range(num_classes):
+        tp = int(((preds == c) & (labels == c)).sum())
+        fp = int(((preds == c) & (labels != c)).sum())
+        fn = int(((preds != c) & (labels == c)).sum())
+        if tp + fp + fn == 0:
+            continue
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
+        f1s.append(f1)
+    return sum(f1s) / len(f1s) if f1s else 0.0
 
 
 def _collate(batch):
@@ -301,16 +317,44 @@ def train(args):
 
     optimizer = torch.optim.AdamW(list(student.parameters()) + list(cls_head.parameters()),
                                   lr=args.lr, weight_decay=1e-4)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=args.t0, T_mult=args.t_mult)
 
     os.makedirs(args.out_dir, exist_ok=True)
+    if not os.path.isdir(args.out_dir):
+        raise RuntimeError(f"[FATAL] could not create out_dir: {args.out_dir}")
+    print(f"[OUT] out_dir verified: {os.path.abspath(args.out_dir)}")
+    for dd in args.data_dirs:
+        if not os.path.isdir(dd):
+            raise RuntimeError(f"[FATAL] data_dir not found: {dd}")
+        print(f"[DATA] data_dir verified: {os.path.abspath(dd)}")
     best_loss = float("inf")
     rng = random.Random(args.seed)
-    history = {"train_loss": [], "lr": []}
+    history = {"train_loss": [], "true_loss": [], "train_acc": [], "train_f1": [], "lr": [], "blank": [], "div": []}
+
+    print("=" * 72)
+    print("YAP Stage 1 - NOISE FILTRATION  (kicked off)")
+    print(f"  device        : {device}")
+    print(f"  data_dirs     : {args.data_dirs}")
+    print(f"  classes       : {args.classes} ({num_classes} classes)")
+    print(f"  out_dir       : {args.out_dir}")
+    print(f"  layout        : {args.layout}  (J={J})")
+    print(f"  epochs        : {args.epochs}  |  batch_size={args.batch_size}  grad_accum={args.grad_accum}  (eff. batch={args.batch_size*args.grad_accum})")
+    print(f"  d_model       : {args.d_model}  n_mem_layers={args.n_mem_layers}  summary_channels={args.summary_channels}  hippo_order={args.hippo_order}  entity_dim={args.entity_dim}")
+    print(f"  lr            : {args.lr}  ema_decay={args.ema_decay}  cls_w={args.cls_w}  ent_w={args.ent_w}")
+    print(f"  aug           : {args.aug}  aug_strength={args.aug_strength}  max_len={args.max_len}  seed={args.seed}")
+    print(f"  noise         : scale[{args.noise_scale_min},{args.noise_scale_max}]  prob={args.noise_prob}  jitter_std={args.jitter_std}")
+    print(f"  anti-blank    : blank_w={args.blank_w}  blank_floor={args.blank_floor}")
+    print(f"  anti-collapse : div_w={args.div_w}")
+    print(f"  scheduler     : CosineAnnealingWarmRestarts T0={args.t0} T_mult={args.t_mult} (simulated annealing)")
+    print(f"  num_workers   : {args.num_workers}")
+    print("=" * 72)
+    print()
 
     for ep in tqdm(range(args.epochs), desc="Stage 1 epochs", leave=True):
         student.train(); teacher.eval(); cls_head.train()
         ep_loss = 0.0; n_ok = 0
+        all_preds = []
+        all_labels = []
 
         micro = 0
         steps_done = 0
@@ -395,10 +439,33 @@ def train(args):
                 first_k = out_t["token_mask"].float().argmax(dim=1)  # (B,)
                 ent_vec_clean = wl[torch.arange(B, device=device), first_k]  # (B, V+1)
                 l_cls = F.cross_entropy(ent_vec_clean[:, 1:], labels)         # skip blank col
+                # collect predictions for epoch accuracy / F1
+                preds = ent_vec_clean[:, 1:].argmax(-1)
+                all_preds.append(preds.detach().cpu())
+                all_labels.append(labels.detach().cpu())
             else:
                 l_cls = torch.tensor(0.0, device=device)
 
             loss = l_pres + l_end + args.ent_w * l_ent + args.cls_w * l_cls
+
+            # ---- anti-blank: every clip has exactly 1 word, so presence
+            #        mass shouldn't collapse to ~0 (all blank / no gesture) ----
+            presence_mean = yap_t["presence"].mean()
+            l_blank = torch.relu(args.blank_floor - presence_mean)
+
+            # ---- anti-collapse: word predictions across the batch should
+            #        not all be the same class (local-minimum collapse) ----
+            if out_t["token_mask"].sum() > 0:
+                wl = out_t["word_logits"]                      # (B, K, V+1)
+                probs = wl.softmax(-1)[:, :, 1:]               # drop blank col -> (B, K, V)
+                # take the max-prob non-blank class per entity slot, then per batch row
+                pred_class = probs.argmax(-1)                  # (B, K)
+                # variance of predicted classes across batch (per slot), averaged
+                l_div = -(pred_class.float().std(dim=0).mean())  # negative = want high std
+            else:
+                l_div = torch.tensor(0.0, device=device)
+
+            loss = loss + args.blank_w * l_blank + args.div_w * l_div
             if torch.isfinite(loss):
                 # The gradient is ACCUMULATED over --grad_accum micro-batches:
                 # the effective batch stays the same while the memory stays low.
@@ -433,11 +500,51 @@ def train(args):
             mem = torch.cuda.max_memory_allocated() / (1024 ** 3)
             print(f"    [MEM] peak GPU memory {mem:.2f} GB (batch {args.batch_size} x accum {args.grad_accum})")
         scheduler.step()
-        print(f"[Ep {ep+1:02d}/{args.epochs}] loss {ep_loss/max(1,n_ok):.4f} "
-              f"| lr {scheduler.get_last_lr()[0]:.2e} | {steps_done} optimiser steps "
-              f"(effective batch {args.batch_size * args.grad_accum})")
-        history["train_loss"].append(ep_loss / max(1, n_ok))
+        # ---- epoch metrics: true (non-negative) task loss, acc, f1 ----
+        pure_task_loss = float(l_pres + l_end + args.ent_w * l_ent + args.cls_w * l_cls)
+        if all_preds:
+            all_preds_t = torch.cat(all_preds)
+            all_labels_t = torch.cat(all_labels)
+            epoch_acc = float((all_preds_t == all_labels_t).float().mean().item())
+            epoch_f1 = _macro_f1(all_preds_t.numpy(), all_labels_t.numpy(), num_classes)
+        else:
+            epoch_acc = 0.0
+            epoch_f1 = 0.0
+
+        composite_loss = ep_loss / max(1, n_ok)
+        # strip out the negative regularizers for the "true" non-negative task loss
+        true_loss = composite_loss - args.blank_w * float(l_blank) - args.div_w * float(l_div)
+
+        history["train_loss"].append(composite_loss)
+        history["true_loss"].append(true_loss)
+        history["train_acc"].append(epoch_acc)
+        history["train_f1"].append(epoch_f1)
         history["lr"].append(scheduler.get_last_lr()[0])
+        history["blank"].append(float(l_blank))
+        history["div"].append(float(l_div))
+
+        print(f"[Ep {ep+1:02d}/{args.epochs}] "
+              f"LOSS {true_loss:.4f} | ACC {epoch_acc*100:.2f}% | F1 {epoch_f1:.4f} | "
+              f"lr {scheduler.get_last_lr()[0]:.2e} | {steps_done} steps "
+              f"(batch {args.batch_size})")
+        if composite_loss != true_loss:
+            print(f"     (composite={composite_loss:.4f} | blank_pen={args.blank_w*float(l_blank):.4f} | div_pen={args.div_w*float(l_div):.4f})")
+
+        # -- live plots after every epoch --
+        plot_training_curves(
+            history, args.out_dir,
+            title="Stage 1 - noise filtration (YAPpingConformer)",
+            tag="stage1_",
+        )
+        write_report(
+            history, args.out_dir,
+            title="Stage 1 - noise filtration (YAPpingConformer)",
+            prefix="stage1_",
+        )
+        # -- refresh GPU memory each epoch: clear unusable / stale tensors --
+        gc.collect()
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
 
         if (ep + 1) % 5 == 0 or ep + 1 == args.epochs:
             # Save checkpoint
@@ -449,22 +556,10 @@ def train(args):
                 torch.save(student.state_dict(), os.path.join(args.out_dir, "yap_noise_robust.pth"))
                 print(f"  * new best -> yap_noise_robust.pth")
 
-    # ---- training history + plots ----------------------------------------
+    # ---- training history ----------------------------------------
     import json as _json
     with open(os.path.join(args.out_dir, "history.json"), "w", encoding="utf-8") as _f:
         _json.dump(history, _f, indent=2)
-    plot_training_curves(
-        history, args.out_dir,
-        title="Stage 1 - noise filtration (YAPpingConformer)",
-        tag="stage1_",
-    )
-    write_report(
-        history, args.out_dir,
-        title="Stage 1 - noise filtration (YAPpingConformer)",
-        tag="stage1_",
-    )
-    print(f"[PLOTS] training curves and report written to {args.out_dir}")
-
     print(f"\nDone. Robust YAP saved to {os.path.join(args.out_dir, 'yap_noise_robust.pth')}")
 
 
@@ -509,6 +604,13 @@ def parse_args():
     p.add_argument("--ema_decay", type=float, default=0.99, help="Teacher EMA decay")
     p.add_argument("--cls_w",     type=float, default=1.0,  help="Word-label loss weight")
     p.add_argument("--ent_w",     type=float, default=0.5,  help="Entity consistency weight")
+    # ---- anti-blank / anti-collapse knobs ----
+    p.add_argument("--blank_w",   type=float, default=1.0,  help="Weight on presence-mass anti-blank penalty")
+    p.add_argument("--blank_floor",type=float, default=0.15, help="Minimum mean presence per clip (anti-blank floor)")
+    p.add_argument("--div_w",     type=float, default=0.5,  help="Weight on prediction-diversity anti-collapse term")
+    # ---- simulated cosine annealing (SGDR warm restarts) ----
+    p.add_argument("--t0",        type=int,   default=5,    help="First restart period (epochs) for cosine warm restarts")
+    p.add_argument("--t_mult",    type=int,   default=2,    help="Multiply restart period by this after each restart")
     p.add_argument("--max_len",   type=int,   default=400)
     p.add_argument("--max_per_class", type=int, default=None)
     p.add_argument("--seed",      type=int,   default=42)

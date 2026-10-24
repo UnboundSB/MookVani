@@ -31,7 +31,7 @@ After this stage you have a YAP that:
 """
 from __future__ import annotations
 
-import argparse, json, math, os, random, sys
+import argparse, json, math, os, random, sys, gc
 from pathlib import Path
 
 import numpy as np
@@ -58,11 +58,27 @@ from yap_conformer import (
     YAPConfig, YAPpingConformer, ConformerConfig,
     focal_presence_loss, layer_conf_loss, end_targets, presence_targets,
     make_segments, soft_count_loss, min_gap_penalty, dip_prior_loss,
-    sentence_ctc_loss, count_parameters,
+    count_parameters,
 )
 from noise_aug import add_noise
 from tqdm import tqdm
 from utils.plotting import plot_training_curves, write_report
+
+
+def _macro_f1(preds, labels, num_classes: int) -> float:
+    """Macro F1 without sklearn dependency."""
+    f1s = []
+    for c in range(num_classes):
+        tp = int(((preds == c) & (labels == c)).sum())
+        fp = int(((preds == c) & (labels != c)).sum())
+        fn = int(((preds != c) & (labels == c)).sum())
+        if tp + fp + fn == 0:
+            continue
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
+        f1s.append(f1)
+    return sum(f1s) / len(f1s) if f1s else 0.0
 
 # -- defaults -----------------------------------------------------------------
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -292,7 +308,7 @@ def train(args):
             load_flexible(model, ck["model"], label="RESUME")
             print(f"[RESUME] epoch {ck['epoch']}")
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
+    optimizer = torch.optim.AdamW(model.yap.parameters(), lr=args.lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs)
 
     train_ds = SyntheticSentenceDataset(clips_by_class, classes, args.train_sentences, J,
@@ -303,13 +319,37 @@ def train(args):
     val_ld   = DataLoader(val_ds,   args.batch_size, shuffle=False, collate_fn=_sent_collate, num_workers=args.num_workers)
 
     os.makedirs(args.out_dir, exist_ok=True)
+    if not os.path.isdir(args.out_dir):
+        raise RuntimeError(f"[FATAL] could not create out_dir: {args.out_dir}")
+    print(f"[OUT] out_dir verified: {os.path.abspath(args.out_dir)}")
+    if not os.path.isdir(args.data_dir):
+        raise RuntimeError(f"[FATAL] data_dir not found: {args.data_dir}")
+    print(f"[DATA] data_dir verified: {os.path.abspath(args.data_dir)}")
     best_wer = float("inf")
     rng = random.Random(args.seed)
-    history = {"train_loss": [], "val_wer": [], "lr": []}
+    history = {"train_loss": [], "true_loss": [], "train_acc": [], "train_f1": [], "lr": []}
+
+    print("=" * 72)
+    print("YAP Stage 2 - SYNTHETIC SENTENCE SEGMENTATION  (kicked off)")
+    print(f"  device        : {device}")
+    print(f"  data_dir      : {args.data_dir}")
+    print(f"  classes       : {args.classes} ({num_classes} classes)")
+    print(f"  init (stage1) : {args.init}")
+    print(f"  out_dir       : {args.out_dir}")
+    print(f"  layout        : {args.layout}  (J={J})")
+    print(f"  epochs        : {args.epochs}  |  batch_size={args.batch_size}")
+    print(f"  d_model       : {args.d_model}  n_mem_layers={args.n_mem_layers}  heads={args.heads}  layers={args.layers}  entity_dim={args.entity_dim}")
+    print(f"  lr            : {args.lr}  max_len={args.max_len}  max_words={args.max_words}  seed={args.seed}")
+    print(f"  aug(spatial)  : {args.aug}  aug_strength={args.aug_strength}")
+    print(f"  train_sentences={args.train_sentences}  val_sentences={args.val_sentences}  max_per_class={args.max_per_class}  num_workers={args.num_workers}")
+    print("=" * 72)
+    print()
 
     for ep in range(args.epochs):
         model.train()
         ep_loss = 0.0; n_ok = 0
+        pres_correct = 0; pres_total = 0
+        pres_tp = 0; pres_fp = 0; pres_fn = 0
 
         pbar = tqdm(train_ld, desc=f"Ep {ep+1:02d}/{args.epochs} train", leave=False)
         for pose, conf, valid, t, lengths, spans_list, word_ids_list in pbar:
@@ -336,48 +376,41 @@ def train(args):
             yap = res["yap"]
 
             # Presence loss (focal BCE with soft targets)
-            pres_tgt = torch.stack([presence_targets(t[b, :int(lengths[b])], spans_list[b])
-                                    for b in range(B)], dim=0)
-            # Pad to full T
             pres_full = pose.new_zeros(B, pose.shape[1])
             for b in range(B):
                 ln = int(lengths[b])
-                pres_full[b, :ln] = pres_tgt[b]
+                pres_full[b, :ln] = presence_targets(t[b, :ln], spans_list[b])
             mask = torch.zeros_like(pres_full, dtype=torch.bool)
             for b in range(B):
                 mask[b, :int(lengths[b])] = True
+            # collect presence predictions for epoch acc / f1 (running counters)
+            pres_pred = (yap["presence"].sigmoid() > 0.5).float()
+            pres_match = (pres_pred == pres_full) & mask
+            pres_correct += int(pres_match.sum().item())
+            pres_total += int(mask.sum().item())
+            pres_tp += int(((pres_pred == 1) & (pres_full == 1) & mask).sum().item())
+            pres_fp += int(((pres_pred == 1) & (pres_full == 0) & mask).sum().item())
+            pres_fn += int(((pres_pred == 0) & (pres_full == 1) & mask).sum().item())
             l_pres = focal_presence_loss(yap["presence"], pres_full, mask.float())
 
             # End-head loss
-            end_tgt = torch.stack([end_targets(t[b, :int(lengths[b])], spans_list[b])
-                                   for b in range(B)])
             end_full = pose.new_zeros(B, pose.shape[1])
             for b in range(B):
-                end_full[b, :int(lengths[b])] = end_tgt[b]
+                ln = int(lengths[b])
+                end_full[b, :ln] = end_targets(t[b, :ln], spans_list[b])
             l_end = F.binary_cross_entropy_with_logits(yap["end"], end_full,
                                                         pos_weight=torch.tensor(10.0, device=device))
 
             # Deep supervision on layer confidences
             l_layer = layer_conf_loss(yap["layer_conf"], pres_full, mask.float())
 
-            # CTC on entity stream (entity = segment, word = target)
-            word_seq_max = max(len(w) for w in word_ids_list)
-            targets = torch.zeros(B, word_seq_max, dtype=torch.long, device=device)
-            tgt_len = torch.zeros(B, dtype=torch.long, device=device)
-            for b, wids in enumerate(word_ids_list):
-                for k, w in enumerate(wids):
-                    targets[b, k] = w + 1          # +1 because CTC blank = 0
-                tgt_len[b] = len(wids)
-            l_ctc = sentence_ctc_loss(res["word_logits"], res["token_mask"], targets, tgt_len)
-
-            # Soft count + min-gap regulariser
+            # Soft count + min-gap regulariser (YAP heads only)
             n_words_t = torch.tensor([len(w) for w in word_ids_list], dtype=torch.float32, device=device)
             l_count = soft_count_loss(yap["end"], n_words_t.long(), mask.float())
             l_gap   = min_gap_penalty(yap["end"], k=6, mask=mask.float())
             l_dip   = dip_prior_loss(yap["end"], yap["speed"], mask.float())
 
             loss = (l_pres + l_end + 0.5 * l_layer +
-                    args.ctc_w * l_ctc +
                     0.1 * l_count + 0.05 * l_gap + 0.02 * l_dip)
             if torch.isfinite(loss):
                 optimizer.zero_grad()
@@ -390,10 +423,41 @@ def train(args):
 
         pbar.close()
         scheduler.step()
-        print(f"[Ep {ep+1:02d}/{args.epochs}] loss {ep_loss/max(1,n_ok):.4f} "
-              f"| lr {scheduler.get_last_lr()[0]:.2e}")
-        history["train_loss"].append(ep_loss / max(1, n_ok))
+        # ---- epoch metrics: true loss, presence acc, presence f1 ----
+        composite_loss = ep_loss / max(1, n_ok)
+        true_loss = composite_loss  # all Stage 2 loss terms are positive
+
+        pres_acc = pres_correct / max(1, pres_total)
+        pres_prec = pres_tp / max(1, pres_tp + pres_fp)
+        pres_rec = pres_tp / max(1, pres_tp + pres_fn)
+        pres_f1 = (2 * pres_prec * pres_rec / max(1e-8, pres_prec + pres_rec))
+
+        history["train_loss"].append(composite_loss)
+        history["true_loss"].append(true_loss)
+        history["train_acc"].append(pres_acc)
+        history["train_f1"].append(pres_f1)
         history["lr"].append(scheduler.get_last_lr()[0])
+
+        print(f"[Ep {ep+1:02d}/{args.epochs}] "
+              f"true_loss {true_loss:.4f} | acc {pres_acc*100:.2f}% | f1 {pres_f1:.4f} | "
+              f"lr {scheduler.get_last_lr()[0]:.2e}")
+
+        # -- live plots after every epoch --
+        plot_training_curves(
+            history, args.out_dir,
+            title="Stage 2 - synthetic sentence segmentation (YAPpingConformer)",
+            tag="stage2_",
+        )
+        write_report(
+            history, args.out_dir,
+            title="Stage 2 - synthetic sentence segmentation (YAPpingConformer)",
+            prefix="stage2_",
+        )
+
+        # -- refresh GPU memory each epoch: clear unusable / stale tensors --
+        gc.collect()
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
 
         if (ep + 1) % 5 == 0 or ep + 1 == args.epochs:
             # Quick val: greedy decoding WER on synthetic val set
@@ -425,21 +489,13 @@ def train(args):
                 torch.save(model.state_dict(), os.path.join(args.out_dir, "yap_seg_best.pth"))
                 print(f"  * new best WER {best_wer*100:.1f}% -> yap_seg_best.pth")
 
-    # ---- training history + plots ----------------------------------------
+    # ---- training history ----------------------------------------
     import json as _json
     with open(os.path.join(args.out_dir, "history.json"), "w", encoding="utf-8") as _f:
         _json.dump(history, _f, indent=2)
-    plot_training_curves(
-        history, args.out_dir,
-        title="Stage 2 - synthetic sentence segmentation (YAPpingConformer)",
-        tag="stage2_",
-    )
-    write_report(
-        history, args.out_dir,
-        title="Stage 2 - synthetic sentence segmentation (YAPpingConformer)",
-        tag="stage2_",
-    )
-    print(f"[PLOTS] training curves and report written to {args.out_dir}")
+    print(f"\nDone. Best val WER {best_wer*100:.1f}%")
+    print(f"Stage 2 weights: {os.path.join(args.out_dir, 'yap_seg_best.pth')}")
+    print("Pass these as --init to train_real_sentences.py for Stage 3.")
 
     print(f"\nDone. Best val WER {best_wer*100:.1f}%")
     print(f"Stage 2 weights: {os.path.join(args.out_dir, 'yap_seg_best.pth')}")
@@ -467,7 +523,6 @@ def parse_args():
     p.add_argument("--aug_strength",type=float, default=1.0,
                    help="Scales the magnitude of the augmentation")
     p.add_argument("--lr",             type=float, default=1e-4)
-    p.add_argument("--ctc_w",          type=float, default=1.0)
     p.add_argument("--train_sentences",type=int,   default=4000)
     p.add_argument("--val_sentences",  type=int,   default=400)
     p.add_argument("--max_len",        type=int,   default=600)
