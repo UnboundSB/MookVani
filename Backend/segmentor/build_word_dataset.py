@@ -56,7 +56,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.checkpoint_utils import load_flexible
 
 from yap_conformer import (
-    YAPConfig, YAPpingConformer, ConformerConfig,
+    YAPConfig, YAPpingConformer, ConformerConfig, Segment,
 )
 
 # ----------------------------------------------------------------------------
@@ -67,6 +67,55 @@ DEFAULT_DATA_SRC = os.path.join(BACKEND_DIR, "data", "tensors_include50_word_lev
 DEFAULT_CLASSES  = os.path.join(BACKEND_DIR, "models", "word_vocabulary", "classes.json")
 DEFAULT_INIT     = os.path.join(BACKEND_DIR, "segmentor", "models", "yap_stage1", "yap_noise_robust.pth")
 DEFAULT_OUT_ROOT = os.path.join(BACKEND_DIR, "segmentor", "data")
+
+
+# ----------------------------------------------------------------------------
+# Missing-coordinate fill  (prev + next coord interpolation)
+# ----------------------------------------------------------------------------
+def fill_missing_coords(pose: torch.Tensor, valid: torch.Tensor, max_gap_frames: int = 15):
+    """
+    Fill missing joints (valid=False) by linear interpolation between the
+    nearest valid frame before and the nearest valid frame after.
+
+      pose  (T, J, 3)
+      valid (T, J) bool
+
+    For each joint j:
+      * frames before the first valid -> carry first valid forward
+      * frames after the last valid  -> carry last valid backward
+      * frames between two valid     -> linear interpolate
+    Gaps longer than max_gap_frames are left as-is (held) to avoid bridging
+    across long dropouts where interpolation would invent motion.
+
+    Returns pose_filled (T, J, 3) with the same missing pattern reduced.
+    """
+    T, J, _ = pose.shape
+    pose_f = pose.clone()
+    for j in range(J):
+        v = valid[:, j]
+        idx_valid = torch.nonzero(v).flatten()
+        if idx_valid.numel() == 0:
+            continue  # never seen -> leave zeros
+        first = int(idx_valid[0])
+        last = int(idx_valid[-1])
+        # carry first valid backward
+        if first > 0:
+            pose_f[:first, j] = pose[first, j]
+        # carry last valid forward
+        if last < T - 1:
+            pose_f[last + 1:, j] = pose[last, j]
+        # linear interpolate between consecutive valid frames
+        for a, b in zip(idx_valid[:-1], idx_valid[1:]):
+            a, b = int(a), int(b)
+            gap = b - a - 1
+            if gap == 0:
+                continue
+            if gap > max_gap_frames:
+                continue  # too long -> hold instead of inventing
+            t = torch.arange(1, gap + 1, dtype=pose.dtype, device=pose.device) / (gap + 1)
+            pose_f[a + 1:b, j] = pose[a, j].unsqueeze(0) * (1 - t).unsqueeze(-1) + \
+                                 pose[b, j].unsqueeze(0) * t.unsqueeze(-1)
+    return pose_f
 
 
 # ----------------------------------------------------------------------------
@@ -163,10 +212,24 @@ def phase2(args, clips_by_class, classes, out_root, ycfg, model, device, mapping
                 # Run through YAP Stage 1 front end
                 T = min(x163.shape[0], args.max_len)
                 clip = x163[:T]
-                pose, conf, valid = split_163_to_pose(clip, J)
-                pose = pose.unsqueeze(0).to(device)
-                conf = conf.unsqueeze(0).to(device)
-                valid = valid.unsqueeze(0).to(device)
+
+                # Build per-joint valid from modality flags: [159]lh, [160]rh,
+                # [161]arms, [162]face.  Corpus layout: LH 0-20, RH 21-41,
+                # arms 42-45, face 46-52.
+                flags = clip[:, 159:163]                                          # (T,4)
+                valid_joint = torch.zeros(T, J, dtype=torch.bool, device=device)
+                valid_joint[:, 0:21]  = flags[:, 0:1] > 0.5                       # left hand
+                valid_joint[:, 21:42] = flags[:, 1:2] > 0.5                       # right hand
+                valid_joint[:, 42:46] = flags[:, 2:3] > 0.5                       # arms
+                valid_joint[:, 46:53] = flags[:, 3:4] > 0.5                       # face
+
+                # Fill missing coords by prev/next interpolation (max 15-frame gaps)
+                pose_np, _, _ = split_163_to_pose(clip, J)                      # (T,J,3)
+                pose_filled = fill_missing_coords(pose_np, valid_joint,
+                                                  max_gap_frames=args.max_gap_frames)
+                pose = pose_filled.unsqueeze(0).to(device)                      # (1,T,J,3)
+                conf = torch.ones(T, J, device=device).unsqueeze(0)
+                valid = valid_joint.unsqueeze(0).to(device)
                 t = torch.arange(T, dtype=torch.float32, device=device).unsqueeze(0) / args.fps
 
                 out = model.yap.forward_frames(pose, conf, valid, t)
@@ -174,13 +237,19 @@ def phase2(args, clips_by_class, classes, out_root, ycfg, model, device, mapping
 
                 if len(segments) == 0:
                     stats["no_entity"] += 1
-                    # Save cleaned poses instead of empty entity
-                    clean = out["clean"][0].cpu()  # (T, J, 3)
-                    torch.save(clean, proc_path)
+                    # No segment detected: fabricate a full-clip segment so encode_segments
+                    # still produces an entity_dim-sized vector (keeps processed.pt shape
+                    # consistent for cosine-similarity loss in Phase A).
+                    fake_seg = Segment(0, T, float(t[0, 0]), float(t[0, T - 1]), "fallback", 0.0)
+                    ent, meta, _ = model.yap.encode_segments(out, t, [[fake_seg]])
+                    processed = ent.cpu()  # (1, entity_dim) -> squeeze
+                    torch.save(processed[0], proc_path)
+                    stats["entities_total"] += 1
                 else:
                     ent, meta, _ = model.yap.encode_segments(out, t, [segments])
                     processed = ent.cpu()  # (n_entities, entity_dim)
-                    torch.save(processed, proc_path)
+                    # Save the first (and usually only) entity as the per-clip target
+                    torch.save(processed[0], proc_path)
                     stats["entities_total"] += len(segments)
 
                 stats["processed"] += 1
@@ -289,6 +358,8 @@ def parse_args():
                    help="1=create folders+word.pt only (instant), "
                         "2=run YAP+processed.pt (slow, resumable), "
                         "3=both")
+    p.add_argument("--max_gap_frames", type=int, default=15,
+                   help="max gap frames to interpolate across; longer gaps held")
     p.add_argument("--d_model",        type=int, default=128)
     p.add_argument("--n_mem_layers",   type=int, default=3)
     p.add_argument("--summary_channels", type=int, default=32)
