@@ -1,0 +1,11 @@
+{
+  "segment_number": 1,
+  "start_seconds": 0.104,
+  "end_seconds": 4.053,
+  "duration_seconds": 3.949,
+  "reported_at_seconds": 4.181,
+  "report_delay_seconds": 0.128,
+  "reason": "max_len",
+  "captured_frames": 31,
+  "note": "Exact tracker-selected interval. This does not prove it is a correct gesture."
+}

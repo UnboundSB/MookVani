@@ -1,0 +1,86 @@
+[
+  {
+    "epoch": 1,
+    "train": 0.2767044071640287,
+    "val": 0.2519832806927817,
+    "val_presence": 0.007143645946468625,
+    "val_end": 0.2141343504190445,
+    "val_layer": 0.0614105723798275,
+    "train_presence": 0.007747532733316932,
+    "train_end": 0.22757932425491392,
+    "train_layer": 0.08275509933157572,
+    "boundary_f1_200ms": 0.6351047904191617,
+    "boundary_precision_200ms": 0.5694630872483222,
+    "boundary_recall_200ms": 0.7178510998307953,
+    "boundary_start_f1_200ms": 0.6152694610778442,
+    "boundary_end_f1_200ms": 0.6549401197604791,
+    "boundary_cut_reasons": {
+      "cut": 832,
+      "max_len": 207,
+      "presence_drop": 451
+    }
+  },
+  {
+    "epoch": 2,
+    "train": 0.2461583325787196,
+    "val": 0.2377465580190931,
+    "val_presence": 0.006917060752000127,
+    "val_end": 0.20514823070594243,
+    "val_layer": 0.05136253471885409,
+    "train_presence": 0.006943533056607795,
+    "train_end": 0.21161907840342747,
+    "train_layer": 0.05519144319825702,
+    "boundary_f1_200ms": 0.6569069069069069,
+    "boundary_precision_200ms": 0.5904183535762483,
+    "boundary_recall_200ms": 0.7402707275803723,
+    "boundary_start_f1_200ms": 0.6448948948948948,
+    "boundary_end_f1_200ms": 0.668918918918919,
+    "boundary_cut_reasons": {
+      "cut": 839,
+      "max_len": 190,
+      "presence_drop": 453
+    }
+  },
+  {
+    "epoch": 3,
+    "train": 0.236896942059199,
+    "val": 0.23132779555661337,
+    "val_presence": 0.006819392953600202,
+    "val_end": 0.20099308022430964,
+    "val_layer": 0.04703064103211675,
+    "train_presence": 0.006789353860926534,
+    "train_end": 0.2058150600346308,
+    "train_layer": 0.04858505483421068,
+    "boundary_f1_200ms": 0.6883789785344189,
+    "boundary_precision_200ms": 0.6118421052631579,
+    "boundary_recall_200ms": 0.7868020304568528,
+    "boundary_start_f1_200ms": 0.6735751295336788,
+    "boundary_end_f1_200ms": 0.703182827535159,
+    "boundary_cut_reasons": {
+      "cut": 914,
+      "max_len": 153,
+      "presence_drop": 453
+    }
+  },
+  {
+    "epoch": 4,
+    "train": 0.23135910739028265,
+    "val": 0.22809883100645884,
+    "val_presence": 0.0067410409184438845,
+    "val_end": 0.19897741292204177,
+    "val_layer": 0.04476076151643481,
+    "train_presence": 0.006781229350183692,
+    "train_end": 0.2017135669787725,
+    "train_layer": 0.045728621856560785,
+    "boundary_f1_200ms": 0.6818856718634001,
+    "boundary_precision_200ms": 0.607473544973545,
+    "boundary_recall_200ms": 0.7770727580372251,
+    "boundary_start_f1_200ms": 0.6674090571640683,
+    "boundary_end_f1_200ms": 0.6963622865627319,
+    "boundary_cut_reasons": {
+      "cut": 897,
+      "max_len": 163,
+      "presence_drop": 452
+    }
+  }
+]

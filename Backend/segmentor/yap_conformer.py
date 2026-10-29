@@ -1741,11 +1741,28 @@ def presence_targets(t: torch.Tensor, spans_t: List[Tuple[float, float]], ramp_s
     return tgt
 
 
-def end_targets(t: torch.Tensor, spans_t: List[Tuple[float, float]], sigma_s: float = 0.05) -> torch.Tensor:
-    """Gaussian bump (T,) centred on each span's end time = soft target for the 'end' head."""
+def end_targets(t: torch.Tensor, spans_t: List[Tuple[float, float]], sigma_s: float = 0.05,
+                normalize: bool = True) -> torch.Tensor:
+    """
+    Gaussian bump (T,) centred on each span's end time = soft target for the 'end' head.
+
+    If normalize (default True), each bump is divided by its own sum so that it
+    integrates to 1.0.  With this convention the sum of end probabilities over the
+    valid frames equals the number of labelled gesture-ending events — every gesture
+    contributes exactly one end bump whose mass is 1.0.  This keeps soft_count_loss()
+    consistent (see that function) and makes the sum of end probabilities a
+    differentiable, interpretable estimate of the gesture count.
+
+    WITHOUT normalisation q.sum() over-counts by the effective bump width in frames,
+    which is why the original code added "+1 for the final segment" as a hack.
+    Both the hack and the un-normalised bumps are removed here.
+    """
     tgt = torch.zeros_like(t)
     for _, e in spans_t:
-        tgt = torch.maximum(tgt, torch.exp(-0.5 * ((t - e) / sigma_s) ** 2))
+        bump = torch.exp(-0.5 * ((t - e) / sigma_s) ** 2)
+        if normalize:
+            bump = bump / bump.sum().clamp_min(1e-12)
+        tgt = torch.maximum(tgt, bump)
     return tgt
 
 
@@ -1773,14 +1790,28 @@ def layer_conf_loss(layer_conf, presence_target, mask=None):
 
 def soft_count_loss(end_logit, n_words, mask=None):
     """
-    Weak supervision (stage 3): expected number of segments = sum of end probabilities
-    (+1 for the final segment, which closes at end of stream) should equal the word count.
-    end_logit (B,T), n_words (B,) long.
+    Differentiable weak supervision for gesture count.
+
+    Convention (consistent with end_targets(normalize=True)): every gesture has
+    exactly one end event inside the stream, and each normalised end-target bump
+    integrates to 1.0, so the expected number of gestures is simply the sum of
+    end probabilities over the valid frames:
+
+        expected_count = sum_t q[t]       q = sigmoid(end_logit), masked to valid frames
+
+    There is NO "+1 for the final segment" term.  In our synthetic data every
+    gesture ends inside the stream (there is an explicit idle tail), so every
+    gesture contributes one end bump and the count target is the number of gestures.
+    Adding +1 would systematically over-estimate by one and pressure the model to
+    invent a spurious final boundary.
+
+    end_logit (B,T) logits, n_words (B,) long or float32.
+    Returns MSE between expected_count and n_words.
     """
     q = torch.sigmoid(end_logit)
     if mask is not None:
         q = q * mask
-    expected = q.sum(1) + 1.0
+    expected = q.sum(1)
     return ((expected - n_words.float()) ** 2).mean()
 
 
