@@ -394,9 +394,6 @@ def train(args):
     student = create_yap_model(sm_cfg, device)
     teacher = create_yap_model(sm_cfg, device)
 
-    # Classification head (word label from the clean entity)
-    cls_head = nn.Linear(args.entity_dim, num_classes).to(device)
-
     # If resuming or initialising from a pretrained YAP
     if args.init and os.path.exists(args.init):
         load_yap_weights(student, args.init, label="INIT")
@@ -406,11 +403,30 @@ def train(args):
         ck = torch.load(os.path.join(args.out_dir, "yap_noise_ckpt.pth"), map_location=device, weights_only=False)
         load_flexible(student, ck["student"], label="RESUME")
         load_flexible(teacher, ck["teacher"], label="RESUME", verbose=False)
-        load_flexible(cls_head, ck["cls_head"], label="RESUME")
         print(f"[RESUME] epoch {ck['epoch']}")
 
-    optimizer = torch.optim.AdamW(list(student.parameters()) + list(cls_head.parameters()),
-                                  lr=args.lr, weight_decay=1e-4)
+    # ---- FREEZE EVERYTHING EXCEPT THE PRESENCE HEAD -------------------------
+    # YAP is a gesture segmentor only. For presence training we train ONLY
+    # yap.core.presence_head (frame-level: is a sign happening right now?).
+    # All other layers (cleaner, expander, memory, end head, readout, etc.)
+    # are frozen so they don't drift.
+    for p in student.parameters():
+        p.requires_grad = False
+    for p in teacher.parameters():
+        p.requires_grad = False
+    # Unfreeze only the presence head on the student (teacher follows via EMA)
+    for p in student.yap.core.presence_head.parameters():
+        p.requires_grad = True
+
+    n_trainable = sum(p.numel() for p in student.parameters() if p.requires_grad)
+    n_total = sum(p.numel() for p in student.parameters())
+    print(f"[FREEZE] Trainable params: {n_trainable:,} / {n_total:,} "
+          f"({100.0 * n_trainable / n_total:.2f}%) — presence head only")
+
+    optimizer = torch.optim.AdamW(
+        [p for p in student.parameters() if p.requires_grad],
+        lr=args.lr, weight_decay=1e-4
+    )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=args.t0, T_mult=args.t_mult)
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -423,7 +439,7 @@ def train(args):
         print(f"[DATA] data_dir verified: {os.path.abspath(dd)}")
     best_loss = float("inf")
     rng = random.Random(args.seed)
-    history = {"train_loss": [], "true_loss": [], "train_acc": [], "train_f1": [], "lr": [], "blank": [], "div": []}
+    history = {"train_loss": [], "true_loss": [], "lr": []}
 
     print("=" * 72)
     print("YAP Stage 1 - NOISE FILTRATION  (kicked off)")
@@ -434,21 +450,18 @@ def train(args):
     print(f"  layout        : {args.layout}  (J={J})")
     print(f"  epochs        : {args.epochs}  |  batch_size={args.batch_size}  grad_accum={args.grad_accum}  (eff. batch={args.batch_size*args.grad_accum})")
     print(f"  d_model       : {args.d_model}  n_mem_layers={args.n_mem_layers}  summary_channels={args.summary_channels}  hippo_order={args.hippo_order}  entity_dim={args.entity_dim}")
-    print(f"  lr            : {args.lr}  ema_decay={args.ema_decay}  cls_w={args.cls_w}  ent_w={args.ent_w}")
+    print(f"  lr            : {args.lr}  ema_decay={args.ema_decay}  ent_w={args.ent_w}")
     print(f"  aug           : {args.aug}  aug_strength={args.aug_strength}  max_len={args.max_len}  seed={args.seed}")
     print(f"  noise         : scale[{args.noise_scale_min},{args.noise_scale_max}]  prob={args.noise_prob}  jitter_std={args.jitter_std}")
     print(f"  anti-blank    : blank_w={args.blank_w}  blank_floor={args.blank_floor}")
-    print(f"  anti-collapse : div_w={args.div_w}")
     print(f"  scheduler     : CosineAnnealingWarmRestarts T0={args.t0} T_mult={args.t_mult} (simulated annealing)")
     print(f"  num_workers   : {args.num_workers}")
     print("=" * 72)
     print()
 
     for ep in tqdm(range(args.epochs), desc="Stage 1 epochs", leave=True):
-        student.train(); teacher.eval(); cls_head.train()
+        student.train(); teacher.eval()
         ep_loss = 0.0; n_ok = 0
-        all_preds = []
-        all_labels = []
 
         micro = 0
         steps_done = 0
@@ -508,73 +521,15 @@ def train(args):
 
             # -- losses --------------------------------------------------------
             yap_s = out_s["yap"]
-            # presence loss: supervised by pres_target (1=word sign, 0=noise/idle)
-            # Student output has grad_fn; teacher does not (no_grad context).
+            # PRESENCE ONLY — supervised by pres_target (1=word sign, 0=noise/idle)
+            # Everything else (end head, entity consistency, blank penalty) is
+            # frozen — we train presence head alone this pass.
             T_min = min(yap_s["presence"].shape[1], pres_target.shape[1])
             pres_mask = mask[:, :T_min].float()
             l_pres = focal_presence_loss(
                 yap_s["presence"][:, :T_min], pres_target[:, :T_min], pres_mask)
-            # end-head loss: only on word clips (noise has no gesture end)
-            l_end = torch.tensor(0.0, device=device)
-            if is_word.any():
-                end_mask = mask[:, :T_min] * is_word.unsqueeze(1)
-                end_tgt = torch.zeros(B, T_min, device=device)
-                for b in range(B):
-                    if is_word[b]:
-                        n = int(lengths[b])
-                        if n <= T_min:
-                            end_tgt[b, :n] = end_targets(t[b, :n], [(0.0, (n-1)/30.0)], sigma_s=0.05)
-                l_end_raw = F.binary_cross_entropy_with_logits(
-                    yap_s["end"][:, :T_min], end_tgt, reduction="none",
-                    pos_weight=pose.new_tensor(10.0))
-                l_end = (l_end_raw * end_mask.float()).sum() / end_mask.float().sum().clamp_min(1)
-            # word classification on clean path (word clips only)
-            l_cls = torch.tensor(0.0, device=device)
-            if is_word.any() and out_s["token_mask"].sum() > 0:
-                wl = out_s["word_logits"]                        # (B, K, V+1)
-                labels_w = labels[is_word]                      # (N_w,)
-                # Get entity logits for word clips: use the first masked token
-                tm = out_s["token_mask"][is_word]               # (N_w, K)
-                if tm.sum() > 0:
-                    first_k = tm.float().argmax(dim=1)          # (N_w,)
-                    ent_vec_clean = wl[is_word][torch.arange(len(labels_w), device=device), first_k]  # (N_w, V+1)
-                    l_cls = F.cross_entropy(ent_vec_clean[:, 1:], labels_w)  # skip blank col
-                    # collect predictions for epoch accuracy / F1 (word clips only)
-                    preds = ent_vec_clean[:, 1:].argmax(-1)
-                    all_preds.append(preds.detach().cpu())
-                    all_labels.append(labels_w.detach().cpu())
 
-            loss = l_pres + l_end + args.cls_w * l_cls
-
-            # ---- anti-blank: WORD clips only (noise clips should be blank) ----
-            if is_word.any():
-                word_presence = yap_s["presence"][is_word][:, :lengths[is_word][0] if lengths[is_word].numel() > 0 else T_min]
-                presence_mean = word_presence.mean()
-            else:
-                presence_mean = yap_s["presence"].mean()
-            l_blank = torch.relu(args.blank_floor - presence_mean)
-
-            # ---- anti-collapse: word predictions across word clips only ----
-            l_div = torch.tensor(0.0, device=device)
-            if is_word.any() and out_s["token_mask"].sum() > 0:
-                wl = out_s["word_logits"]                      # (B, K, V+1)
-                probs = wl.softmax(-1)[:, :, 1:]               # drop blank col -> (B, K, V)
-                pred_class = probs.argmax(-1)                  # (B, K)
-                # Only consider word clips
-                pred_w = pred_class[is_word]                   # (N_w, K)
-                l_div = -(pred_w.float().std(dim=0).mean())  # negative = want high std
-
-            loss = loss + args.blank_w * l_blank + args.div_w * l_div
-
-            # ---- anti-collapse: word predictions across word clips only ----
-            l_div = torch.tensor(0.0, device=device)
-            if is_word.any() and out_s["token_mask"].sum() > 0:
-                wl = out_s["word_logits"]                      # (B, K, V+1)
-                probs = wl.softmax(-1)[:, :, 1:]               # drop blank col -> (B, K, V)
-                pred_class = probs.argmax(-1)                  # (B, K)
-                # Only consider word clips
-                pred_w = pred_class[is_word]                   # (N_w, K)
-                l_div = -(pred_w.float().std(dim=0).mean())  # negative = want high std
+            loss = l_pres
             if torch.isfinite(loss):
                 # The gradient is ACCUMULATED over --grad_accum micro-batches:
                 # the effective batch stays the same while the memory stays low.
@@ -609,38 +564,19 @@ def train(args):
             mem = torch.cuda.max_memory_allocated() / (1024 ** 3)
             print(f"    [MEM] peak GPU memory {mem:.2f} GB (batch {args.batch_size} x accum {args.grad_accum})")
         scheduler.step()
-        # ---- epoch metrics: true (non-negative) task loss, acc, f1 ----
-        pure_task_loss = float(l_pres + l_end + args.cls_w * l_cls)
-        if all_preds:
-            all_preds_t = torch.cat(all_preds)
-            all_labels_t = torch.cat(all_labels)
-            epoch_acc = float((all_preds_t == all_labels_t).float().mean().item())
-            epoch_f1 = _macro_f1(all_preds_t.numpy(), all_labels_t.numpy(), num_classes)
-        else:
-            epoch_acc = 0.0
-            epoch_f1 = 0.0
-
+        # ---- epoch metrics: presence loss only ----
         composite_loss = ep_loss / max(1, n_ok)
-        # strip out the negative regularizers for the "true" non-negative task loss
-        true_loss = composite_loss - args.blank_w * float(l_blank)
+        true_loss = composite_loss
 
         history["train_loss"].append(composite_loss)
         history["true_loss"].append(true_loss)
-        history["train_acc"].append(epoch_acc)
-        history["train_f1"].append(epoch_f1)
         history["lr"].append(scheduler.get_last_lr()[0])
-        history["blank"].append(float(l_blank))
-        history["div"].append(float(l_div))
 
         print(f"[Ep {ep+1:02d}/{args.epochs}] "
-              f"pres={float(l_pres):.4f} end={float(l_end):.4f} cls={float(l_cls):.4f} "
-              f"blank={float(l_blank):.4f} div={float(l_div):.4f} | "
-              f"ACC {epoch_acc*100:.2f}% | F1 {epoch_f1:.4f} | "
+              f"pres={float(l_pres):.4f} | "
               f"lr {scheduler.get_last_lr()[0]:.2e} | {steps_done} steps "
               f"(batch {args.batch_size})")
-        print(f"     TOTAL loss={true_loss:.4f}  "
-              f"(pres={float(l_pres):.4f} + end={float(l_end):.4f} + cls={args.cls_w}*{float(l_cls):.4f} + "
-              f"blank={args.blank_w}*{float(l_blank):.4f})  [div={float(l_div):.4f} diagnostic only]")
+        print(f"     TOTAL loss={true_loss:.4f}  (pres={float(l_pres):.4f})")
 
         # -- live plots after every epoch --
         plot_training_curves(
@@ -661,7 +597,7 @@ def train(args):
         if (ep + 1) % 5 == 0 or ep + 1 == args.epochs:
             # Save checkpoint
             torch.save({"epoch": ep + 1, "student": student.state_dict(),
-                        "teacher": teacher.state_dict(), "cls_head": cls_head.state_dict()},
+                        "teacher": teacher.state_dict()},
                        os.path.join(args.out_dir, "yap_noise_ckpt.pth"))
             if ep_loss < best_loss:
                 best_loss = ep_loss
@@ -716,12 +652,10 @@ def parse_args():
                    help="Scales the magnitude of the augmentation")
     p.add_argument("--lr",        type=float, default=3e-4)
     p.add_argument("--ema_decay", type=float, default=0.99, help="Teacher EMA decay")
-    p.add_argument("--cls_w",     type=float, default=1.0,  help="Word-label loss weight")
     p.add_argument("--ent_w",     type=float, default=0.5,  help="Entity consistency weight")
-    # ---- anti-blank / anti-collapse knobs ----
+    # ---- anti-blank knobs ----
     p.add_argument("--blank_w",   type=float, default=1.0,  help="Weight on presence-mass anti-blank penalty")
     p.add_argument("--blank_floor",type=float, default=0.15, help="Minimum mean presence per clip (anti-blank floor)")
-    p.add_argument("--div_w",     type=float, default=0.5,  help="Weight on prediction-diversity anti-collapse term")
     # ---- simulated cosine annealing (SGDR warm restarts) ----
     p.add_argument("--t0",        type=int,   default=5,    help="First restart period (epochs) for cosine warm restarts")
     p.add_argument("--t_mult",    type=int,   default=2,    help="Multiply restart period by this after each restart")
