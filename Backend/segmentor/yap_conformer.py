@@ -1972,7 +1972,8 @@ class YAPpingConformer(nn.Module):
         full_mask = torch.cat([torch.ones(B, 1, dtype=torch.bool, device=x.device), mask], dim=1)
         for blk in self.blocks:
             x = blk(x, full_mask)
-        return dict(word_logits=self.head(x[:, 1:]), token_mask=mask, segments=segments, yap=out)
+        return dict(word_logits=self.head(x[:, 1:]), token_mask=mask, segments=segments,
+                    yap=out, entities=ent, entity_meta=meta, entity_owner=owner)
 
 
 def sentence_ctc_loss(word_logits, token_mask, targets, target_lengths):

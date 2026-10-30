@@ -61,6 +61,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))  # Backend/
 from utils.checkpoint_utils import load_flexible
 from utils.pose_augmentation import AugmentConfig, augment_hands_batch
+from utils.segmentor_utils import (
+    create_yap_model, load_yap_weights, save_segmentor_ckpt,
+    SegmentorModelCfg,
+)
 
 from yap_conformer import (
     YAPConfig, YAPCore, YAP, YAPpingConformer, ConformerConfig,
@@ -110,32 +114,75 @@ AUG_CFG = AugmentConfig(
 # ==============================================================================
 class WordClipDataset(Dataset):
     """
-    Each item is ONE word-level clip. Returns:
-      pose (T,J,3) float  clean MediaPipe landmarks (harmonized)
-      conf (T,J)   float  confidence (1.0 if unavailable)
-      valid (T,J)  bool   all True for stored tensors (dropout added in aug)
-      label        int    word class index
-      t            (T,)   synthetic uniform timestamps at 30 fps
+    Mixed dataset: word clips (presence=1 during the sign) + noise clips
+    (presence=0 everywhere). Each item returns:
+      pose          (T,J,3) float
+      conf          (T,J)   float
+      valid         (T,J)   bool
+      label         int     word class index, or -1 for noise clips
+      t             (T,)    timestamps
+      presence_tgt  (T,)    1.0 during word sign, 0.0 for noise / idle
+      is_word       bool    True for word clips, False for noise
     """
 
-    def __init__(self, clips: list[dict], num_joints: int, max_len: int = 400):
-        self.clips = clips
+    def __init__(self, word_clips: list[dict], noise_clips: list[dict],
+                 num_joints: int, max_len: int = 400):
+        self.word_clips = word_clips
+        self.noise_clips = noise_clips
         self.J = num_joints
         self.max_len = max_len
+        # Build combined item list: (kind, index)
+        self.items = [("w", i) for i in range(len(word_clips))] + \
+                     [("n", i) for i in range(len(noise_clips))]
 
     def __len__(self):
-        return len(self.clips)
+        return len(self.items)
 
     def __getitem__(self, idx):
-        item = self.clips[idx]
-        raw = np.load(item["path"]).astype(np.float32)          # (T, J*3)
+        kind, i = self.items[idx]
+        if kind == "w":
+            return self._get_word(i)
+        else:
+            return self._get_noise(i)
+
+    def _load_raw(self, path: str) -> np.ndarray:
+        """Load a .pt or .npy clip into a (T, J*3) float32 numpy array."""
+        ext = Path(path).suffix.lower()
+        if ext == ".pt":
+            t = torch.load(path, map_location="cpu", weights_only=True).float()
+            if t.dim() == 3:  # (T, J, 3) already
+                return t.numpy().reshape(len(t), -1)
+            return t.numpy().reshape(len(t), -1)  # (T, J*3)
+        else:  # .npy
+            return np.load(path).astype(np.float32)
+
+    def _get_word(self, idx):
+        item = self.word_clips[idx]
+        raw = self._load_raw(item["path"])  # (T, 163) or (T, J*3)
+        raw = raw[:, : self.J * 3]  # keep only J*3 coord dims, drop flags
         T = min(len(raw), self.max_len)
         raw = raw[:T]
         pose = torch.from_numpy(raw).view(T, self.J, 3)
         conf = torch.ones(T, self.J)
         valid = torch.ones(T, self.J, dtype=torch.bool)
         t = torch.arange(T, dtype=torch.float32) / 30.0
-        return pose, conf, valid, item["label"], t
+        # Whole clip is one word sign: presence = 1 for all frames
+        presence_tgt = torch.ones(T)
+        return pose, conf, valid, item["label"], t, presence_tgt, True
+
+    def _get_noise(self, idx):
+        item = self.noise_clips[idx]
+        raw = self._load_raw(item["path"])  # (T, 163) or (T, J*3)
+        raw = raw[:, : self.J * 3]  # keep only J*3 coord dims, drop flags
+        T = min(len(raw), self.max_len)
+        raw = raw[:T]
+        pose = torch.from_numpy(raw).view(T, self.J, 3)
+        conf = torch.ones(T, self.J)
+        valid = torch.ones(T, self.J, dtype=torch.bool)
+        t = torch.arange(T, dtype=torch.float32) / 30.0
+        # Noise clip: presence = 0 everywhere (no sign)
+        presence_tgt = torch.zeros(T)
+        return pose, conf, valid, -1, t, presence_tgt, False
 
 
 def _macro_f1(preds, labels, num_classes: int) -> float:
@@ -156,7 +203,7 @@ def _macro_f1(preds, labels, num_classes: int) -> float:
 
 def _collate(batch):
     """Pad to the longest clip in the batch."""
-    poses, confs, valids, labels, ts = zip(*batch)
+    poses, confs, valids, labels, ts, pres_tgts, is_words = zip(*batch)
     B = len(poses)
     T = max(p.shape[0] for p in poses)
     J = poses[0].shape[1]
@@ -164,20 +211,30 @@ def _collate(batch):
     conf_b = torch.zeros(B, T, J)
     valid_b = torch.zeros(B, T, J, dtype=torch.bool)
     t_b = torch.zeros(B, T)
+    pres_b = torch.zeros(B, T)
+    mask_b = torch.zeros(B, T, dtype=torch.bool)
     lengths = torch.zeros(B, dtype=torch.long)
-    for i, (p, c, v, _, t_) in enumerate(zip(poses, confs, valids, labels, ts)):
+    label_b = torch.full((B,), -1, dtype=torch.long)
+    is_word_b = torch.zeros(B, dtype=torch.bool)
+    for i, (p, c, v, l, t_, pt, iw, length) in enumerate(zip(
+            poses, confs, valids, labels, ts, pres_tgts, is_words,
+            [p.shape[0] for p in poses])):
         n = p.shape[0]
         pose_b[i, :n] = p
         conf_b[i, :n] = c
         valid_b[i, :n] = v
         t_b[i, :n] = t_
         t_b[i, n:] = t_[-1]        # pad timestamps (harmless, valid=False)
+        pres_b[i, :n] = pt
+        mask_b[i, :n] = True
+        label_b[i] = l
+        is_word_b[i] = iw
         lengths[i] = n
-    return pose_b, conf_b, valid_b, torch.tensor(labels, dtype=torch.long), t_b, lengths
+    return pose_b, conf_b, valid_b, label_b, t_b, pres_b, mask_b, lengths, is_word_b
 
 
 def load_clips(data_dirs, classes_path, max_per_class=None):
-    """Scan data directories for .npy word clips. Returns list of dicts."""
+    """Scan data directories for .pt/.npy word clips. Returns list of dicts."""
     # Load class list for label mapping
     with open(classes_path) as f:
         classes = json.load(f)
@@ -201,11 +258,12 @@ def load_clips(data_dirs, classes_path, max_per_class=None):
                 if p.exists():
                     clips.append({"path": str(p), "label": label_map[lbl]})
         else:
-            # Fallback: scan .npy files named <anything>/<label>/<...>.npy
-            for npy in d.rglob("*.npy"):
-                lbl = npy.parent.name
-                if lbl in label_map:
-                    clips.append({"path": str(npy), "label": label_map[lbl]})
+            # Fallback: scan .pt and .npy files named <anything>/<label>/<...>
+            for ext in ("*.pt", "*.npy"):
+                for f in d.rglob(ext):
+                    lbl = f.parent.name
+                    if lbl in label_map:
+                        clips.append({"path": str(f), "label": label_map[lbl], "ext": f.suffix})
 
     if max_per_class:
         from collections import defaultdict
@@ -218,6 +276,26 @@ def load_clips(data_dirs, classes_path, max_per_class=None):
             clips.extend(items[:max_per_class])
 
     random.shuffle(clips)
+    return clips
+
+
+def load_noise_clips(noise_dir: str) -> list[dict]:
+    """Scan a noise directory for .npy clips. Returns list of dicts."""
+    clips = []
+    d = Path(noise_dir)
+    if not d.exists():
+        return clips
+    idx_path = d / "index.json"
+    if idx_path.exists():
+        with open(idx_path) as f:
+            entries = json.load(f)
+        for e in entries:
+            p = d / e["path"] if not os.path.isabs(e["path"]) else Path(e["path"])
+            if p.exists():
+                clips.append({"path": str(p), "label": "NOISE"})
+    else:
+        for npy in d.rglob("*.npy"):
+            clips.append({"path": str(npy), "label": "NOISE"})
     return clips
 
 
@@ -284,11 +362,22 @@ def train(args):
     if not all_clips:
         raise RuntimeError(f"No clips found in {args.data_dirs}. Check paths.")
     split = max(1, int(len(all_clips) * 0.9))
-    train_clips, val_clips = all_clips[:split], all_clips[split:]
-    print(f"[DATA] {len(train_clips)} train clips, {len(val_clips)} val clips, {num_classes} classes")
+    train_word, val_word = all_clips[:split], all_clips[split:]
 
-    train_ds = WordClipDataset(train_clips, J, args.max_len)
-    val_ds   = WordClipDataset(val_clips,   J, args.max_len)
+    # Load noise clips (all-blank + random garbage) for presence=0 training
+    train_noise, val_noise = [], []
+    if args.noise_dir:
+        all_noise = load_noise_clips(args.noise_dir)
+        random.shuffle(all_noise)
+        n_split = max(1, int(len(all_noise) * 0.9)) if all_noise else 0
+        train_noise, val_noise = all_noise[:n_split], all_noise[n_split:]
+
+    print(f"[DATA] {len(train_word)} train word clips, {len(val_word)} val word clips, "
+          f"{len(train_noise)} train noise clips, {len(val_noise)} val noise clips, "
+          f"{num_classes} classes (max {args.max_per_class} per class)")
+
+    train_ds = WordClipDataset(train_word, train_noise, J, args.max_len)
+    val_ds   = WordClipDataset(val_word,   val_noise,   J, args.max_len)
     train_ld = DataLoader(train_ds, args.batch_size, shuffle=True,  collate_fn=_collate, num_workers=args.num_workers)
     val_ld   = DataLoader(val_ds,   args.batch_size, shuffle=False, collate_fn=_collate, num_workers=args.num_workers)
 
@@ -296,17 +385,22 @@ def train(args):
     # teacher: receives CLEAN clips, no grad (reference signal)
     # student: receives NOISY clips, gradients flow through it
     # They share NO weights. The student is what we train and save.
-    teacher = YAPpingConformer(ycfg, ConformerConfig(num_words=num_classes, d_model=args.d_model)).to(device)
-    student = YAPpingConformer(ycfg, ConformerConfig(num_words=num_classes, d_model=args.d_model)).to(device)
+    sm_cfg = SegmentorModelCfg(
+        layout=args.layout, d_model=args.d_model, n_mem_layers=args.n_mem_layers,
+        summary_channels=args.summary_channels, hippo_order=args.hippo_order,
+        entity_dim=args.entity_dim, num_words=num_classes,
+        conformer_d_model=args.d_model, conformer_heads=4, conformer_layers=4,
+    )
+    student = create_yap_model(sm_cfg, device)
+    teacher = create_yap_model(sm_cfg, device)
 
     # Classification head (word label from the clean entity)
     cls_head = nn.Linear(args.entity_dim, num_classes).to(device)
 
     # If resuming or initialising from a pretrained YAP
     if args.init and os.path.exists(args.init):
-        sd = torch.load(args.init, map_location=device, weights_only=True)
-        load_flexible(student, sd, label="INIT")
-        load_flexible(teacher, sd, label="INIT", verbose=False)
+        load_yap_weights(student, args.init, label="INIT")
+        load_yap_weights(teacher, args.init, label="INIT")
         print(f"[INIT] loaded weights from {args.init}")
     if args.resume and os.path.exists(os.path.join(args.out_dir, "yap_noise_ckpt.pth")):
         ck = torch.load(os.path.join(args.out_dir, "yap_noise_ckpt.pth"), map_location=device, weights_only=False)
@@ -359,10 +453,11 @@ def train(args):
         micro = 0
         steps_done = 0
         pbar = tqdm(train_ld, desc=f"Ep {ep+1:02d}/{args.epochs}", leave=False)
-        for pose, conf, valid, labels, t, lengths in pbar:
-            pose, conf, valid, labels, t, lengths = (
+        for pose, conf, valid, labels, t, pres_target, mask, lengths, is_word in pbar:
+            pose, conf, valid, labels, t, pres_target, mask, lengths, is_word = (
                 pose.to(device), conf.to(device), valid.to(device),
-                labels.to(device), t.to(device), lengths.to(device))
+                labels.to(device), t.to(device), pres_target.to(device),
+                mask.to(device), lengths.to(device), is_word.to(device))
 
             # -- build noisy batch ---------------------------------------------
             # -- the canonical augmentation (mirror / tilt / shift / speed) --
@@ -412,60 +507,74 @@ def train(args):
             out_s = student(pose_n, conf_n, valid_n, t_n, lengths_n)
 
             # -- losses --------------------------------------------------------
-            yap_t, yap_s = out_t["yap"], out_s["yap"]
-            # presence KL (student must agree with teacher on when gesture happens)
-            # Both have shape (B, T_clean) and (B, T_noisy); use min length
-            T_min = min(yap_t["presence"].shape[1], yap_s["presence"].shape[1])
-            l_pres = presence_kl(
-                yap_t["presence"][:, :T_min],
-                yap_s["presence"][:, :T_min],
-                lengths.clamp_max(T_min))
-            # end-head KL
-            l_end = presence_kl(
-                yap_t["end"][:, :T_min],
-                yap_s["end"][:, :T_min],
-                lengths.clamp_max(T_min))
-            # entity consistency (MSE after soft alignment)
-            ent_t = out_t.get("entity_raw")
-            ent_s = out_s.get("entity_raw")
-            l_ent = (entity_consistency(out_t["word_logits"].view(-1, num_classes + 1),
-                                        out_s["word_logits"].view(-1, num_classes + 1))
-                     if out_t["token_mask"].sum() > 0 and out_s["token_mask"].sum() > 0
-                     else torch.tensor(0.0, device=device))
-            # word classification on clean path (anti-collapse + keeps both correct)
-            if out_t["token_mask"].sum() > 0:
-                wl = out_t["word_logits"]                        # (B, K, V+1)
-                # pick the first valid entity per batch row
-                first_k = out_t["token_mask"].float().argmax(dim=1)  # (B,)
-                ent_vec_clean = wl[torch.arange(B, device=device), first_k]  # (B, V+1)
-                l_cls = F.cross_entropy(ent_vec_clean[:, 1:], labels)         # skip blank col
-                # collect predictions for epoch accuracy / F1
-                preds = ent_vec_clean[:, 1:].argmax(-1)
-                all_preds.append(preds.detach().cpu())
-                all_labels.append(labels.detach().cpu())
+            yap_s = out_s["yap"]
+            # presence loss: supervised by pres_target (1=word sign, 0=noise/idle)
+            # Student output has grad_fn; teacher does not (no_grad context).
+            T_min = min(yap_s["presence"].shape[1], pres_target.shape[1])
+            pres_mask = mask[:, :T_min].float()
+            l_pres = focal_presence_loss(
+                yap_s["presence"][:, :T_min], pres_target[:, :T_min], pres_mask)
+            # end-head loss: only on word clips (noise has no gesture end)
+            l_end = torch.tensor(0.0, device=device)
+            if is_word.any():
+                end_mask = mask[:, :T_min] * is_word.unsqueeze(1)
+                end_tgt = torch.zeros(B, T_min, device=device)
+                for b in range(B):
+                    if is_word[b]:
+                        n = int(lengths[b])
+                        if n <= T_min:
+                            end_tgt[b, :n] = end_targets(t[b, :n], [(0.0, (n-1)/30.0)], sigma_s=0.05)
+                l_end_raw = F.binary_cross_entropy_with_logits(
+                    yap_s["end"][:, :T_min], end_tgt, reduction="none",
+                    pos_weight=pose.new_tensor(10.0))
+                l_end = (l_end_raw * end_mask.float()).sum() / end_mask.float().sum().clamp_min(1)
+            # word classification on clean path (word clips only)
+            l_cls = torch.tensor(0.0, device=device)
+            if is_word.any() and out_s["token_mask"].sum() > 0:
+                wl = out_s["word_logits"]                        # (B, K, V+1)
+                labels_w = labels[is_word]                      # (N_w,)
+                # Get entity logits for word clips: use the first masked token
+                tm = out_s["token_mask"][is_word]               # (N_w, K)
+                if tm.sum() > 0:
+                    first_k = tm.float().argmax(dim=1)          # (N_w,)
+                    ent_vec_clean = wl[is_word][torch.arange(len(labels_w), device=device), first_k]  # (N_w, V+1)
+                    l_cls = F.cross_entropy(ent_vec_clean[:, 1:], labels_w)  # skip blank col
+                    # collect predictions for epoch accuracy / F1 (word clips only)
+                    preds = ent_vec_clean[:, 1:].argmax(-1)
+                    all_preds.append(preds.detach().cpu())
+                    all_labels.append(labels_w.detach().cpu())
+
+            loss = l_pres + l_end + args.cls_w * l_cls
+
+            # ---- anti-blank: WORD clips only (noise clips should be blank) ----
+            if is_word.any():
+                word_presence = yap_s["presence"][is_word][:, :lengths[is_word][0] if lengths[is_word].numel() > 0 else T_min]
+                presence_mean = word_presence.mean()
             else:
-                l_cls = torch.tensor(0.0, device=device)
-
-            loss = l_pres + l_end + args.ent_w * l_ent + args.cls_w * l_cls
-
-            # ---- anti-blank: every clip has exactly 1 word, so presence
-            #        mass shouldn't collapse to ~0 (all blank / no gesture) ----
-            presence_mean = yap_t["presence"].mean()
+                presence_mean = yap_s["presence"].mean()
             l_blank = torch.relu(args.blank_floor - presence_mean)
 
-            # ---- anti-collapse: word predictions across the batch should
-            #        not all be the same class (local-minimum collapse) ----
-            if out_t["token_mask"].sum() > 0:
-                wl = out_t["word_logits"]                      # (B, K, V+1)
+            # ---- anti-collapse: word predictions across word clips only ----
+            l_div = torch.tensor(0.0, device=device)
+            if is_word.any() and out_s["token_mask"].sum() > 0:
+                wl = out_s["word_logits"]                      # (B, K, V+1)
                 probs = wl.softmax(-1)[:, :, 1:]               # drop blank col -> (B, K, V)
-                # take the max-prob non-blank class per entity slot, then per batch row
                 pred_class = probs.argmax(-1)                  # (B, K)
-                # variance of predicted classes across batch (per slot), averaged
-                l_div = -(pred_class.float().std(dim=0).mean())  # negative = want high std
-            else:
-                l_div = torch.tensor(0.0, device=device)
+                # Only consider word clips
+                pred_w = pred_class[is_word]                   # (N_w, K)
+                l_div = -(pred_w.float().std(dim=0).mean())  # negative = want high std
 
             loss = loss + args.blank_w * l_blank + args.div_w * l_div
+
+            # ---- anti-collapse: word predictions across word clips only ----
+            l_div = torch.tensor(0.0, device=device)
+            if is_word.any() and out_s["token_mask"].sum() > 0:
+                wl = out_s["word_logits"]                      # (B, K, V+1)
+                probs = wl.softmax(-1)[:, :, 1:]               # drop blank col -> (B, K, V)
+                pred_class = probs.argmax(-1)                  # (B, K)
+                # Only consider word clips
+                pred_w = pred_class[is_word]                   # (N_w, K)
+                l_div = -(pred_w.float().std(dim=0).mean())  # negative = want high std
             if torch.isfinite(loss):
                 # The gradient is ACCUMULATED over --grad_accum micro-batches:
                 # the effective batch stays the same while the memory stays low.
@@ -501,7 +610,7 @@ def train(args):
             print(f"    [MEM] peak GPU memory {mem:.2f} GB (batch {args.batch_size} x accum {args.grad_accum})")
         scheduler.step()
         # ---- epoch metrics: true (non-negative) task loss, acc, f1 ----
-        pure_task_loss = float(l_pres + l_end + args.ent_w * l_ent + args.cls_w * l_cls)
+        pure_task_loss = float(l_pres + l_end + args.cls_w * l_cls)
         if all_preds:
             all_preds_t = torch.cat(all_preds)
             all_labels_t = torch.cat(all_labels)
@@ -513,7 +622,7 @@ def train(args):
 
         composite_loss = ep_loss / max(1, n_ok)
         # strip out the negative regularizers for the "true" non-negative task loss
-        true_loss = composite_loss - args.blank_w * float(l_blank) - args.div_w * float(l_div)
+        true_loss = composite_loss - args.blank_w * float(l_blank)
 
         history["train_loss"].append(composite_loss)
         history["true_loss"].append(true_loss)
@@ -524,11 +633,14 @@ def train(args):
         history["div"].append(float(l_div))
 
         print(f"[Ep {ep+1:02d}/{args.epochs}] "
-              f"LOSS {true_loss:.4f} | ACC {epoch_acc*100:.2f}% | F1 {epoch_f1:.4f} | "
+              f"pres={float(l_pres):.4f} end={float(l_end):.4f} cls={float(l_cls):.4f} "
+              f"blank={float(l_blank):.4f} div={float(l_div):.4f} | "
+              f"ACC {epoch_acc*100:.2f}% | F1 {epoch_f1:.4f} | "
               f"lr {scheduler.get_last_lr()[0]:.2e} | {steps_done} steps "
               f"(batch {args.batch_size})")
-        if composite_loss != true_loss:
-            print(f"     (composite={composite_loss:.4f} | blank_pen={args.blank_w*float(l_blank):.4f} | div_pen={args.div_w*float(l_div):.4f})")
+        print(f"     TOTAL loss={true_loss:.4f}  "
+              f"(pres={float(l_pres):.4f} + end={float(l_end):.4f} + cls={args.cls_w}*{float(l_cls):.4f} + "
+              f"blank={args.blank_w}*{float(l_blank):.4f})  [div={float(l_div):.4f} diagnostic only]")
 
         # -- live plots after every epoch --
         plot_training_curves(
@@ -566,6 +678,8 @@ def train(args):
 def parse_args():
     p = argparse.ArgumentParser(description="YAP Stage 1: Noise Filtration Training")
     p.add_argument("--data_dirs", nargs="+", default=DEFAULT_DATA_DIRS)
+    p.add_argument("--noise_dir", default=None,
+                   help="Directory of noise .npy clips (all-blank + random garbage) for presence=0 training")
     p.add_argument("--classes",   default=CLASSES_PATH)
     p.add_argument("--out_dir",   default=DEFAULT_OUT)
     p.add_argument("--init",      default=None, help="Pretrained YAPpingConformer weights")
@@ -612,7 +726,8 @@ def parse_args():
     p.add_argument("--t0",        type=int,   default=5,    help="First restart period (epochs) for cosine warm restarts")
     p.add_argument("--t_mult",    type=int,   default=2,    help="Multiply restart period by this after each restart")
     p.add_argument("--max_len",   type=int,   default=400)
-    p.add_argument("--max_per_class", type=int, default=None)
+    p.add_argument("--max_per_class", type=int, default=20,
+                   help="Max clips per class (default 20, matches old pipeline)")
     p.add_argument("--seed",      type=int,   default=42)
     # YAP architecture
     p.add_argument("--d_model",         type=int, default=128)

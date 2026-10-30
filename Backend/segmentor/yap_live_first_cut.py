@@ -374,6 +374,7 @@ def main():
     count=0; show_panel=True; mirror=True; flash_until=0; fps=0.0
     camera_buffer=collections.deque(maxlen=300)
     first_cut_saved=False
+    paused=False
     args.save_dir.mkdir(parents=True,exist_ok=True)
     with hand,body,face,torch.inference_mode():
         try:
@@ -394,8 +395,17 @@ def main():
                 recorded=mirrored.copy()
                 draw_landmarks(recorded,parts)
                 camera_buffer.append((ts/1000.0,recorded))
-                entities=stream.push(torch.from_numpy(xyz),torch.from_numpy(confidence),
-                                     torch.from_numpy(valid),ts/1000.0)
+                if paused:
+                    entities=[]
+                    out=stream.last_out
+                    if out is None:
+                        # warm the stream with one push so last_out exists
+                        stream.push(torch.from_numpy(xyz),torch.from_numpy(confidence),
+                                    torch.from_numpy(valid),ts/1000.0)
+                        out=stream.last_out
+                else:
+                    entities=stream.push(torch.from_numpy(xyz),torch.from_numpy(confidence),
+                                         torch.from_numpy(valid),ts/1000.0)
                 current=time.perf_counter()
                 if entities:
                     flash_until=current+0.65
@@ -404,28 +414,32 @@ def main():
                         event=f'#{count} {e.reason} [{e.start_t:.2f}s-{e.end_t:.2f}s]'
                         events.append(event)
                         print('[SEGMENT]',event, f'duration={e.end_t-e.start_t:.2f}s')
-                        if not first_cut_saved:
+                        if not first_cut_saved and not paused:
                             first_cut_saved=True
                             sheet, details, report_path, video_path = save_first_segment(
                                 camera_buffer,e,ts/1000.0,args.save_dir)
                             if not args.no_freeze:
                                 if not inspect_first_cut(sheet,details,report_path,video_path):
                                     return
-                                # Re-arm first-cut inspection on every Space press.
-                                # Do NOT reset the MediaPipe VIDEO timestamp: it must
-                                # increase monotonically across the entire camera session.
-                                # A new YAPStream can accept the current absolute timestamp.
+                                # Resume tracking with a fresh stream. Keep the MediaPipe
+                                # VIDEO timestamp monotonic across the session.
                                 stream=model.stream(device=device)
-                                first_cut_saved=False
+                                paused=False
                                 camera_buffer.clear()
                                 hist_p.clear();hist_q.clear();events.clear()
                                 count=0
                                 flash_until=0
                                 print('[RESUME] Tracking reset; next segment will freeze again')
-                                # The fresh stream has no last_out until push() runs.
-                                # Skip the rest of this iteration and read a new frame.
                                 continue
                 out=stream.last_out
+                if out is None:
+                    # stream was just reset; warm it so last_out exists
+                    stream.push(torch.from_numpy(xyz),torch.from_numpy(confidence),
+                                torch.from_numpy(valid),ts/1000.0)
+                    out=stream.last_out
+                if out is None:
+                    # still nothing; skip this frame
+                    continue
                 p=float(torch.sigmoid(out['presence'][0]).item());q=float(torch.sigmoid(out['end'][0]).item())
                 hist_p.append(p);hist_q.append(q)
                 process_elapsed=max(time.perf_counter()-loop_start,1e-6)
@@ -448,12 +462,15 @@ def main():
                     filename=args.save_dir/f'yap_{int(time.time())}.png'
                     cv2.imwrite(str(filename),viz)
                     print('[SCREENSHOT]',filename)
+                if key==ord(' '):   # SPACE: pause / resume
+                    paused=not paused
+                    print('[PAUSE]' if paused else '[RESUME]')
                 if key==ord('r'):
                     for e in stream.flush():
                         print('[FLUSH]',e.reason,e.start_t,e.end_t)
                     stream=model.stream(device=device)
                     hist_p.clear();hist_q.clear();events.clear();count=0;flash_until=0
-                    camera_buffer.clear(); first_cut_saved=False
+                    camera_buffer.clear(); first_cut_saved=False; paused=False
                     print('[RESET] Stream state cleared')
         finally:
             cap.release();cv2.destroyAllWindows()

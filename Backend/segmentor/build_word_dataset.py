@@ -243,8 +243,8 @@ def phase2(args, clips_by_class, classes, out_root, mapping):
                 continue
 
             idx = prep_futures.pop(done_fut)
-            status, word, take_idx, wp, pp, pose, t = done_fut.result()
-
+            result = done_fut.result()
+            status = result[0]
             if status == "skip":
                 stats["skipped"] += 1
                 completed += 1
@@ -255,6 +255,9 @@ def phase2(args, clips_by_class, classes, out_root, mapping):
                     prep_futures[new_fut] = next_to_prep
                     next_to_prep += 1
                 continue
+
+            # "ready" path: unpack the remaining 6 values
+            _, word, take_idx, wp, pp, pose, t = result
 
             # ---- Run inference on GPU (main thread, alternates models) ----
             model = models[model_idx]
