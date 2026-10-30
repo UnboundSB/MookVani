@@ -24,6 +24,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
+from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))  # Backend/
@@ -55,28 +56,66 @@ TOTAL_DIM = 163
 rng_np = np.random.default_rng(42)
 
 
-def make_junk_clip(t: int) -> np.ndarray:
-    """One junk clip: (T, 163) — random hand jitter, still body/face, flags=0."""
+def make_junk_clip(t: int, rng: np.random.Generator = None) -> np.ndarray:
+    """One junk clip: (T, 163) — realistic non-sign poses.
+
+    Simulates a signer who is NOT signing: hands resting near the body with
+    slight Gaussian tremor, body/face completely still, all presence flags = 0.
+    This is what the presence head must learn to output 0 for — distinct from
+    real ISL word signs which have coherent hand motion.
+    """
+    if rng is None:
+        rng = rng_np
     clip = np.zeros((t, TOTAL_DIM), dtype=np.float32)
 
-    # Hands: random walk / jitter (simulates tracker noise / non-sign movement)
+    # --- Hands: resting near torso with subtle tremor -----------------------
     for h in range(2):
         base = h * HAND_DIM
         hand = np.zeros((t, 21, 3), dtype=np.float32)
-        hand[:, 0, :] = rng_np.uniform(-0.3, 0.3, size=(t, 3))  # wrist
+
+        # Rest position: hands down near the waist, slightly apart
+        rest_x = -0.30 if h == 0 else 0.30   # left/right of center
+        rest_y = 0.55                         # waist level
+        rest_z = -0.40                        # slightly in front of torso
+
+        # Wrist: small random walk around rest position (tremor)
+        wrist = np.zeros((t, 3), dtype=np.float32)
+        wrist[:, 0] = rest_x + rng.normal(0, 0.02, size=t)
+        wrist[:, 1] = rest_y + rng.normal(0, 0.015, size=t)
+        wrist[:, 2] = rest_z + rng.normal(0, 0.01, size=t)
+
+        # Fingers curl slightly around the rest position (relaxed hand)
         for j in range(1, 21):
-            hand[:, j, :] = hand[:, 0, :] + rng_np.normal(0, 0.05, size=(t, 3))
+            # Each finger joint drifts slightly from wrist with small Gaussian
+            offset = rng.normal(0, 0.03, size=(t, 3))
+            hand[:, j, :] = wrist + offset
+
+        hand[:, 0, :] = wrist  # wrist joint
         clip[:, base:base + 63] = hand.reshape(t, 63)
 
-    # Body: still
-    clip[:, BODY_START:BODY_START + BODY_DIM] = rng_np.normal(
-        0, 0.01, size=(t, 4, 3)).astype(np.float32).reshape(t, 12)
+    # --- Body: completely still (shoulders+elbows at rest) -----------------
+    body = np.zeros((t, 4, 3), dtype=np.float32)
+    # Shoulders level, elbows down
+    body[:, 0, :] = [-0.25, 0.30, -0.35]   # left shoulder
+    body[:, 1, :] = [0.25, 0.30, -0.35]    # right shoulder
+    body[:, 2, :] = [-0.20, 0.65, -0.30]   # left elbow
+    body[:, 3, :] = [0.20, 0.65, -0.30]    # right elbow
+    body += rng.normal(0, 0.005, size=(t, 4, 3)).astype(np.float32)  # micro-jitter
+    clip[:, BODY_START:BODY_START + BODY_DIM] = body.reshape(t, 12)
 
-    # Face: still
-    clip[:, FACE_START:FACE_START + FACE_DIM] = rng_np.normal(
-        0, 0.01, size=(t, 7, 3)).astype(np.float32).reshape(t, 21)
+    # --- Face: completely still --------------------------------------------
+    face = np.zeros((t, 7, 3), dtype=np.float32)
+    face[:, 0, :] = [0.0, 0.55, -0.25]     # nose
+    face[:, 1, :] = [-0.05, 0.50, -0.20]   # left eye
+    face[:, 2, :] = [0.05, 0.50, -0.20]    # right eye
+    face[:, 3, :] = [-0.08, 0.45, -0.15]   # left cheek
+    face[:, 4, :] = [0.08, 0.45, -0.15]    # right cheek
+    face[:, 5, :] = [0.0, 0.40, -0.10]     # mouth
+    face[:, 6, :] = [0.0, 0.62, -0.30]     # chin
+    face += rng.normal(0, 0.005, size=(t, 7, 3)).astype(np.float32)
+    clip[:, FACE_START:FACE_START + FACE_DIM] = face.reshape(t, 21)
 
-    # Presence flags: all 0 (no meaningful detection)
+    # Presence flags: all 0 (no meaningful detection — not a sign)
     clip[:, FLAGS_START:FLAGS_START + FLAGS_DIM] = 0.0
 
     return clip
@@ -89,12 +128,14 @@ class PresenceDataset(Dataset):
     """
 
     def __init__(self, word_clips: list[dict], num_joints: int,
-                 max_len: int = 400, junk_ratio: float = 0.5, seed: int = 42):
+                 max_len: int = 400, junk_ratio: float = 0.5, seed: int = 42,
+                 junk_rng: np.random.Generator = None):
         self.word_clips = word_clips
         self.J = num_joints
         self.max_len = max_len
         self.junk_ratio = junk_ratio
         self.rng = random.Random(seed)
+        self.junk_rng = junk_rng if junk_rng is not None else np.random.default_rng(seed)
 
         # Balanced item list
         self.items = [("w", i) for i in range(len(word_clips))]
@@ -112,7 +153,16 @@ class PresenceDataset(Dataset):
 
     def _get_word(self, idx):
         item = self.word_clips[idx]
-        raw = np.load(item["path"]).astype(np.float32)  # (T, 163)
+        # Load .pt word clip — try torch.load first (PyTorch format), fall back
+        # to np.load (some .pt files are saved as NumPy npz archives).
+        try:
+            raw = torch.load(item["path"], weights_only=True).float().numpy()
+        except Exception:
+            data = np.load(item["path"])
+            if isinstance(data, np.lib.npyio.NpzFile):
+                raw = data[data.files[0]].astype(np.float32)
+            else:
+                raw = data.astype(np.float32)
         T = min(len(raw), self.max_len)
         raw = raw[:T, : self.J * 3]  # drop the 4 flags
         pose = torch.from_numpy(raw).view(T, self.J, 3)
@@ -123,8 +173,8 @@ class PresenceDataset(Dataset):
         return pose, conf, valid, item["label"], t, presence_tgt, True
 
     def _get_junk(self):
-        T = int(self.rng.integers(60, 181))  # 60–180 frames
-        raw = make_junk_clip(T)
+        T = int(self.rng.randint(60, 180))  # 60–180 frames
+        raw = make_junk_clip(T, self.junk_rng)
         raw = raw[:, : self.J * 3]
         pose = torch.from_numpy(raw).view(T, self.J, 3)
         conf = torch.ones(T, self.J)
@@ -210,13 +260,42 @@ def train(args):
     if not word_clips:
         raise RuntimeError("No word clips found! Check data_dirs.")
 
-    # ---- dataset / loader -------------------------------------------------
-    ds = PresenceDataset(word_clips, args.joints,
-                         max_len=args.max_len,
-                         junk_ratio=args.junk_ratio,
-                         seed=args.seed)
-    loader = DataLoader(ds, batch_size=args.batch_size, shuffle=True,
-                        collate_fn=collate, num_workers=args.num_workers)
+    # ---- stratified split: 20% of each class to validation ----------------
+    from collections import defaultdict
+    by_cls = defaultdict(list)
+    for c in word_clips:
+        by_cls[c["label"]].append(c)
+
+    train_clips = []
+    val_clips = []
+    for label, items in by_cls.items():
+        random.shuffle(items)
+        n_val = max(1, int(len(items) * 0.2))  # at least 1 val clip per class
+        val_clips.extend(items[:n_val])
+        train_clips.extend(items[n_val:])
+
+    random.shuffle(train_clips)
+    random.shuffle(val_clips)
+    print(f"[DATA] Train: {len(train_clips)} clips | Val: {len(val_clips)} clips "
+          f"(20% per class held out)")
+
+    # ---- datasets / loaders ----------------------------------------------
+    # Each epoch re-seeds junk RNG so junk differs every epoch (no memorization)
+    train_ds = PresenceDataset(train_clips, args.joints,
+                               max_len=args.max_len,
+                               junk_ratio=args.junk_ratio,
+                               seed=args.seed,
+                               junk_rng=np.random.default_rng(args.seed))
+    val_ds = PresenceDataset(val_clips, args.joints,
+                             max_len=args.max_len,
+                             junk_ratio=args.junk_ratio,
+                             seed=args.seed + 1,
+                             junk_rng=np.random.default_rng(args.seed + 1000))
+
+    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
+                              collate_fn=collate, num_workers=args.num_workers)
+    val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False,
+                            collate_fn=collate, num_workers=args.num_workers)
 
     # ---- model ------------------------------------------------------------
     sm_cfg = SegmentorModelCfg(
@@ -263,16 +342,22 @@ def train(args):
     print("=" * 72)
 
     for ep in range(args.epochs):
+        # ---- re-seed junk generator each epoch (different junk every epoch) ----
+        train_ds.junk_rng = np.random.default_rng(args.seed + ep)
+        val_ds.junk_rng = np.random.default_rng(args.seed + ep + 5000)
+
+        # ===== TRAIN =====
         model.train()
         ep_loss = 0.0
         n_ok = 0
 
-        for pose, conf, valid, labels, t, pres_target, mask, lengths in loader:
+        pbar = tqdm(train_loader, desc=f"Ep {ep+1:02d}/{args.epochs} [train]", leave=False)
+        for pose, conf, valid, labels, t, pres_target, mask, lengths in pbar:
             pose, conf, valid, labels, t, pres_target, mask, lengths = (
                 x.to(device) for x in (pose, conf, valid, labels, t, pres_target, mask, lengths))
 
             optimizer.zero_grad(set_to_none=True)
-            out = model.yap.forward_frames(pose, conf, valid, t, lengths=lengths)
+            out = model.yap.forward_frames(pose, conf, valid, t)
             presence = out["presence"]  # (B, T)
 
             pmask = mask.float()
@@ -287,20 +372,48 @@ def train(args):
                 optimizer.step()
                 ep_loss += loss.item()
                 n_ok += 1
+                pbar.set_postfix(pres=f"{l_pres.item():.4f}")
+
+        pbar.close()
+        train_avg = ep_loss / max(1, n_ok)
+
+        # ===== VALIDATION =====
+        model.eval()
+        val_loss = 0.0
+        val_n = 0
+        with torch.no_grad():
+            for pose, conf, valid, labels, t, pres_target, mask, lengths in val_loader:
+                pose, conf, valid, labels, t, pres_target, mask, lengths = (
+                    x.to(device) for x in (pose, conf, valid, labels, t, pres_target, mask, lengths))
+
+                out = model.yap.forward_frames(pose, conf, valid, t)
+                presence = out["presence"]
+
+                pmask = mask.float()
+                T_min = min(presence.shape[1], pres_target.shape[1])
+                v_loss = focal_presence_loss(
+                    presence[:, :T_min], pres_target[:, :T_min], pmask[:, :T_min])
+
+                if torch.isfinite(v_loss):
+                    val_loss += v_loss.item()
+                    val_n += 1
+
+        val_avg = val_loss / max(1, val_n)
 
         scheduler.step()
-        avg = ep_loss / max(1, n_ok)
-        print(f"[Ep {ep+1:02d}/{args.epochs}] pres={avg:.4f} | "
-              f"lr {scheduler.get_last_lr()[0]:.2e} | {n_ok} steps")
+        print(f"[Ep {ep+1:02d}/{args.epochs}] "
+              f"train_pres={train_avg:.4f} val_pres={val_avg:.4f} | "
+              f"lr {scheduler.get_last_lr()[0]:.2e} | {n_ok} steps "
+              f"(batch {args.batch_size})")
 
-        history["train_loss"].append(avg)
-        history["true_loss"].append(avg)
+        history["train_loss"].append(train_avg)
+        history["true_loss"].append(train_avg)
         history["lr"].append(scheduler.get_last_lr()[0])
 
-        if avg < best_loss:
-            best_loss = avg
+        if val_avg < best_loss:
+            best_loss = val_avg
             torch.save(model.state_dict(), os.path.join(args.out_dir, "yap_presence_best.pth"))
-            print(f"  * new best -> yap_presence_best.pth (pres={avg:.4f})")
+            print(f"  * new best (val_pres={val_avg:.4f}) -> yap_presence_best.pth")
 
     print(f"\nDone. Best presence model saved to {args.out_dir}/yap_presence_best.pth")
 

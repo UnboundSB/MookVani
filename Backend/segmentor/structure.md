@@ -1,118 +1,109 @@
 # Directory Structure: Backend/segmentor
 
 YAP (You Adapt Progressively) gesture-segmentor workspace: the `yap_conformer.py`
-model, a MediaPipe noise augmenter, a per-word dataset builder, and the two-stage
-training pipeline for a noise-robust segmenter built on YAP + YAPpingConformer.
+model, a MediaPipe noise augmenter, per-word dataset builders, and the training
+pipeline for a noise-robust gesture segmentor built on YAP + YAPpingConformer.
+
+## CRITICAL: YAP is a gesture SEGMENTOR, not a word classifier
+
+`yap_conformer.py` contains **two models in one file**:
+
+1. **YAP** (the segmentor front-end) — watches a live stream of poses, decides
+   WHERE one gesture starts and ends ("segmenting"), and squashes each segment
+   into ONE fixed-size vector (an "entity"). Outputs per-pose `presence`
+   (is a gesture happening?) and `end` (does a gesture end here?) logits.
+   YAP does NOT recognise words — it only finds boundaries and packages segments.
+   YAP has **no word-classification head and no CTC output**.
+
+2. **YAPpingConformer** — wraps YAP, runs the entity stream through a Conformer
+   (transformer + conv blocks), and produces per-entity `word_logits` (class 0
+   = blank, classes 1..N = words). This is the CTC sentence model.
+
+**The Conformer/word-classification part is NOT YAP.** If you load YAP and try
+to train it on CTC word-classification tasks, it will fail because YAP has no
+word head — it only has presence/end heads. **Always use `YAPpingConformer` for
+CTC / word-training tasks.** YAP alone is only for segmentation (Stage 1 noise
+filtration, Stage 2A entity matching, Stage 2B boundary detection).
 
 ## The training order
 
-**Stage 1 (`train_noise_filter.py`) has to be trained FIRST** — stage 2 initialises
-from its weights, and stage 3 (the real-sentence fine-tune) initialises from
-stage 2's.
+**Stage 1 (`train_noise_filter.py`) has to be trained FIRST** — it teaches YAP's
+presence head to distinguish real ISL word signs from noise/garbage, with every
+other layer frozen. Stage 2 then trains boundary/end detection, and stage 3
+fine-tunes on real sentences.
 
 | stage | script | needs | produces |
 |---|---|---|---|
 | 0 — word dataset | `build_word_dataset.py` | `segmentor/models/yap_stage1/yap_noise_robust.pth` | `segmentor/data/<word>/<take>/` + `mapping.json` |
-| 1 — noise filtration | `train_noise_filter.py` | the word corpus in the **YAP format** (`.npy`, `(T, 42*3)`, the two hands) | `yap_noise_robust.pth` |
-| 2A — word-entity matching | `train_segmentor.py --phase A` | stage 1's weights + `segmentor/data/` (processed.pt targets) | `yap_phaseA_best.pth` + `word_head_phaseA_final.pth` |
+| 1A — presence only | `presence_trainer.py` | word clips + on-the-fly junk | `yap_presence_best.pth` (presence head only) |
+| 1 — noise filtration | `train_noise_filter.py` | word clips + noise clips | `yap_noise_robust.pth` |
+| 2A — word-entity matching | `train_segmentor.py --phase A` | stage 1's weights + `segmentor/data/` | `yap_phaseA_best.pth` + `word_head_phaseA_final.pth` |
 | 2B — synthetic segmentation | `train_segmentor.py --phase B` | stage 2A's weights + `.npy` word corpus | `yap_seg_best.pth` |
 | 3 — real-sentence fine-tune | `../training/train_real_sentences.py --init` | stage 2's weights | the live sentence model |
 
-**Phase A must come before Phase B.** Phase A trains the filteration + expansion +
-entity→word mapping on isolated word clips with `processed.pt` targets (cosine
-similarity + word CE). Phase B then trains segmentation + Conformer + CTC on
-stitched synthetic sentences. The Conformer is **not** touched in Phase A.
-
-**The body layout was the blocker.** YAP was written against the FULL
-MediaPipe point sets, but our corpus stores a subset of them:
-
-    MediaPipe                 our corpus (163 dims)              YAP before
-    ------------------------  ---------------------------  -----------------------
-    HandLandmarker  21        left hand  21  (0:63)          left_hand  21
-    HandLandmarker  21        right hand 21  (63:126)        right_hand 21
-    PoseLandmarker  33        shoulders+elbows 4 (126:138)    upper_body  9
-                              (p[11], p[12], p[13], p[14])   (shoulders, elbows,
-                                                                 WRISTS, HIPS, nose)
-    FaceLandmarker  478       7 face points (138:159)         face       28
-                              (f[159], f[386], f[4], f[234],   (brows, eyes, mouth,
-                               f[454], f[61], f[291])          nose tip, chin)
-
-So the corpus has **53** landmarks, the default YAP wanted 42 and the holistic
-preset wanted 79 - neither matched.  `YAPConfig.corpus()` was added: the two
-hands + the 4 body points + the 7 face points, in the corpus order (which IS
-the YAP part order), with the two shoulders as the body frame.  The trainers
-use it by default (`--layout corpus|holistic|hands`).
-
-**The corpus format is the second blocker.** The segmentor reads `.npy` files of
-`(T, J*3)` with `J = 42` (the two MediaPipe hands — the default YAP config),
-while our word corpus is `.pt` tensors of `(T, 163)` (hands + 4 arm points +
-7 face points + 4 presence flags). `load_clips()` scans for `*.npy` and would
-find **nothing** → stage 1 would train on an empty dataset. Convert it first:
-
-```powershell
-python -c "
-import torch, numpy as np
-from pathlib import Path
-root = Path('data/tensors_include50_word_level')
-for p in root.rglob('*.pt'):
-    npy = p.with_suffix('.npy')
-    if not npy.exists():
-        np.save(npy, torch.load(p, weights_only=True).numpy().astype(np.float32))
-"
-python segmentor/train_noise_filter.py --data_dirs Backend/data/tensors_include50_word_level
-```
+**Phase A must come before Phase B.** Phase A trains entity→word mapping on
+isolated word clips. Phase B trains segmentation + Conformer + CTC on stitched
+synthetic sentences.
 
 ## Files
 
-- `yap_conformer.py`: The whole model in ONE file — PoseCleaner, FeatureExpander,
+- `yap_conformer.py`: **The whole model in ONE file** — PoseCleaner, FeatureExpander,
   CausalConvStem, MemoryLayer, HiPPOLegS pooling, SegmentTracker, YAPCore, YAP,
-  YAPStream, all losses, YAPpingConformer, plus its own smoke tests.
+  YAPStream, YAPpingConformer, all losses, plus smoke tests.
   Verify with `python yap_conformer.py` → ALL TESTS PASSED.
-  Known issues (in the committed version): the HiPPO-LegS `A` matrix diagonal
-  uses `n+1` instead of the reference `-(2n+1)` (pool deviates from the analytic
-  Legendre projection by 50–130%), the palm frame uses the noisy 3D `z`
-  coordinate (13.4% of real ISL-CSLRT hand frames are edge-on but the fade-out
-  never fires), and `min_gap_penalty` only checks `L-k+1` windows. These were
-  fixed in a working branch but the file is currently at the committed revision.
-- `noise_aug.py`: MediaPipe noise augmentation for Stage 1 — jitter, per-joint and
-  whole-part dropout, hand swap, depth noise, speed warp and idle padding applied
-  to clean word-level clips. **Every magnitude is scaled by a global `scale` factor**, so the corruption INTENSITY can be drawn at random for every batch.
-- `train_noise_filter.py`: **Stage 1** — noise-robustness training. Teacher (clean
-  path) and student (noisy path) YAPpingConformer in lockstep. The canonical
-  augmentation (mirror / tilt / shift / speed) is applied ONCE to the clean clip, so
-  the teacher and the student see the SAME augmented clip and the only difference
-  between them is the noise. The student is trained to match the teacher (KL on the
-  presence/end heads, MSE on the entity vectors) while also predicting the word
-  label to prevent collapse. Teacher is an EMA of the student. Saves `yap_noise_robust.pth`.
-  NOTE: loads `.npy` files; run the `.pt → .npy` conversion above first.
+  **Two models in this file:**
+  - `YAP` = gesture segmentor (presence + end heads only, NO word classifier).
+  - `YAPpingConformer` = YAP + Conformer + word classification head (CTC sentence model).
+  **Do not train YAP on CTC tasks — it has no word head. Use `YAPpingConformer`.**
+- `presence_trainer.py`: **Standalone presence trainer.** Trains ONLY
+  `yap.core.presence_head` (everything else frozen). Mixes word clips
+  (presence=1 everywhere) with on-the-fly random junk clips (presence=0
+  everywhere, 60–180 frames of garbage coordinates). Teaches YAP: "is this a
+  real sign or just noise?" Saves `yap_presence_best.pth`.
+- `train_noise_filter.py`: **Stage 1 noise filtration.** Can run in two modes:
+  (a) default — teacher/student consistency on presence + end heads with
+  augmentation + noise; (b) presence-only — freezes everything except the
+  presence head, trains on word vs junk clips. Saves `yap_noise_robust.pth`.
+  Loads `.pt` word tensors directly (no `.npy` conversion needed).
+- `noise_aug.py`: MediaPipe noise augmentation — jitter, per-joint and
+  whole-part dropout, hand swap, depth noise, speed warp and idle padding.
 - `train_segmentor.py`: **Stage 2** — two phases:
-  - **Phase A** (`--phase A`): word-clip entity matching. Runs each clip in
-    `segmentor/data/<word>/<take>/` through YAP → one entity → word classification
-    head + cosine similarity to the `processed.pt` target. Trains YAP's MemoryLayer,
-    presence/end heads, lift, readout, ctx_vec, and the word head. **No Conformer.**
-    Saves `yap_phaseA_best.pth` + `word_head_phaseA_final.pth`.
-  - **Phase B** (`--phase B`): synthetic sentence segmentation + CTC. Stitched
-    sentences with ground-truth spans; focal-BCE presence, Gaussian-bump end,
-    deep supervision, soft-count / min-gap / dip-prior regularisers, and CTC on
-    the entity stream. Trains the Conformer + word head. Saves `yap_seg_best.pth`.
-    NOTE: loads `.npy` files; run the `.pt → .npy` conversion first.
+  - **Phase A** (`--phase A`): word-clip entity matching. Word classification
+    head + cosine similarity to `processed.pt` target. **No Conformer.**
+  - **Phase B** (`--phase B`): synthetic sentence segmentation + CTC. Trains
+    the Conformer + word head on stitched sentences.
 - `build_word_dataset.py`: Builds the per-word processed dataset that Phase A
-  trains on. Phase 1 (instant): creates `segmentor/data/<word>/<take>/word.pt`
-  for every clip + `mapping.json`. Phase 2 (slow, ~4s/clip on CUDA, resumable):
-  runs YAP Stage 1 front end on each clip → `processed.pt` entity vector. Includes
-  `fill_missing_coords()` — prev/next linear interpolation for missing joints
-  (max gap `max_gap_frames`, default 15).
-- `verify_no_collapse.py`: Standalone audit script — runs YAP on 30 real ISL-CSLRT
-  clips and checks that the output is not NULL/zero-collapsed. Verified: output
-  has meaningful variance (cleaned pose std 2.41, zero-joint % matches raw input).
+  trains on. Creates `segmentor/data/<word>/<take>/word.pt` + `processed.pt`
+  + `mapping.json`.
+- `verify_no_collapse.py`: Standalone audit — runs YAP on 30 real ISL-CSLRT
+  clips and checks output is not NULL/zero-collapsed.
 - `structure.md`: This file.
 
 ## Immediate Subdirectories
 
-- `models/`: Training outputs. `yap_stage1/` — Stage 1 noise-robust weights
-  (`yap_noise_robust.pth`). `yap_stage2/` — Stage 2 weights
-  (`yap_phaseA_best.pth`, `yap_seg_best.pth`, `yap_seg_ckpt.pth`).
+- `data_builder/`: Curation pipeline — sentence→word segmentation tooling.
+  - `opencv_app.py`: OpenCV desktop segmentation UI (fullscreen video playback,
+    SPACE = mark boundary, R = repeat, Q = quit).
+  - `builder.py`: Backend logic — hashing, scanning, matching, composing, CSV
+    persistence, checkpoint/resume.
+  - `sentences.csv`: 1,003 sentences filtered to top-228 words, all with word
+    videos.
+  - `word_videos.csv`: 1,509 word→video entries (all `archive_extracted`).
+  - `word_inventory.json`: 841 words with video paths from archive + isign.
+  - `top228_words.json`: 228 most frequent words (matches
+    `Backend/models/word_vocabulary/classes.json`).
+  - `segmentation.csv`: Output CSV (empty, auto-created on first run).
+  - `checkpoint.json`: Resume state (deleted on fresh start).
+  - `noise_clips/`: 500 synthetic noise clips (250 all-blank + 250 random
+    garbage) + `index.json`. Used by presence trainers.
+  - `rebuild_top228.py`: Script to rebuild sentences.csv / word_videos.csv
+    filtered to top-228 words.
+- `models/`: Training outputs. `yap_stage1/` — Stage 1 weights
+  (`yap_noise_robust.pth`, `yap_presence_best.pth`). `yap_stage2/` —
+  Stage 2 weights (`yap_phaseA_best.pth`, `yap_seg_best.pth`,
+  `yap_seg_ckpt.pth`).
 - `data/`: Per-word processed dataset built by `build_word_dataset.py`.
-  `<word>/<take>/word.pt` + `processed.pt`, plus `mapping.json`. Generated, not
-  committed.
+  `<word>/<take>/word.pt` + `processed.pt`, plus `mapping.json`. Generated,
+  not committed.
+- `yap_live_capture/`: Live segmentation capture sessions (JSON logs).
 - `__pycache__`: Python bytecode cache (generated, ignored).
