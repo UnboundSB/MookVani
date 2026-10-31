@@ -1,14 +1,20 @@
 """
-OpenCV desktop segmentation app — no Streamlit, real-time keyboard capture.
+MookVani Sentence Segmentor — OpenCV Desktop App
+=================================================
 
-Reads sentences.csv and word_videos.csv.
+Reads sentences.csv and word_videos.csv. For each sentence:
+  1. Shows matched word videos individually (no blank frames, no stitching)
+  2. User presses SPACE when ready
+  3. Plays the FULL sentence recording:
+     - ISL_CSLRT: plays the real sentence video file
+     - ISIGN: plays matched word videos sequentially (each as its own clip)
+  4. During full playback, SPACE marks segmentation boundary → segmentation.csv
 
-Flow:
-  1. Pick a sentence from sentences.csv
-  2. Show word videos one-by-one (auto-play)
-  3. User: SPACE = ready, R = rewatch word sequence
-  4. Play sentence video in slow-mo; tap SPACE at each word boundary
-  5. Each tap recorded to segmentation.csv
+Controls:
+  SPACE = mark segmentation boundary at current word
+  N     = skip to next word boundary
+  R     = redo this sentence
+  Q     = quit
 """
 
 from __future__ import annotations
@@ -19,7 +25,6 @@ import json
 import os
 import re
 import sys
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -33,11 +38,10 @@ SENTENCES_CSV = APP_DIR / "sentences.csv"
 WORD_VIDEOS_CSV = APP_DIR / "word_videos.csv"
 SEGMENTATION_CSV = APP_DIR / "segmentation.csv"
 CHECKPOINT_JSON = APP_DIR / "checkpoint.json"
-COMPOSED_DIR = Path(r"F:\dataset\composed_sentence_videos")
 
 VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".avi", ".MP4", ".MOV"}
 SLOWDOWN = 1.6
-FULLSCREEN = True
+FULLSCREEN = False
 
 # ────────────────────────── CSV schema ──────────────────────────
 SEG_COLUMNS = [
@@ -108,6 +112,19 @@ class SegmentationDB:
         with open(self.path, "a", newline="", encoding="utf-8") as f:
             csv.DictWriter(f, fieldnames=SEG_COLUMNS).writerow(row)
 
+    def reject_sentence(self, sentence_id: str):
+        """Remove all segmentation rows for a given sentence_id (reject/discard)."""
+        if not self.path.is_file():
+            return
+        with open(self.path, "r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            fieldnames = reader.fieldnames
+            rows = [row for row in reader if row.get("sentence_id") != sentence_id]
+        with open(self.path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+
     def checkpoint(self, sentence_index: int, sentence_id: str, stage: str):
         data = {
             "sentence_index": int(sentence_index),
@@ -126,68 +143,10 @@ class SegmentationDB:
             return None
 
 
-# ────────────────────────── compose sentence video ──────────────────────────
-def ensure_sentence_video(sentence_id: str, sentence: str, word_videos: List[dict],
-                          existing_video: str) -> str:
-    if existing_video and Path(existing_video).is_file():
-        return existing_video
-
-    COMPOSED_DIR.mkdir(parents=True, exist_ok=True)
-    composed_path = COMPOSED_DIR / f"{sentence_id}.mp4"
-
-    if composed_path.is_file():
-        return str(composed_path)
-
-    if not word_videos:
-        print(f"[COMPOSE] No word videos for: {sentence}")
-        return ""
-
-    print(f"[COMPOSE] Building sentence video: {sentence[:60]}...")
-    print(f"[COMPOSE] Using {len(word_videos)} word clips")
-
-    canvas_w = canvas_h = 0
-    for wv in word_videos[:3]:  # check first 3 for size
-        cap = cv2.VideoCapture(wv["word_video_path"])
-        if cap.isOpened():
-            canvas_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            canvas_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            cap.release()
-            if canvas_w > 0 and canvas_h > 0:
-                break
-    if canvas_w == 0 or canvas_h == 0:
-        canvas_w, canvas_h = 640, 480
-
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(str(composed_path), fourcc, 25.0, (canvas_w, canvas_h))
-
-    try:
-        for i, wv in enumerate(word_videos):
-            cap = cv2.VideoCapture(wv["word_video_path"])
-            if not cap.isOpened():
-                print(f"[COMPOSE] Skip unreadable: {wv['word_video_path']}")
-                continue
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                if frame.shape[:2] != (canvas_h, canvas_w):
-                    frame = cv2.resize(frame, (canvas_w, canvas_h))
-                writer.write(frame)
-            cap.release()
-            if (i + 1) % 5 == 0:
-                print(f"[COMPOSE] {i + 1}/{len(word_videos)} clips done")
-    finally:
-        writer.release()
-
-    if composed_path.is_file():
-        print(f"[COMPOSE] Done: {composed_path.name}")
-        return str(composed_path)
-    return ""
-
-
 # ────────────────────────── OpenCV helpers ──────────────────────────
 def play_video_fullscreen(path: str, window_name: str, slowdown: float = 1.0,
                           on_key=None) -> Optional[int]:
+    """Play a single video file. Returns last key pressed."""
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
         print(f"[WARN] Cannot open video: {path}")
@@ -217,7 +176,6 @@ def play_video_fullscreen(path: str, window_name: str, slowdown: float = 1.0,
         frame_count += 1
         if on_key and not on_key(key):
             break
-        # Safety: stop after very long videos (prevent infinite loop)
         if frame_count > 10000:
             print("[WARN] Video too long, stopping playback")
             break
@@ -255,7 +213,7 @@ def wait_for_key(window_name: str, valid_keys: Tuple[int, ...], timeout_ms: int 
         key = cv2.waitKey(timeout_ms) & 0xFF
         if key == 255:
             if timeout_ms > 0:
-                return None  # timeout
+                return None
             continue
         if key in valid_keys:
             return key
@@ -270,11 +228,12 @@ class SegmentationApp:
         self.window = "MookVani Segmentor"
         self.current_pos = 0
         self.stage = "select"
+        self.marks_in_current_sentence = 0
 
     def run(self):
         print(f"[INFO] {len(self.sentences)} sentences total")
         print(f"[INFO] Output: {self.db.path}")
-        print("[INFO] Controls: UP/DOWN navigate, ENTER/SPACE select, SPACE mark, R redo, Q quit")
+        print("[INFO] Controls: UP/DOWN navigate, ENTER/SPACE select, SPACE mark boundary, R redo, Q quit")
 
         ckpt = self.db.load_checkpoint()
         if ckpt:
@@ -309,7 +268,7 @@ class SegmentationApp:
                 [
                     f"{self.current_pos + 1} / {len(self.sentences)}",
                     s["sentence"],
-                    f"[{'real video' if s['sentence_video'] else 'composable'}]",
+                    f"[{'real video' if s['sentence_video'] else 'word videos'}]",
                     "",
                     "UP/DOWN = navigate",
                     "ENTER / SPACE = select",
@@ -321,11 +280,11 @@ class SegmentationApp:
                 cv2.destroyAllWindows()
                 print("[INFO] Quit by user")
                 sys.exit(0)
-            elif key in (ord('j'), 82):
+            elif key in (ord('j'), 82):  # down
                 self.current_pos = (self.current_pos + 1) % len(self.sentences)
-            elif key in (ord('k'), 81):
+            elif key in (ord('k'), 81):  # up
                 self.current_pos = (self.current_pos - 1) % len(self.sentences)
-            elif key in (13, 32):
+            elif key in (13, 32):  # ENTER or SPACE
                 print(f"[INFO] Selected: {s['sentence']}")
                 self.stage = "words"
                 self.db.checkpoint(self.current_pos, s["sentence_id"], "words")
@@ -334,38 +293,42 @@ class SegmentationApp:
     # ── words ──
     def _stage_words(self):
         ent = self.sentences[self.current_pos]
-        words = self.word_videos.get(ent["sentence_id"], [])
+        sentence = ent["sentence"]
+        all_words = sentence_words(sentence)
 
-        print(f"\n=== WORD SEQUENCE: {ent['sentence']} ===")
-        if words:
-            for i, w in enumerate(words):
-                print(f"  {i+1}. {w['word']} -> {Path(w['word_video_path']).name} ({w['source']})")
-        else:
-            print("  (no matching word videos)")
+        word_entries = self.word_videos.get(ent["sentence_id"], [])
+        video_map = {}
+        for wv in word_entries:
+            video_map[wv["word"]] = wv["word_video_path"]
 
-        if not words:
-            draw_overlay(
-                self.window,
-                "NO WORD VIDEOS",
-                [ent["sentence"], "", "SPACE = skip to next", "Q = quit"],
-            )
-            key = wait_for_key(self.window, (ord(' '), ord('q'), ord('Q'), 27))
-            if key in (ord('q'), ord('Q'), 27) or key is None:
-                cv2.destroyAllWindows()
-                print("[INFO] Quit by user")
-                sys.exit(0)
+        # Only include words that HAVE videos — skip missing words entirely (no blank frames)
+        matched_entries = []
+        for w in all_words:
+            if w in video_map:
+                matched_entries.append({
+                    "word": w,
+                    "word_video_path": video_map[w],
+                })
+
+        if not matched_entries:
+            print(f"[SKIP] No word videos for sentence: {sentence}")
             self.current_pos = (self.current_pos + 1) % len(self.sentences)
             self.db.checkpoint(self.current_pos, self.sentences[self.current_pos]["sentence_id"], "words")
             return
 
+        print(f"\n=== WORD SEQUENCE (matched words only): {ent['sentence']} ===")
+        for i, e in enumerate(matched_entries):
+            print(f"  {i+1}. {e['word']} -> {e['word_video_path']}")
+
         while True:
-            for i, wv in enumerate(words):
-                label = f"{i+1}/{len(words)}: {wv['word']}"
-                print(f"[PLAY] {label}")
+            for i, entry in enumerate(matched_entries):
+                label = f"{i+1}/{len(matched_entries)}: {entry['word']}"
+                print(f"[PLAY] {label} (video)")
                 last_key = play_video_fullscreen(
-                    wv["word_video_path"], self.window, slowdown=1.0,
+                    entry["word_video_path"], self.window, slowdown=1.0,
                     on_key=lambda k: self._word_video_key(k)
                 )
+
                 if last_key in (ord('r'), ord('R')):
                     break
                 elif last_key == 27:
@@ -401,7 +364,7 @@ class SegmentationApp:
             [
                 f"Sentence: {sentence_text}",
                 "",
-                "SPACE = Ready -> sentence video",
+                "SPACE = Ready -> full sentence playback",
                 "R = Rewatch word sequence",
                 "Q = Quit",
             ],
@@ -411,24 +374,71 @@ class SegmentationApp:
     # ── sentence ──
     def _stage_sentence(self):
         ent = self.sentences[self.current_pos]
-        words = self.word_videos.get(ent["sentence_id"], [])
+        self.marks_in_current_sentence = 0
+        sentence = ent["sentence"]
+        all_words = sentence_words(sentence)
 
-        print(f"\n=== SENTENCE VIDEO: {ent['sentence']} ===")
+        word_entries = self.word_videos.get(ent["sentence_id"], [])
+        video_map = {}
+        for wv in word_entries:
+            video_map[wv["word"]] = wv["word_video_path"]
 
-        sentence_video = ensure_sentence_video(
-            ent["sentence_id"], ent["sentence"], words, ent["sentence_video"]
-        )
+        # Only include words that HAVE videos
+        entries = []
+        for w in all_words:
+            if w in video_map:
+                entries.append({
+                    "word": w,
+                    "word_video_path": video_map[w],
+                })
 
-        if not sentence_video:
-            print(f"[WARN] No sentence video for: {ent['sentence']}")
-            self._advance_next()
+        if not entries:
+            print(f"[SKIP] No word videos for sentence: {sentence}")
+            self.current_pos = (self.current_pos + 1) % len(self.sentences)
+            self.db.checkpoint(self.current_pos, self.sentences[self.current_pos]["sentence_id"], "words")
             return
 
-        print(f"[PLAY] {sentence_video}")
+        print(f"\n=== FULL SENTENCE PLAYBACK: {ent['sentence']} ===")
+        for i, e in enumerate(entries):
+            print(f"  {i+1}. {e['word']} -> {e['word_video_path']}")
 
-        cap = cv2.VideoCapture(sentence_video)
+        is_composed = ent.get("is_composed", "1") == "1"
+
+        if not is_composed:
+            # ── ISL_CSLRT: gather all video takes for this sentence ──
+            sentence_id = ent["sentence_id"]
+            takes = [
+                s for s in self.sentences
+                if s["sentence_id"] == sentence_id and s.get("sentence_video", "").strip()
+                and os.path.isfile(s.get("sentence_video", "").strip())
+            ]
+            if not takes:
+                print(f"[WARN] No real sentence video found: {sentence}")
+                self._advance_next()
+                return
+            # Find current take index
+            current_take_idx = 0
+            for i, t in enumerate(takes):
+                if t["sentence_video"] == ent["sentence_video"]:
+                    current_take_idx = i
+                    break
+            print(f"[PLAY] Real sentence video (take {current_take_idx + 1}/{len(takes)}): {takes[current_take_idx]['sentence_video']}")
+            self._play_full_with_marking(ent, entries, takes, current_take_idx, is_real=True)
+        else:
+            # ── ISIGN: play matched word videos sequentially (NOT stitched) ──
+            print(f"[PLAY] Word videos sequentially (no stitching)")
+            self._play_words_sequential_with_marking(ent, entries)
+
+    def _play_full_with_marking(self, ent: dict, entries: list, takes: list,
+                                take_idx: int, is_real: bool):
+        """Play a full video (real sentence video) with SPACE boundary marking.
+        Supports switching takes with T key."""
+        take = takes[take_idx]
+        video_path = take["sentence_video"]
+
+        cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
-            print(f"[WARN] Cannot open: {sentence_video}")
+            print(f"[WARN] Cannot open video: {video_path}")
             self._advance_next()
             return
 
@@ -438,7 +448,20 @@ class SegmentationApp:
         total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         delay = max(1, int((1.0 / fps) * SLOWDOWN * 1000))
 
-        word_idx = 0
+        # Build word→frame map (divide duration across matched words)
+        word_frame_map = []
+        n_words = len(entries)
+        if n_words > 0:
+            frames_per_word = total // n_words
+            current_frame = 0
+            for entry in entries:
+                word_frame_map.append((
+                    entry["word"],
+                    current_frame,
+                    current_frame + frames_per_word,
+                    entry["word_video_path"],
+                ))
+                current_frame += frames_per_word
 
         if FULLSCREEN:
             cv2.namedWindow(self.window, cv2.WND_PROP_FULLSCREEN)
@@ -454,39 +477,62 @@ class SegmentationApp:
             fidx = int(cap.get(cv2.CAP_PROP_POS_FRAMES)) - 1
             ts = fidx / fps
 
-            current_word = words[word_idx]["word"] if word_idx < len(words) else ""
-            current_word_video = words[word_idx]["word_video_path"] if word_idx < len(words) else ""
+            current_word = ""
+            current_word_video = ""
+            for w, start_f, end_f, vpath in word_frame_map:
+                if start_f <= fidx < end_f:
+                    current_word = w
+                    current_word_video = vpath if vpath else ""
+                    break
 
             cv2.putText(frame, f"Sentence: {ent['sentence']}", (30, 60),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 255, 0), 3)
             cv2.putText(frame, f"Mark word: {current_word}", (30, 110),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 255, 255), 3)
-            cv2.putText(frame, f"Frame {fidx}/{total}  {ts:.2f}s", (30, 160),
+            cv2.putText(frame, f"Take {take_idx + 1}/{len(takes)}  Frame {fidx}/{total}  {ts:.2f}s", (30, 160),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-            cv2.putText(frame, "SPACE = mark boundary  N = next word  R = redo  Q = quit", (30, 660),
+            cv2.putText(frame, "SPACE = mark boundary  S = skip this word  T = next take  N = next word  R = redo  Q = quit", (30, 660),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (150, 150, 150), 2)
 
             cv2.imshow(self.window, frame)
             key = cv2.waitKey(delay) & 0xFF
 
             if key == ord(' '):
-                if word_idx < len(words):
-                    wv = words[word_idx]
-                    self.db.append(
-                        sentence_hash=hash_sentence(ent["sentence"]),
-                        sentence=ent["sentence"],
-                        sentence_id=ent["sentence_id"],
-                        sentence_video=sentence_video,
-                        word=wv["word"],
-                        word_video=wv["word_video_path"],
-                        frame_index=fidx,
-                        timestamp=ts,
-                        accepted=1,
-                    )
-                    print(f"[MARK] frame {fidx} ({ts:.2f}s) -> '{wv['word']}'")
-                word_idx = min(word_idx + 1, len(words) - 1) if words else 0
+                self.db.append(
+                    sentence_hash=hash_sentence(ent["sentence"]),
+                    sentence=ent["sentence"],
+                    sentence_id=ent["sentence_id"],
+                    sentence_video=video_path,
+                    word=current_word,
+                    word_video=current_word_video,
+                    frame_index=fidx,
+                    timestamp=ts,
+                    accepted=1,
+                )
+                self.marks_in_current_sentence += 1
+                print(f"[MARK] frame {fidx} ({ts:.2f}s) -> '{current_word}'")
+            elif key in (ord('s'), ord('S')):
+                # Skip this word boundary — jump to next word's start frame
+                print(f"[SKIP] frame {fidx} ({ts:.2f}s) -> '{current_word}' not marked")
+                # Find current word's index and jump to next word's start frame
+                current_word_idx = None
+                for i, (w, sf, ef, vp) in enumerate(word_frame_map):
+                    if w == current_word:
+                        current_word_idx = i
+                        break
+                if current_word_idx is not None and current_word_idx + 1 < len(word_frame_map):
+                    next_start_frame = word_frame_map[current_word_idx + 1][1]
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, next_start_frame)
+                    print(f"[SKIP] Jumped to next word: {word_frame_map[current_word_idx + 1][0]} at frame {next_start_frame}")
+            elif key == ord('t') or key == ord('T'):
+                # Next take for same sentence
+                cap.release()
+                next_idx = (take_idx + 1) % len(takes)
+                print(f"[NEXT TAKE] Switching to take {next_idx + 1}/{len(takes)}")
+                self._play_full_with_marking(ent, entries, takes, next_idx, is_real=True)
+                return
             elif key in (ord('n'), ord('N')):
-                word_idx = min(word_idx + 1, len(words) - 1) if words else 0
+                pass
             elif key in (ord('r'), ord('R')):
                 cap.release()
                 self.stage = "words"
@@ -498,10 +544,111 @@ class SegmentationApp:
                 print("[INFO] Quit by user")
                 sys.exit(0)
 
-            if words and word_idx >= len(words):
-                break
-
         cap.release()
+        if self.marks_in_current_sentence == 0:
+            print(f"[DONE] No words marked — auto-advancing to next sentence.")
+            self._advance_next()
+            return
+        self.stage = "done"
+        self.db.checkpoint(self.current_pos, ent["sentence_id"], "done")
+        print(f"[DONE] Sentence complete.")
+
+    def _play_words_sequential_with_marking(self, ent: dict, entries: list):
+        """Play matched word videos sequentially (NOT stitched) with SPACE boundary marking.
+        For ISIGN sentences that have no real sentence video."""
+        window = self.window
+
+        if FULLSCREEN:
+            cv2.namedWindow(window, cv2.WND_PROP_FULLSCREEN)
+            cv2.setWindowProperty(window, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        else:
+            cv2.namedWindow(window, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(window, 1280, 720)
+
+        # Track cumulative frame index across all word videos
+        global_frame_idx = 0
+        global_timestamp = 0.0
+
+        for entry_idx, entry in enumerate(entries):
+            word = entry["word"]
+            word_video_path = entry["word_video_path"]
+
+            cap = cv2.VideoCapture(word_video_path)
+            if not cap.isOpened():
+                print(f"[WARN] Cannot open word video: {word_video_path}")
+                continue
+
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            if not fps or fps <= 0:
+                fps = 25.0
+            delay = max(1, int((1.0 / fps) * SLOWDOWN * 1000))
+            word_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+            word_frame_idx = 0
+            skipped = False
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                current_ts = global_timestamp + (word_frame_idx / fps)
+
+                cv2.putText(frame, f"Sentence: {ent['sentence']}", (30, 60),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 255, 0), 3)
+                cv2.putText(frame, f"Mark word: {word}", (30, 110),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 255, 255), 3)
+                cv2.putText(frame, f"Word {entry_idx + 1}/{len(entries)}  Frame {word_frame_idx}/{word_total}  {current_ts:.2f}s", (30, 160),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                cv2.putText(frame, "SPACE = mark boundary  S = skip this word  N = next word  R = redo  Q = quit", (30, 660),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (150, 150, 150), 2)
+
+                cv2.imshow(window, frame)
+                key = cv2.waitKey(delay) & 0xFF
+
+                if key == ord(' '):
+                    self.db.append(
+                        sentence_hash=hash_sentence(ent["sentence"]),
+                        sentence=ent["sentence"],
+                        sentence_id=ent["sentence_id"],
+                        sentence_video=word_video_path,
+                        word=word,
+                        word_video=word_video_path,
+                        frame_index=global_frame_idx,
+                        timestamp=current_ts,
+                        accepted=1,
+                    )
+                    self.marks_in_current_sentence += 1
+                    print(f"[MARK] frame {global_frame_idx} ({current_ts:.2f}s) -> '{word}'")
+                elif key in (ord('s'), ord('S')):
+                    # Skip this word — break out of current word video loop, move to next word
+                    print(f"[SKIP] frame {global_frame_idx} ({current_ts:.2f}s) -> '{word}' not marked")
+                    skipped = True
+                    break
+                elif key in (ord('n'), ord('N')):
+                    pass
+                elif key in (ord('r'), ord('R')):
+                    cap.release()
+                    self.stage = "words"
+                    self.db.checkpoint(self.current_pos, ent["sentence_id"], "words")
+                    return
+                elif key in (ord('q'), ord('Q'), 27):
+                    cap.release()
+                    cv2.destroyAllWindows()
+                    print("[INFO] Quit by user")
+                    sys.exit(0)
+
+                word_frame_idx += 1
+                global_frame_idx += 1
+
+            cap.release()
+            # Only add actual frames played to timestamp (if skipped early, don't add full duration)
+            frames_played = word_frame_idx if skipped else word_total
+            global_timestamp += frames_played / fps
+
+        if self.marks_in_current_sentence == 0:
+            print(f"[DONE] No words marked — auto-advancing to next sentence.")
+            self._advance_next()
+            return
         self.stage = "done"
         self.db.checkpoint(self.current_pos, ent["sentence_id"], "done")
         print(f"[DONE] Sentence complete.")
@@ -516,12 +663,19 @@ class SegmentationApp:
                 ent["sentence"],
                 "",
                 "SPACE = Next sentence",
+                "D = Reject this sentence (discard marks)",
                 "R = Redo this sentence",
                 "Q = Quit",
             ],
         )
-        key = wait_for_key(self.window, (ord(' '), ord('r'), ord('R'), ord('q'), ord('Q'), 27))
+        key = wait_for_key(self.window, (ord(' '), ord('d'), ord('D'), ord('r'), ord('R'), ord('q'), ord('Q'), 27))
         if key == ord(' '):
+            self.current_pos = (self.current_pos + 1) % len(self.sentences)
+            self.stage = "words"
+            self.db.checkpoint(self.current_pos, self.sentences[self.current_pos]["sentence_id"], "words")
+        elif key in (ord('d'), ord('D')):
+            self.db.reject_sentence(ent["sentence_id"])
+            print(f"[REJECT] Discarded marks for: {ent['sentence']}")
             self.current_pos = (self.current_pos + 1) % len(self.sentences)
             self.stage = "words"
             self.db.checkpoint(self.current_pos, self.sentences[self.current_pos]["sentence_id"], "words")

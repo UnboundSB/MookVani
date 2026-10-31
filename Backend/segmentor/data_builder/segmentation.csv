@@ -1,1 +1,4 @@
-sentence_hash,sentence,sentence_video,word_video,word,frame_index,timestamp
+sentence_hash,sentence,sentence_id,sentence_video,word,word_video,frame_index,timestamp,accepted,marked_at
+2c5d45ac58bb596c5992d5a9fae4a13897df7580a256cef6d8ad738a5349a11e,are you free today,are_you_free_today,D:\MookVani\backend\data\ISL_CSLRT_Corpus\Videos_Sentence_Level\are you free today\free (2).MP4,you,F:\dataset\archive_extracted\Pronouns\41. you\MVI_0015.MOV,25,1.0,1,2026-10-31T16:05:51.443127
+2c5d45ac58bb596c5992d5a9fae4a13897df7580a256cef6d8ad738a5349a11e,are you free today,are_you_free_today,D:\MookVani\backend\data\ISL_CSLRT_Corpus\Videos_Sentence_Level\are you free today\free (3).MP4,you,F:\dataset\archive_extracted\Pronouns\41. you\MVI_0015.MOV,31,1.24,1,2026-10-31T16:06:09.500999
+2c5d45ac58bb596c5992d5a9fae4a13897df7580a256cef6d8ad738a5349a11e,are you free today,are_you_free_today,D:\MookVani\backend\data\ISL_CSLRT_Corpus\Videos_Sentence_Level\are you free today\free (3).MP4,you,F:\dataset\archive_extracted\Pronouns\41. you\MVI_0015.MOV,44,1.76,1,2026-10-31T16:06:10.536824
