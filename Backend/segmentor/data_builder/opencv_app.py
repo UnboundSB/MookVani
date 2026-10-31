@@ -524,6 +524,12 @@ class SegmentationApp:
                     next_start_frame = word_frame_map[current_word_idx + 1][1]
                     cap.set(cv2.CAP_PROP_POS_FRAMES, next_start_frame)
                     print(f"[SKIP] Jumped to next word: {word_frame_map[current_word_idx + 1][0]} at frame {next_start_frame}")
+                else:
+                    # On last word, skip and advance to next sentence
+                    print(f"[SKIP] Last word skipped — advancing to next sentence.")
+                    cap.release()
+                    self._advance_next()
+                    return
             elif key == ord('t') or key == ord('T'):
                 # Next take for same sentence
                 cap.release()
@@ -569,14 +575,20 @@ class SegmentationApp:
         global_frame_idx = 0
         global_timestamp = 0.0
 
+        # Pre-open all captures to avoid lag between words
+        caps = []
+        for entry in entries:
+            cap = cv2.VideoCapture(entry["word_video_path"])
+            caps.append(cap if cap.isOpened() else None)
+
         for entry_idx, entry in enumerate(entries):
+            cap = caps[entry_idx]
+            if cap is None:
+                print(f"[WARN] Cannot open word video: {entry['word_video_path']}")
+                continue
+
             word = entry["word"]
             word_video_path = entry["word_video_path"]
-
-            cap = cv2.VideoCapture(word_video_path)
-            if not cap.isOpened():
-                print(f"[WARN] Cannot open word video: {word_video_path}")
-                continue
 
             fps = cap.get(cv2.CAP_PROP_FPS)
             if not fps or fps <= 0:
@@ -623,16 +635,29 @@ class SegmentationApp:
                     # Skip this word — break out of current word video loop, move to next word
                     print(f"[SKIP] frame {global_frame_idx} ({current_ts:.2f}s) -> '{word}' not marked")
                     skipped = True
+                    # If this is the last word, advance to next sentence immediately
+                    if entry_idx + 1 >= len(entries):
+                        cap.release()
+                        # Release remaining caps
+                        for c in caps[entry_idx + 1:]:
+                            if c is not None:
+                                c.release()
+                        self._advance_next()
+                        return
                     break
                 elif key in (ord('n'), ord('N')):
                     pass
                 elif key in (ord('r'), ord('R')):
-                    cap.release()
+                    for c in caps:
+                        if c is not None:
+                            c.release()
                     self.stage = "words"
                     self.db.checkpoint(self.current_pos, ent["sentence_id"], "words")
                     return
                 elif key in (ord('q'), ord('Q'), 27):
-                    cap.release()
+                    for c in caps:
+                        if c is not None:
+                            c.release()
                     cv2.destroyAllWindows()
                     print("[INFO] Quit by user")
                     sys.exit(0)
@@ -644,6 +669,11 @@ class SegmentationApp:
             # Only add actual frames played to timestamp (if skipped early, don't add full duration)
             frames_played = word_frame_idx if skipped else word_total
             global_timestamp += frames_played / fps
+
+        # Release any remaining captures
+        for c in caps:
+            if c is not None:
+                c.release()
 
         if self.marks_in_current_sentence == 0:
             print(f"[DONE] No words marked — auto-advancing to next sentence.")
