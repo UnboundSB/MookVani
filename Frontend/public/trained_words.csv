@@ -1,0 +1,17 @@
+video_filename,words,sentence,category
+MVI_0015.MOV,"you","are you free today",Pronouns
+MVI_4615.MOV,"today","are you free today",Days_and_Time
+MVI_0001.MOV,"i","can i help you",Pronouns
+MVI_0013.MOV,"it","do not take it to the heart",Pronouns
+MVI_0005.MOV,"he","he came by train",Pronouns
+MVI_3110.MOV,"train","he came by train",Means_of_Transportation
+MVI_0009.MOV,"she","he she is my friend",Pronouns
+MVI_3826.MOV,"friend","he she is my friend",People
+MVI_5152.MOV,"old","how old are you",Adjectives
+MVI_5139.MOV,"cold","i am feeling cold",Adjectives
+MVI_5183.MOV,"happy","i am very happy",Adjectives
+MVI_6209.MP4,"are you hiding something","are you hiding something",real_video
+MVI_6507.MP4,"are you hiding something","are you hiding something",real_video
+MVI_6685.MP4,"are you hiding something","are you hiding something",real_video
+MVI_6817.MP4,"are you hiding something","are you hiding something",real_video
+MVI_6958.MP4,"are you hiding something","are you hiding something",real_video
