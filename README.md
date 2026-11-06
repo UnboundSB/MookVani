@@ -19,6 +19,7 @@ MookVani is an end-to-end Continuous Indian Sign Language (ISL) Recognition and 
 - `Backend/features/`: MediaPipe canonical keypoint extraction and normalizations (`extract_features.py`).
 - `Backend/data/`: Tensors and dataset storage location (ignored in Git).
 - `Backend/training/`: Training modules for the `ISLSentenceReconformer` (`train_reconformer_word.py`) and plot generation routines.
+- `Backend/segmentor/`: YAP gesture segmentor (presence/end boundary detection) plus its modular v5 fine-tune package (`segmentor_v5/`) and training scripts. See `Backend/segmentor/structure.md`.
 - `Backend/scripts/`: Heavy lifting utilities for parsing raw `.mp4` files into parallelized 163-dimensional `(T, 163)` coordinate tensors (`extract_word.py`).
 - `Backend/live_inference.py`: Live webcam inference script using MediaPipe Tasks API.
 

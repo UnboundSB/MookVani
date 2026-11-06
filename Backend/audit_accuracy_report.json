@@ -1,0 +1,408 @@
+{
+  "summary": {
+    "n_checkpoints": 20,
+    "n_sentences": 600
+  },
+  "results": {
+    "D:\\MookVani\\Backend\\segmentor\\models\\yap_presence_only\\yap_presence_best.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\segmentor\\models\\yap_presence_only\\yap_presence_best.pth",
+      "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_presence_only",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.45717372240265014,
+        "precision": 0.48703356935073044,
+        "recall": 0.7084131006057234,
+        "f1": 0.5452697690600842
+      },
+      "end_boundary": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "mae": 0.0
+      },
+      "segment_iou": 0.1467239538239538,
+      "avg_n_pred_end": 0.0,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\segmentor\\models\\yap_segmentation_f1_v2\\yap_phaseA_best.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\segmentor\\models\\yap_segmentation_f1_v2\\yap_phaseA_best.pth",
+      "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_segmentation_f1_v2",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.4810875215521933,
+        "precision": 0.5088293834137825,
+        "recall": 0.1637249194794331,
+        "f1": 0.22156859191459574
+      },
+      "end_boundary": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "mae": 0.0
+      },
+      "segment_iou": 0.1467239538239538,
+      "avg_n_pred_end": 0.0,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\segmentor\\models\\yap_segmentation_only_v1\\yap_phaseA_best.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\segmentor\\models\\yap_segmentation_only_v1\\yap_phaseA_best.pth",
+      "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_segmentation_only_v1",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.4937352397034501,
+        "precision": 0.514111028762936,
+        "recall": 0.5458489859540921,
+        "f1": 0.5029182262437845
+      },
+      "end_boundary": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "mae": 0.0
+      },
+      "segment_iou": 0.1467239538239538,
+      "avg_n_pred_end": 0.0,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1\\yap_noise_ckpt.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1\\yap_noise_ckpt.pth",
+      "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.5803012193330396,
+        "precision": 0.541732489225465,
+        "recall": 0.4105837224389309,
+        "f1": 0.4350810221591691
+      },
+      "end_boundary": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "mae": 0.0
+      },
+      "segment_iou": 0.1467239538239538,
+      "avg_n_pred_end": 0.0,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1\\yap_noise_robust.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1\\yap_noise_robust.pth",
+      "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.4945208142363349,
+        "precision": 0.4394766305731779,
+        "recall": 0.04725088407019828,
+        "f1": 0.08189508803085174
+      },
+      "end_boundary": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "mae": 0.0
+      },
+      "segment_iou": 0.1467239538239538,
+      "avg_n_pred_end": 0.0,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1_presence\\yap_noise_ckpt.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1_presence\\yap_noise_ckpt.pth",
+      "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1_presence",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.43328485660745514,
+        "precision": 0.5003954854403857,
+        "recall": 0.6328863593864636,
+        "f1": 0.49826090569147574
+      },
+      "end_boundary": {
+        "precision": 0.06666666666666667,
+        "recall": 0.007037037037037037,
+        "f1": 0.012727272727272728,
+        "mae": 1.5
+      },
+      "segment_iou": 0.14277636324584247,
+      "avg_n_pred_end": 0.13333333333333333,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1_presence\\yap_noise_robust.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1_presence\\yap_noise_robust.pth",
+      "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1_presence",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.43207616110976904,
+        "precision": 0.49043740728396623,
+        "recall": 0.7807736734827232,
+        "f1": 0.5552162052715747
+      },
+      "end_boundary": {
+        "precision": 0.1277777777777778,
+        "recall": 0.021984126984126984,
+        "f1": 0.03632515632515632,
+        "mae": 0.6
+      },
+      "segment_iou": 0.13598531977209474,
+      "avg_n_pred_end": 0.36666666666666664,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage2\\yap_phaseA_best.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage2\\yap_phaseA_best.pth",
+      "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage2",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.5289705059759532,
+        "precision": 0.5406170184658196,
+        "recall": 0.5505634764306617,
+        "f1": 0.5129726485114877
+      },
+      "end_boundary": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "mae": 0.0
+      },
+      "segment_iou": 0.1467239538239538,
+      "avg_n_pred_end": 0.0,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage2\\yap_phaseA_final.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage2\\yap_phaseA_final.pth",
+      "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage2",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.4927607151925249,
+        "precision": 0.5238209538027965,
+        "recall": 0.2815144209753183,
+        "f1": 0.3382721647711314
+      },
+      "end_boundary": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "mae": 0.0
+      },
+      "segment_iou": 0.1467239538239538,
+      "avg_n_pred_end": 0.0,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch10.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch10.pth",
+      "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.5163526240748999,
+        "precision": 0.5163526240748999,
+        "recall": 1.0,
+        "f1": 0.6563427408751845
+      },
+      "end_boundary": {
+        "precision": 0.44227032227032226,
+        "recall": 0.2989297739297738,
+        "f1": 0.312022356728239,
+        "mae": 0.9722222222222222
+      },
+      "segment_iou": 0.06480741729311552,
+      "avg_n_pred_end": 5.633333333333334,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch15.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch15.pth",
+      "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.5163526240748999,
+        "precision": 0.5163526240748999,
+        "recall": 1.0,
+        "f1": 0.6563427408751845
+      },
+      "end_boundary": {
+        "precision": 0.42111111111111116,
+        "recall": 0.2273292448292448,
+        "f1": 0.26717611259664925,
+        "mae": 1.16
+      },
+      "segment_iou": 0.0734594458982376,
+      "avg_n_pred_end": 4.4,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch20.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch20.pth",
+      "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.5163526240748999,
+        "precision": 0.5163526240748999,
+        "recall": 1.0,
+        "f1": 0.6563427408751845
+      },
+      "end_boundary": {
+        "precision": 0.3872685185185185,
+        "recall": 0.1859259259259259,
+        "f1": 0.22194436826789768,
+        "mae": 0.993939393939394
+      },
+      "segment_iou": 0.08170183264164434,
+      "avg_n_pred_end": 3.8,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch25.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch25.pth",
+      "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.5163526240748999,
+        "precision": 0.5163526240748999,
+        "recall": 1.0,
+        "f1": 0.6563427408751845
+      },
+      "end_boundary": {
+        "precision": 0.40793177525375673,
+        "recall": 0.282463924963925,
+        "f1": 0.29768907018907015,
+        "mae": 0.9524691358024691
+      },
+      "segment_iou": 0.06321536914405092,
+      "avg_n_pred_end": 5.933333333333334,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch30.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch30.pth",
+      "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.5163526240748999,
+        "precision": 0.5163526240748999,
+        "recall": 1.0,
+        "f1": 0.6563427408751845
+      },
+      "end_boundary": {
+        "precision": 0.3846553065670713,
+        "recall": 0.3677537277537278,
+        "f1": 0.3347645795378037,
+        "mae": 0.7555555555555555
+      },
+      "segment_iou": 0.05451192651920594,
+      "avg_n_pred_end": 7.633333333333334,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch35.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch35.pth",
+      "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.5163526240748999,
+        "precision": 0.5163526240748999,
+        "recall": 1.0,
+        "f1": 0.6563427408751845
+      },
+      "end_boundary": {
+        "precision": 0.44237077737077735,
+        "recall": 0.21279100529100528,
+        "f1": 0.258337114954762,
+        "mae": 0.9633333333333332
+      },
+      "segment_iou": 0.0771254566961544,
+      "avg_n_pred_end": 3.8333333333333335,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch40.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch40.pth",
+      "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.5163526240748999,
+        "precision": 0.5163526240748999,
+        "recall": 1.0,
+        "f1": 0.6563427408751845
+      },
+      "end_boundary": {
+        "precision": 0.3958363858363858,
+        "recall": 0.1972883597883598,
+        "f1": 0.23637296799061508,
+        "mae": 1.0978260869565215
+      },
+      "segment_iou": 0.07818230779566053,
+      "avg_n_pred_end": 3.6333333333333333,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch45.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch45.pth",
+      "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.5163526240748999,
+        "precision": 0.5163526240748999,
+        "recall": 1.0,
+        "f1": 0.6563427408751845
+      },
+      "end_boundary": {
+        "precision": 0.3897402597402598,
+        "recall": 0.2171825396825397,
+        "f1": 0.25146128816717056,
+        "mae": 1.0688405797101448
+      },
+      "segment_iou": 0.07473610725889494,
+      "avg_n_pred_end": 4.133333333333334,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch5.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch5.pth",
+      "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.5167314119536877,
+        "precision": 0.516526779421469,
+        "recall": 1.0,
+        "f1": 0.6565067828699351
+      },
+      "end_boundary": {
+        "precision": 0.4530626998274057,
+        "recall": 0.28377224627224623,
+        "f1": 0.3049215816862876,
+        "mae": 1.110897435897436
+      },
+      "segment_iou": 0.06441042788630594,
+      "avg_n_pred_end": 5.5,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch50.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_epoch50.pth",
+      "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.5163526240748999,
+        "precision": 0.5163526240748999,
+        "recall": 1.0,
+        "f1": 0.6563427408751845
+      },
+      "end_boundary": {
+        "precision": 0.3903354978354978,
+        "recall": 0.21347883597883602,
+        "f1": 0.24625184075184078,
+        "mae": 1.0905797101449275
+      },
+      "segment_iou": 0.07531536811182551,
+      "avg_n_pred_end": 4.066666666666666,
+      "avg_n_gt_end": 7.466666666666667
+    },
+    "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_final.pth": {
+      "checkpoint": "D:\\MookVani\\Backend\\models\\yap_segmentor\\yap_segmentor_final.pth",
+      "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+      "n_sentences": 30,
+      "presence": {
+        "accuracy": 0.5163526240748999,
+        "precision": 0.5163526240748999,
+        "recall": 1.0,
+        "f1": 0.6563427408751845
+      },
+      "end_boundary": {
+        "precision": 0.3903354978354978,
+        "recall": 0.21347883597883602,
+        "f1": 0.24625184075184078,
+        "mae": 1.0905797101449275
+      },
+      "segment_iou": 0.07531536811182551,
+      "avg_n_pred_end": 4.066666666666666,
+      "avg_n_gt_end": 7.466666666666667
+    }
+  }
+}

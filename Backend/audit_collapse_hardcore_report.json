@@ -1,0 +1,1304 @@
+{
+  "summary": {
+    "collapsed": 0,
+    "ok": 20,
+    "error": 0,
+    "total": 20
+  },
+  "results": {
+    "D:\\MookVani\\Backend\\models\\yap_segmentor": [
+      {
+        "file": "yap_segmentor_epoch10.pth",
+        "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9999615550041199,
+                "std": 0.732877254486084,
+                "mean": 0.07086874986998737,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 4.955738067626953,
+                "std": 0.731269121170044,
+                "mean": 3.60930635035038,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 2.187652826309204,
+                "std": 0.5684911012649536,
+                "mean": -0.7072059474885464,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      },
+      {
+        "file": "yap_segmentor_epoch15.pth",
+        "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9999682307243347,
+                "std": 0.732262909412384,
+                "mean": 0.08348613185808063,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 5.156805038452148,
+                "std": 0.7427355051040649,
+                "mean": 3.8194300532341003,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 2.538867473602295,
+                "std": 0.6544610857963562,
+                "mean": -0.9021247588098049,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      },
+      {
+        "file": "yap_segmentor_epoch20.pth",
+        "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9999703764915466,
+                "std": 0.7313902378082275,
+                "mean": 0.09065403183922172,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 5.210994720458984,
+                "std": 0.7477976679801941,
+                "mean": 3.8432532250881195,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 2.525411367416382,
+                "std": 0.5924391150474548,
+                "mean": -0.8000440858304501,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      },
+      {
+        "file": "yap_segmentor_epoch25.pth",
+        "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9999704360961914,
+                "std": 0.7309225797653198,
+                "mean": 0.09088436095044017,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 5.343644142150879,
+                "std": 0.7501655220985413,
+                "mean": 3.8561247140169144,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 2.5668349266052246,
+                "std": 0.7045480608940125,
+                "mean": -0.7183884866535664,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      },
+      {
+        "file": "yap_segmentor_epoch30.pth",
+        "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9999731183052063,
+                "std": 0.731139600276947,
+                "mean": 0.09288705931976438,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 5.347304821014404,
+                "std": 0.7264774441719055,
+                "mean": 3.8127377778291702,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 2.4873974323272705,
+                "std": 0.6974155306816101,
+                "mean": -0.677426116541028,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      },
+      {
+        "file": "yap_segmentor_epoch35.pth",
+        "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9999741315841675,
+                "std": 0.7279347777366638,
+                "mean": 0.0910840816795826,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 5.3469157218933105,
+                "std": 0.7249377369880676,
+                "mean": 3.8211375921964645,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 2.725684881210327,
+                "std": 0.690444827079773,
+                "mean": -0.9046835005283356,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      },
+      {
+        "file": "yap_segmentor_epoch40.pth",
+        "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9999727010726929,
+                "std": 0.7268195748329163,
+                "mean": 0.09081874508410692,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 5.380685806274414,
+                "std": 0.7353044748306274,
+                "mean": 3.807280093431473,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 2.797051191329956,
+                "std": 0.7198852896690369,
+                "mean": -0.9302834048867226,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      },
+      {
+        "file": "yap_segmentor_epoch45.pth",
+        "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9999726414680481,
+                "std": 0.7265092134475708,
+                "mean": 0.09043904906138778,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 5.386714935302734,
+                "std": 0.7420668601989746,
+                "mean": 3.8018826842308044,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 2.8129682540893555,
+                "std": 0.7404571175575256,
+                "mean": -0.9120641052722931,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      },
+      {
+        "file": "yap_segmentor_epoch5.pth",
+        "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9999359250068665,
+                "std": 0.7100715637207031,
+                "mean": 0.03439165017334744,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 4.457436561584473,
+                "std": 0.7540778517723083,
+                "mean": 3.061044231057167,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 2.2152047157287598,
+                "std": 0.5536993145942688,
+                "mean": -0.6387171074748039,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      },
+      {
+        "file": "yap_segmentor_epoch50.pth",
+        "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9999727606773376,
+                "std": 0.7262613773345947,
+                "mean": 0.09055701363831758,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 5.390727996826172,
+                "std": 0.742202877998352,
+                "mean": 3.803940013051033,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 2.827787160873413,
+                "std": 0.7399470210075378,
+                "mean": -0.9242642372846603,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      },
+      {
+        "file": "yap_segmentor_final.pth",
+        "dir": "D:\\MookVani\\Backend\\models\\yap_segmentor",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9999727606773376,
+                "std": 0.7262613773345947,
+                "mean": 0.09055701363831758,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 5.390727996826172,
+                "std": 0.742202877998352,
+                "mean": 3.803940013051033,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 2.827787160873413,
+                "std": 0.7399470210075378,
+                "mean": -0.9242642372846603,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      }
+    ],
+    "D:\\MookVani\\Backend\\segmentor\\models\\yap_presence_only": [
+      {
+        "file": "yap_presence_best.pth",
+        "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_presence_only",
+        "layouts": {
+          "corpus": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 53,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.4242966175079346,
+                "mean": 2.1519978418946266,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9976316690444946,
+                "std": 0.5901141166687012,
+                "mean": 0.05457690998446196,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 3.8226492404937744,
+                "std": 0.951263427734375,
+                "mean": 1.805642046034336,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 4.215493679046631,
+                "std": 0.4123930037021637,
+                "mean": -3.433200404047966,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 47.82481002807617,
+                "std": 9.599390029907227,
+                "mean": 7.863426566123962,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.16873224685402352,
+              "frames_all_joints_zero": 0,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      }
+    ],
+    "D:\\MookVani\\Backend\\segmentor\\models\\yap_segmentation_f1_v2": [
+      {
+        "file": "yap_phaseA_best.pth",
+        "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_segmentation_f1_v2",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.99928218126297,
+                "std": 0.6351140141487122,
+                "mean": 0.07852444192394614,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 2.6964759826660156,
+                "std": 0.8137204051017761,
+                "mean": -0.222531896433793,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 4.333539009094238,
+                "std": 0.6790445446968079,
+                "mean": -2.5901056081056595,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      }
+    ],
+    "D:\\MookVani\\Backend\\segmentor\\models\\yap_segmentation_only_v1": [
+      {
+        "file": "yap_phaseA_best.pth",
+        "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_segmentation_only_v1",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9996160864830017,
+                "std": 0.6618337631225586,
+                "mean": 0.06608139630407095,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 2.1177799701690674,
+                "std": 0.8290549516677856,
+                "mean": -0.16050434531643987,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 4.91282844543457,
+                "std": 1.2422959804534912,
+                "mean": -1.2386002391576767,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      }
+    ],
+    "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1": [
+      {
+        "file": "yap_noise_ckpt.pth",
+        "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.998161256313324,
+                "std": 0.6278087496757507,
+                "mean": -0.03549155860673636,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 2.908932685852051,
+                "std": 0.7695286273956299,
+                "mean": -0.5192653276026249,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 5.405143737792969,
+                "std": 0.847147524356842,
+                "mean": -3.699818938970566,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      },
+      {
+        "file": "yap_noise_robust.pth",
+        "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1",
+        "layouts": {
+          "corpus": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 53,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.4242966175079346,
+                "mean": 2.1519978418946266,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9975321292877197,
+                "std": 0.5895796418190002,
+                "mean": 0.06385242869146168,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 1.142622709274292,
+                "std": 0.41485267877578735,
+                "mean": -0.46828906051814556,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 4.173642158508301,
+                "std": 0.40977710485458374,
+                "mean": -3.46003957092762,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 47.82481002807617,
+                "std": 9.599390029907227,
+                "mean": 7.863426566123962,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.16873224685402352,
+              "frames_all_joints_zero": 0,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      }
+    ],
+    "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1_presence": [
+      {
+        "file": "yap_noise_ckpt.pth",
+        "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1_presence",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9994831681251526,
+                "std": 0.6710930466651917,
+                "mean": 0.030687553924508393,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 2.302215814590454,
+                "std": 0.8498074412345886,
+                "mean": -0.227632824331522,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 4.977304935455322,
+                "std": 0.8277393579483032,
+                "mean": -2.6563044041395187,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      },
+      {
+        "file": "yap_noise_robust.pth",
+        "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage1_presence",
+        "layouts": {
+          "corpus": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 53,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.4242966175079346,
+                "mean": 2.1519978418946266,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9996662735939026,
+                "std": 0.6427159309387207,
+                "mean": -0.016117122228024527,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 6.878288745880127,
+                "std": 1.244396686553955,
+                "mean": 4.872979089617729,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 8.243884086608887,
+                "std": 2.9467763900756836,
+                "mean": -4.20759804546833,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 47.82481002807617,
+                "std": 9.599390029907227,
+                "mean": 7.863426566123962,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.16873224685402352,
+              "frames_all_joints_zero": 0,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      }
+    ],
+    "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage2": [
+      {
+        "file": "yap_phaseA_best.pth",
+        "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage2",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9994292855262756,
+                "std": 0.6319860816001892,
+                "mean": -0.000899101388768031,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 1.9449127912521362,
+                "std": 0.6714264750480652,
+                "mean": 0.16691638494376093,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 4.387859344482422,
+                "std": 0.8814511895179749,
+                "mean": -2.3579651564359665,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      },
+      {
+        "file": "yap_phaseA_final.pth",
+        "dir": "D:\\MookVani\\Backend\\segmentor\\models\\yap_stage2",
+        "layouts": {
+          "hands": {
+            "collapsed": false,
+            "reasons": [],
+            "J": 42,
+            "d_model": 128,
+            "stats": {
+              "clean": {
+                "abs_max": 7.119516372680664,
+                "std": 2.366507053375244,
+                "mean": 2.5395740643143654,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "feat": {
+                "abs_max": 0.9998041987419128,
+                "std": 0.6155044436454773,
+                "mean": -0.03311390077578835,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "presence": {
+                "abs_max": 1.955179214477539,
+                "std": 0.559303343296051,
+                "mean": -0.31761366268619895,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "end": {
+                "abs_max": 4.017083168029785,
+                "std": 0.8078814148902893,
+                "mean": -1.9805458709597588,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "speed": {
+                "abs_max": 70.14839935302734,
+                "std": 14.234970092773438,
+                "mean": 10.003793239593506,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "quality": {
+                "abs_max": 1.0,
+                "std": 0.0,
+                "mean": 1.0,
+                "has_nan": false,
+                "has_inf": false
+              },
+              "zero_slot_ratio": 0.04625735912531539,
+              "frames_all_joints_zero": 6,
+              "total_frames": 1189,
+              "input_all_zero_frames": 0,
+              "input_all_zero_ratio": 0.0,
+              "fully_zero_clean_clips": 0,
+              "fully_zero_feat_clips": 0
+            }
+          }
+        },
+        "collapsed_any_layout": false
+      }
+    ]
+  }
+}

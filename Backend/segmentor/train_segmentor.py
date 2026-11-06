@@ -16,7 +16,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
-from yap_conformer import YAP, YAPConfig, presence_targets, end_targets, focal_presence_loss, layer_conf_loss
+from yap_conformer import YAP, YAPConfig, presence_targets, end_targets, focal_presence_loss, layer_conf_loss, soft_count_loss
 
 HERE = Path(__file__).resolve().parent
 BACKEND = HERE.parent
@@ -58,6 +58,60 @@ def split_sources(corpus, seed, train_fraction=0.8):
         n = min(len(items)-1, max(1, int(len(items) * train_fraction)))
         train[key], val[key] = items[:n], items[n:]
     return train, val
+
+
+def signer_of(path: Path) -> str:
+    """Best-effort signer id from a path: the parent folder name of the word class,
+    or the clip stem prefix before the first '_' or '-' digit run."""
+    p = Path(path)
+    # Try to extract a signer token from the filename: e.g. "alright_03_signerA.pt"
+    stem = p.stem
+    for sep in ('_', '-'):
+        parts = stem.split(sep)
+        if len(parts) > 1 and any(ch.isdigit() for ch in parts[-1]):
+            return sep.join(parts[:-1])
+    return p.parent.name
+
+
+def split_sources_signer_disjoint(corpus, seed, train_fraction=0.7, val_fraction=0.15,
+                                  test_fraction=0.15):
+    """Split clips into train/val/test, preferring signer-disjoint sets.
+
+    Groups clips by (class, signer) so that all takes of the same signer stay
+    in the same partition. Falls back to per-class split when signer info is
+    unavailable. Returns (train, val, test) dicts keyed by class id.
+    """
+    rng = random.Random(seed)
+    train, val, test = {}, {}, {}
+    for key, sources in corpus.items():
+        groups: Dict[str, List[Path]] = {}
+        for p in sources:
+            groups.setdefault(signer_of(p), []).append(p)
+        group_items = list(groups.items())
+        rng.shuffle(group_items)
+        g = len(group_items)
+        n_train = max(1, int(g * train_fraction))
+        n_val = max(1, int(g * val_fraction)) if g > 1 else 0
+        n_test = g - n_train - n_val
+        if n_test < 0:
+            n_test = 0
+            n_val = g - n_train
+            if n_val < 0:
+                n_val = 0
+        for gi, (signer, items) in enumerate(group_items):
+            if gi < n_train:
+                dest = train
+            elif gi < n_train + n_val:
+                dest = val
+            else:
+                dest = test
+            dest.setdefault(key, []).extend(items)
+    # Guarantee every partition has something
+    for d in (val, test):
+        for key in corpus:
+            if key not in d:
+                d[key] = []
+    return train, val, test
 
 
 def read_xyz(path: Path, joints: int):
@@ -192,26 +246,35 @@ def state_from_checkpoint(path):
     return obj
 
 
-def losses(yap, batch, device, return_output=False):
+def losses(yap, batch, device, return_output=False, count_weight=0.5):
     pose, conf, valid, t, mask, spans = batch
     pose,conf,valid,t,mask = (x.to(device) for x in (pose,conf,valid,t,mask))
     output = yap.forward_frames(pose,conf,valid,t)
     B,T = mask.shape
     presence = torch.zeros(B,T,device=device)
     ending = torch.zeros(B,T,device=device)
+    counts = torch.zeros(B,device=device)
     for b,ss in enumerate(spans):
         n = int(mask[b].sum().item())
         presence[b,:n] = presence_targets(t[b,:n], ss)
         ending[b,:n] = end_targets(t[b,:n], ss)
+        counts[b] = len(ss)
     pmask = mask.float()
     pres = focal_presence_loss(output['presence'],presence,pmask)
     end_raw = F.binary_cross_entropy_with_logits(output['end'],ending,reduction='none',
                                                  pos_weight=pose.new_tensor(10.0))
     end = (end_raw*pmask).sum()/pmask.sum().clamp_min(1)
     layer = layer_conf_loss(output['layer_conf'],presence,pmask)
-    total = pres + end + 0.5*layer
-    parts = {'presence':pres.detach().item(), 'end':end.detach().item(),
-             'layer':layer.detach().item()}
+    # Count supervision: sum of sigmoid(end) over valid frames == gesture count.
+    cnt = soft_count_loss(output['end'], counts, pmask)
+    total = pres + end + 0.5*layer + count_weight*cnt
+    # --- P0-2 safeguard: never log NaN loss components silently ---
+    for name, val in (('presence', pres), ('end', end), ('layer', layer), ('count', cnt), ('total', total)):
+        if not torch.isfinite(val):
+            raise FloatingPointError(f'Nonfinite loss component "{name}" = {val.item()}. '
+                                     f'Stopping before NaN gets written to history.')
+    parts = {'presence': pres.detach().item(), 'end': end.detach().item(),
+             'layer': layer.detach().item(), 'count': cnt.detach().item()}
     return (total, parts, output) if return_output else (total, parts)
 
 
@@ -242,7 +305,7 @@ def boundary_counts(yap, output, times, mask, spans, tolerance_s=0.2):
     result = dict(matches=0, predicted=0, truth=0,
                   start_matches=0, start_predicted=0, start_truth=0,
                   end_matches=0, end_predicted=0, end_truth=0,
-                  reasons={})
+                  iou_sum=0.0, iou_count=0, reasons={})
     for segments, gt in zip(predicted, spans):
         # EOS is artificial. Do not count it as a learned cut.
         segments = [seg for seg in segments if seg.reason != 'eos']
@@ -259,9 +322,36 @@ def boundary_counts(yap, output, times, mask, spans, tolerance_s=0.2):
             result['matches'] += matches
             result['predicted'] += len(ps)
             result['truth'] += len(gs)
+        # Segment IoU between predicted and GT intervals.
+        for (ps, pe) in zip(pred_starts, pred_ends):
+            best = 0.0
+            for (gs, ge) in zip(gt_starts, gt_ends):
+                inter = max(0.0, min(pe, ge) - max(ps, gs))
+                uni = max(pe, ge) - min(ps, gs)
+                if uni > 0:
+                    best = max(best, inter / uni)
+            result['iou_sum'] += best
+            result['iou_count'] += 1
         for seg in segments:
             result['reasons'][seg.reason] = result['reasons'].get(seg.reason, 0) + 1
     return result
+
+
+def count_mae(output, times, mask, spans):
+    """Mean absolute error between predicted and true gesture count.
+
+    Predicted count = number of end-head peaks above cut_thr within valid frames.
+    """
+    lengths = mask.sum(dim=1).long()
+    q = torch.sigmoid(output['end'])
+    B,T = q.shape
+    tot = 0.0
+    for b in range(B):
+        n = int(lengths[b].item())
+        pred = int((q[b,:n] > 0.7).sum().item())
+        true = len(spans[b])
+        tot += abs(pred - true)
+    return tot / max(B,1)
 
 
 def prf(count, prefix=''):
@@ -297,33 +387,53 @@ def run(args):
         missing,unexpected = yap.load_state_dict(compatible,strict=False)
         print(f'[INIT] loaded {len(compatible)}/{len(own)} tensors; missing={len(missing)} unexpected={len(unexpected)}')
     clips = discover(Path(args.dataset_root),classes,args.max_per_class,args.seed)
-    train_sources,val_sources = split_sources(clips,args.seed)
-    if not train_sources or not val_sources:
-        raise RuntimeError('Train or validation source recordings missing')
+    # Prefer signer-disjoint train/val/test split; fall back to per-class split.
+    try:
+        train_sources,val_sources,test_sources = split_sources_signer_disjoint(
+            clips,args.seed)
+    except TypeError:
+        train_sources,val_sources = split_sources(clips,args.seed)
+        test_sources = {k:[] for k in val_sources}
+    if not train_sources:
+        raise RuntimeError('No training source recordings')
     out = Path(args.out_dir)
     out.mkdir(parents=True,exist_ok=True)
     if (out/'yap_phaseA_best.pth').exists() and not args.overwrite:
         raise FileExistsError('Output checkpoint exists. Use a new --out-dir or explicitly --overwrite')
     (out/'source_split.json').write_text(json.dumps({
         'train':{str(k):[str(p) for p in v] for k,v in train_sources.items()},
-        'val':{str(k):[str(p) for p in v] for k,v in val_sources.items()}},indent=2),encoding='utf-8')
+        'val':{str(k):[str(p) for p in v] for k,v in val_sources.items()},
+        'test':{str(k):[str(p) for p in v] for k,v in test_sources.items()}},indent=2),encoding='utf-8')
     train = SentenceSet(train_sources,cfg.total_joints,args.train_sentences,args.fps,args.max_words,args.max_len,args.seed,True)
     val = SentenceSet(val_sources,cfg.total_joints,args.val_sentences,args.fps,args.max_words,args.max_len,args.seed+7,False)
+    test = SentenceSet(test_sources,cfg.total_joints,args.val_sentences,args.fps,args.max_words,args.max_len,args.seed+13,False) if any(test_sources.values()) else None
     tr = DataLoader(train,batch_size=args.batch_size,shuffle=True,collate_fn=collate,num_workers=0)
     va = DataLoader(val,batch_size=args.batch_size,shuffle=False,collate_fn=collate,num_workers=0)
+    te = DataLoader(test,batch_size=args.batch_size,shuffle=False,collate_fn=collate,num_workers=0) if test is not None else None
     params = [p for p in yap.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(params,lr=args.lr,weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,T_max=args.epochs)
     best = math.inf
+    start_epoch = 0
     history=[]
-    # These names, loss definitions and checkpoint schema remain unchanged.
-    loss_names = ('presence', 'end', 'layer')
+    # Checkpoint resume: load optimizer + epoch state if present.
+    resume_ckpt = out/'yap_phaseA_resume.pth'
+    if args.resume and resume_ckpt.exists():
+        rb = torch.load(resume_ckpt,map_location='cpu',weights_only=False)
+        yap.load_state_dict(rb['yap'],strict=False)
+        optimizer.load_state_dict(rb['optimizer'])
+        start_epoch = rb.get('epoch',0)
+        best = rb.get('best',math.inf)
+        history = rb.get('history',[])
+        print(f'[RESUME] from epoch {start_epoch}, best={best:.4f}')
+    loss_names = ('presence', 'end', 'layer', 'count')
     descriptions = {
         'presence': 'focal presence loss (gesture-active frames)',
         'end': 'masked weighted BCE (gesture end boundaries)',
         'layer': 'layer confidence loss (deep supervision; weight 0.5)',
+        'count': 'soft count loss (sum of end probs == gesture count)',
     }
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch,args.epochs):
         train.epoch=epoch
         yap.train()
         train_sum=0.0
@@ -345,7 +455,8 @@ def run(args):
         boundary_totals = dict(matches=0, predicted=0, truth=0,
                                start_matches=0, start_predicted=0, start_truth=0,
                                end_matches=0, end_predicted=0, end_truth=0,
-                               reasons={})
+                               iou_sum=0.0, iou_count=0, reasons={})
+        count_mae_total=0.0; count_batches=0
         with torch.no_grad():
             for batch in va:
                 loss, parts, output = losses(yap, batch, device, return_output=True)
@@ -355,6 +466,8 @@ def run(args):
                 # Same validation inputs, same forward pass. Uses production tracker.
                 _, _, _, times, mask, spans = batch
                 bc = boundary_counts(yap, output, times, mask, spans)
+                count_mae_total += count_mae(output, times, mask, spans)
+                count_batches += 1
                 for k in boundary_totals:
                     if k == 'reasons':
                         for reason, n in bc[k].items():
@@ -364,6 +477,8 @@ def run(args):
         boundary_all = prf(boundary_totals)
         boundary_start = prf(boundary_totals, 'start_')
         boundary_end = prf(boundary_totals, 'end_')
+        iou = boundary_totals['iou_sum'] / max(boundary_totals['iou_count'],1)
+        cm = count_mae_total / max(count_batches,1)
         tr_loss=train_sum/len(tr)
         v_loss=val_sum/len(va)
         train_avg={k:train_parts[k]/len(tr) for k in loss_names}
@@ -376,6 +491,8 @@ def run(args):
                         'boundary_recall_200ms':boundary_all['recall'],
                         'boundary_start_f1_200ms':boundary_start['f1'],
                         'boundary_end_f1_200ms':boundary_end['f1'],
+                        'boundary_iou':iou,
+                        'count_mae':cm,
                         'boundary_cut_reasons':boundary_totals['reasons']})
         print('\n'+'='*76)
         print(f'  YAP SEGMENTATION ONLY | EPOCH {epoch+1:03d}/{args.epochs:03d} | LR {optimizer.param_groups[0]["lr"]:.2e}')
@@ -385,7 +502,7 @@ def run(args):
         for k in loss_names:
             print(f'  {descriptions[k]:<52} {train_avg[k]:>9.4f} {val_avg[k]:>11.4f}')
         print('-'*76)
-        print(f'  {"TOTAL (presence + end + 0.5 * layer)":<52} {tr_loss:>9.4f} {v_loss:>11.4f}')
+        print(f'  {"TOTAL (presence + end + 0.5 * layer + count)":<52} {tr_loss:>9.4f} {v_loss:>11.4f}')
         improved=v_loss<best
         if improved:
             best=v_loss
@@ -396,13 +513,47 @@ def run(args):
               f'Precision: {boundary_all["precision"]:.4f} | Recall: {boundary_all["recall"]:.4f}')
         print(f'  Start F1: {boundary_start["f1"]:.4f} | '
               f'End F1: {boundary_end["f1"]:.4f}')
+        print(f'  Segment IoU: {iou:.4f} | Count MAE: {cm:.3f}')
         print(f'  Matched: {boundary_all["matched"]} / Predicted: {boundary_all["predicted"]}'
               f' / Ground truth: {boundary_all["ground_truth"]}')
         print(f'  Cut reasons: {boundary_totals["reasons"]}')
         print(f'  Best validation: {best:.4f}'+(' [new checkpoint saved]' if improved else ''))
         print('='*76+'\n',flush=True)
+        # Resume checkpoint: save optimizer + epoch state for safe resume.
+        torch.save({'yap':yap.state_dict(),'optimizer':optimizer.state_dict(),
+                    'epoch':epoch+1,'best':best,'history':history},resume_ckpt)
         (out/'history.json').write_text(json.dumps(history,indent=2),encoding='utf-8')
         scheduler.step()
+    # Final test-set evaluation (never used for training or model selection).
+    if te is not None:
+        yap.eval()
+        test_sum=0.0; test_bc = dict(matches=0,predicted=0,truth=0,
+                                     start_matches=0,start_predicted=0,start_truth=0,
+                                     end_matches=0,end_predicted=0,end_truth=0,
+                                     iou_sum=0.0,iou_count=0,reasons={})
+        test_mae=0.0; test_n=0
+        with torch.no_grad():
+            for batch in te:
+                loss,parts,output = losses(yap,batch,device,return_output=True)
+                test_sum+=loss.item(); test_n+=1
+                _,_,_,times,mask,spans = batch
+                bc = boundary_counts(yap,output,times,mask,spans)
+                test_mae += count_mae(output,times,mask,spans)
+                for k in test_bc:
+                    if k=='reasons':
+                        for r,n in bc[k].items(): test_bc[k][r]=test_bc[k].get(r,0)+n
+                    else: test_bc[k]+=bc[k]
+        t_iou = test_bc['iou_sum']/max(test_bc['iou_count'],1)
+        t_mae = test_mae/max(test_n,1)
+        t_prf = prf(test_bc); t_start = prf(test_bc,'start_'); t_end = prf(test_bc,'end_')
+        print('\n'+'='*76)
+        print('  HELD-OUT TEST SET (never seen during training or model selection)')
+        print('-'*76)
+        print(f'  Test loss: {test_sum/max(test_n,1):.4f} | F1: {t_prf["f1"]:.4f} | '
+              f'Start F1: {t_start["f1"]:.4f} | End F1: {t_end["f1"]:.4f}')
+        print(f'  Segment IoU: {t_iou:.4f} | Count MAE: {t_mae:.3f}')
+        print(f'  Cut reasons: {test_bc["reasons"]}')
+        print('='*76+'\n',flush=True)
     torch.save(yap.state_dict(),out/'yap_phaseA_final.pth')
     print(f'[DONE] best validation loss={best:.4f}; no Conformer or CTC used')
 
@@ -430,6 +581,8 @@ def arguments():
     p.add_argument('--entity-dim',type=int,default=256)
     p.add_argument('--overwrite',action='store_true')
     p.add_argument('--cpu',action='store_true')
+    p.add_argument('--resume',action='store_true',
+                   help='Resume from yap_phaseA_resume.pth in --out-dir (optimizer + epoch state)')
     return p.parse_args()
 
 
