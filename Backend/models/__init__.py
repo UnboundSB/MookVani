@@ -1,1 +1,1 @@
-from .conformer import ISL_Conformer, MultiStreamEmbedding, EfficientNet1DBlock, ConformerBlock
+from .isl_conformer import ISL_Conformer, MultiStreamEmbedding, EfficientNet1DBlock, ConformerBlock

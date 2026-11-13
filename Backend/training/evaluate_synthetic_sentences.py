@@ -10,7 +10,7 @@ from training.train_synthetic_sentences import (
     SyntheticSentenceDataset,
     collate_fn_sentence,
     ctc_decode,
-    get_targets,
+    get_targets_list as get_targets,
     compute_wer,
     compute_f1_prec_rec
 )

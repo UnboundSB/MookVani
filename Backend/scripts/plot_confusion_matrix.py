@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
-from models.isl_conformer import ISL_Conformer
+from models.isl_conformer import WordCategorizerModel as ISL_Conformer
 from data.datasets import build_word_dataloaders
 
 def plot_conf_matrix():

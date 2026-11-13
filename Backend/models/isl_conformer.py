@@ -244,3 +244,7 @@ class WordCategorizerModel(nn.Module):
         lengths = torch.ones(x.size(0), dtype=torch.long, device=x.device)
         log_probs, _ = self.forward(x, lengths)   # (B, 1, num_classes+1)
         return log_probs.squeeze(1)                # (B, num_classes+1), still log-softmax'd
+
+
+# Backward compatibility alias
+ISL_Conformer = WordCategorizerModel
