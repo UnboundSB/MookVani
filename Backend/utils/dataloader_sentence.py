@@ -300,16 +300,22 @@ class ISLSentenceTensorDataset(Dataset):
     def __getitem__(self, idx: int):
         if idx < len(self.sentence_items):
             item = self.sentence_items[idx]
-            clip = self._prepare(
-                torch.load(item["tensor_path"], weights_only=True), NECK_OFFSET
-            )
+            try:
+                clip = torch.load(item["tensor_path"], weights_only=True)
+            except Exception as exc:  # a corrupt file must not kill the run
+                print(f"  [WARN] could not load {item['tensor_path']}: {exc}")
+                clip = torch.zeros(1, 163, dtype=torch.float32)
+            clip = self._prepare(clip, NECK_OFFSET)
             target = torch.tensor(item["target_indices"], dtype=torch.long)
             return clip, clip.shape[0], target
 
         path, label = self.word_items[idx - len(self.sentence_items)]
-        clip = self._prepare(
-            torch.load(path, weights_only=True), NECK_OFFSET_WORD
-        )
+        try:
+            clip = torch.load(path, weights_only=True)
+        except Exception as exc:  # a corrupt file must not kill the run
+            print(f"  [WARN] could not load {path}: {exc}")
+            clip = torch.zeros(1, 163, dtype=torch.float32)
+        clip = self._prepare(clip, NECK_OFFSET_WORD)
         target = torch.tensor([label], dtype=torch.long)
         return clip, clip.shape[0], target
 

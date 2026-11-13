@@ -296,8 +296,8 @@ def train_pretrainer(epochs=25, batch_size=32, lr=1.5e-3, samples_per_class=4,
     # from the canonical manifest, so the pretrainer, the word phases and the
     # sentence phases all speak the same class list and agree on which clip is
     # training data and which one is validation data.
-    infos = discover_word_classes(data_dir, min_samples_per_class=MIN_SAMPLES,
-                                  max_samples_per_class=MAX_SAMPLES)
+    infos = discover_word_classes(data_dir, min_samples_per_class=MIN_SAMPLES_PER_CLASS,
+                                  max_samples_per_class=MAX_SAMPLES_PER_CLASS)
     classes = [i.name for i in infos]
     num_classes = len(classes)
     print(f"[INFO] Found {num_classes} classes in {data_dir}", flush=True)
@@ -465,7 +465,7 @@ def train_pretrainer(epochs=25, batch_size=32, lr=1.5e-3, samples_per_class=4,
     try:
         from utils.plotting import write_report as _write_report
         _written = _write_report(
-            hist, os.path.join(SAVE_DIR, "plots"),
+            history, os.path.join(SAVE_DIR, "plots"),
             title="pretrainer", chance=1.0 / max(1, len(classes)), prefix="standard_",
             y_true=final_targets, y_pred=final_preds, class_names=list(classes))
         for _p in _written:

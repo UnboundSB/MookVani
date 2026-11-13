@@ -32,7 +32,7 @@ BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS = os.path.join(BACKEND_DIR, "models")
 
 # The shared vocabulary + split manifest (every phase reads them).
-COMMON = ["--min_samples_per_class", "14", "--max_samples_per_class", "15"]
+COMMON = ["--min_samples_per_class", "14", "--max_samples_per_class", "20"]
 
 
 def accuracy_steps():

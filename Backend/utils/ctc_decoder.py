@@ -126,12 +126,9 @@ def ctc_prefix_beam_search(
 
     out.sort(key=lambda kv: -kv[1])
 
-    # the duration filter: a word that lasted less than min_dur frames is a
-    # tracking flicker, not a sign.  The durations are not tracked through the
-    # beam, so the filter is applied on the collapsed sequence length.
-    if min_dur > 1:
-        filtered = [h for h in out if len(h[0]) >= 1]
-        out = filtered or out
+    # NOTE: per-word durations are not tracked through the beam, so min_dur is
+    # not enforced here.  It is enforced in the greedy decoder (greedy_decode in
+    # training/train_conformer_ctc.py) instead.
     return out
 
 

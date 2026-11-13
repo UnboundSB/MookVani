@@ -119,7 +119,7 @@ GLOSSARY
  B batch, T poses, J = cfg.total_joints = sum of num_joints over cfg.parts.
  The J axis is the parts CONCATENATED in cfg.parts order (cfg.part_offsets() gives
  where each part starts; assemble_parts() builds the tensors from per-part data).
- Default config = 2 MediaPipe hands (J=42). YAPConfig.holistic() = 2 hands + 9-point
+ Default config = corpus layout (J=53: 2 hands + 4 body + 7 face). YAPConfig.holistic() = 2 hands + 9-point
  upper body + 28-point face subset + shoulder body frame (J=79).
  pose  (B,T,J,3) float  coordinates (x,y normalised image units, z relative)
  conf  (B,T,J)   float  tracker confidence in [0,1] (use 1 if unavailable)
@@ -397,7 +397,14 @@ def face_corpus_part(name: str = "face") -> PartSpec:
 
 
 def _default_parts() -> List[PartSpec]:
-    return [hand_part("left_hand"), hand_part("right_hand")]
+    """Default body layout = the corpus layout our 163-dim tensors store.
+
+    left hand (21) + right hand (21) + upper body (4: shoulders + elbows)
+    + face (7: eyes, nose, cheeks, mouth corners) = J=53, in the order of the
+    landmarks in the 163-dim tensor, with the shoulders as the body frame.
+    """
+    return [hand_part("left_hand"), hand_part("right_hand"),
+            upper_body_corpus_part(), face_corpus_part()]
 
 
 @dataclass
@@ -520,10 +527,10 @@ class YAPConfig:
         elbows) + face (7), in the order of the landmarks in the 163-dim
         tensor, with the shoulders as the body frame.
 
-        This is the preset the segmentor has to be trained with: the default
-        (J=42, hands only) throws the shoulders away, and the holistic preset
-        (J=79) asks for 9 body points and 28 face points that the corpus does
-        not have.
+        This is the preset the segmentor has to be trained with: it matches
+        the corpus layout our 163-dim tensors store (J = 53), with the
+        shoulders as the body frame. The holistic preset (J = 79) asks for
+        9 body points and 28 face points that the corpus does not have.
         """
         return cls(parts=[hand_part("left_hand"), hand_part("right_hand"),
                            upper_body_corpus_part(), face_corpus_part()],

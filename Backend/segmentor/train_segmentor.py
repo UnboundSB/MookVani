@@ -1,7 +1,9 @@
 """YAP-only gesture boundary pretraining. No Conformer, CTC or word classifier.
 
-Use existing segmentor/data/<class>/**/*.pt word recordings (T,163).
+Use existing segmentor/data/<class>/<take>/word.npy word recordings (T, 159).
 Labels only identify source recordings; the objective is presence/end segmentation.
+
+Run `python scripts/convert_word_corpus_for_yap.py` first to generate the .npy files.
 """
 from __future__ import annotations
 import argparse
@@ -29,13 +31,15 @@ def discover(root: Path, classes: list[str], max_per_class: int, seed: int):
         folder = root / name
         if not folder.is_dir():
             continue
-        paths = [p for p in folder.rglob('*.pt') if p.name != 'processed.pt']
+        # The segmentor expects .npy files (T, 53*3) from convert_word_corpus_for_yap.py
+        paths = [p for p in folder.rglob('*.npy')]
         rng.shuffle(paths)
         good = []
         for path in paths:
             try:
-                obj = torch.load(path, map_location='cpu', weights_only=True)
-                if isinstance(obj, torch.Tensor) and obj.numel() >= 163 * 4 and obj.numel() % 163 == 0:
+                obj = np.load(path)
+                # Expect (T, 159) = 53 joints * 3 coords (YAP corpus layout)
+                if isinstance(obj, np.ndarray) and obj.ndim == 2 and obj.shape[1] == 159 and obj.shape[0] >= 4:
                     good.append(path)
             except (RuntimeError, ValueError, OSError, TypeError):
                 continue
@@ -115,9 +119,8 @@ def split_sources_signer_disjoint(corpus, seed, train_fraction=0.7, val_fraction
 
 
 def read_xyz(path: Path, joints: int):
-    clip = torch.load(path, map_location='cpu', weights_only=True).float()
-    clip = clip.reshape(-1, 163)
-    if joints * 3 > 163:
+    clip = torch.from_numpy(np.load(path)).float()
+    if joints * 3 > 159:
         raise ValueError('Only the 53-joint corpus layout is supported by these tensors')
     return clip[:, :joints * 3].reshape(-1, joints, 3).numpy().copy()
 
@@ -388,12 +391,16 @@ def run(args):
         print(f'[INIT] loaded {len(compatible)}/{len(own)} tensors; missing={len(missing)} unexpected={len(unexpected)}')
     clips = discover(Path(args.dataset_root),classes,args.max_per_class,args.seed)
     # Prefer signer-disjoint train/val/test split; fall back to per-class split.
-    try:
-        train_sources,val_sources,test_sources = split_sources_signer_disjoint(
-            clips,args.seed)
-    except TypeError:
+    train_sources,val_sources,test_sources = split_sources_signer_disjoint(clips,args.seed)
+    # Check if validation got empty (happens when each class has only 1 signer group)
+    val_empty = all(len(v) == 0 for v in val_sources.values())
+    if val_empty:
+        print("[INFO] Signer-disjoint split produced empty validation; falling back to per-class split")
         train_sources,val_sources = split_sources(clips,args.seed)
         test_sources = {k:[] for k in val_sources}
+    # Filter out classes with empty validation (needed for SentenceSet sampling)
+    val_sources = {k: v for k, v in val_sources.items() if len(v) > 0}
+    train_sources = {k: v for k, v in train_sources.items() if k in val_sources}
     if not train_sources:
         raise RuntimeError('No training source recordings')
     out = Path(args.out_dir)

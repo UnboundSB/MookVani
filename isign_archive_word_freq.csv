@@ -1,0 +1,844 @@
+word,total_frequency,in_classes_json,isign_csv_count,archive_extracted_count,sources_detail
+court,23,YES,3,20,archive_extracted=20; word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+warm,22,YES,1,21,archive_extracted=21; word-description-dataset_v1.1.csv=1
+good afternoon,22,YES,0,22,archive_extracted=22
+loud,21,YES,0,21,archive_extracted=21
+quiet,21,YES,0,21,archive_extracted=21
+happy,21,YES,0,21,archive_extracted=21
+long,21,YES,0,21,archive_extracted=21
+short,21,YES,0,21,archive_extracted=21
+tall,21,YES,0,21,archive_extracted=21
+wide,21,YES,0,21,archive_extracted=21
+narrow,21,YES,0,21,archive_extracted=21
+big large,21,YES,0,21,archive_extracted=21
+small little,21,YES,0,21,archive_extracted=21
+slow,21,YES,0,21,archive_extracted=21
+fast,21,YES,0,21,archive_extracted=21
+hot,21,YES,0,21,archive_extracted=21
+cool,21,YES,0,21,archive_extracted=21
+new,21,YES,0,21,archive_extracted=21
+old,21,YES,0,21,archive_extracted=21
+young,21,YES,0,21,archive_extracted=21
+good,21,YES,0,21,archive_extracted=21
+bad,21,YES,0,21,archive_extracted=21
+wet,21,YES,0,21,archive_extracted=21
+dry,21,YES,0,21,archive_extracted=21
+sick,21,YES,0,21,archive_extracted=21
+healthy,21,YES,0,21,archive_extracted=21
+cow,21,YES,0,21,archive_extracted=21
+brown,21,YES,0,21,archive_extracted=21
+grey,21,YES,0,21,archive_extracted=21
+hello,21,YES,0,21,archive_extracted=21
+how are you,21,YES,0,21,archive_extracted=21
+alright,21,YES,0,21,archive_extracted=21
+good morning,21,YES,0,21,archive_extracted=21
+good evening,21,YES,0,21,archive_extracted=21
+good night,21,YES,0,21,archive_extracted=21
+thank you,21,YES,0,21,archive_extracted=21
+pleased,21,YES,0,21,archive_extracted=21
+plane,21,YES,0,21,archive_extracted=21
+truck,21,YES,0,21,archive_extracted=21
+boat,21,YES,0,21,archive_extracted=21
+train ticket,21,YES,0,21,archive_extracted=21
+transportation,21,YES,0,21,archive_extracted=21
+train,21,YES,0,21,archive_extracted=21
+brother,21,YES,0,21,archive_extracted=21
+boy,21,YES,0,21,archive_extracted=21
+i,21,YES,0,21,archive_extracted=21
+you,21,YES,0,21,archive_extracted=21
+he,21,YES,0,21,archive_extracted=21
+she,21,YES,0,21,archive_extracted=21
+it,21,YES,0,21,archive_extracted=21
+we,21,YES,0,21,archive_extracted=21
+you plural,21,YES,0,21,archive_extracted=21
+they,21,YES,0,21,archive_extracted=21
+cold,20,YES,0,20,archive_extracted=20
+dog,20,YES,0,20,archive_extracted=20
+cat,20,YES,0,20,archive_extracted=20
+fish,20,YES,0,20,archive_extracted=20
+bird,20,YES,0,20,archive_extracted=20
+mouse,20,YES,0,20,archive_extracted=20
+horse,20,YES,0,20,archive_extracted=20
+animal,20,YES,0,20,archive_extracted=20
+hat,20,YES,0,20,archive_extracted=20
+dress,20,YES,0,20,archive_extracted=20
+shirt,20,YES,0,20,archive_extracted=20
+tshirt,20,YES,0,20,archive_extracted=20
+pant,20,YES,0,20,archive_extracted=20
+shoes,20,YES,0,20,archive_extracted=20
+pocket,20,YES,0,20,archive_extracted=20
+clothing,20,YES,0,20,archive_extracted=20
+red,20,YES,0,20,archive_extracted=20
+green,20,YES,0,20,archive_extracted=20
+blue,20,YES,0,20,archive_extracted=20
+yellow,20,YES,0,20,archive_extracted=20
+pink,20,YES,0,20,archive_extracted=20
+orange,20,YES,0,20,archive_extracted=20
+black,20,YES,0,20,archive_extracted=20
+white,20,YES,0,20,archive_extracted=20
+colour,20,YES,0,20,archive_extracted=20
+car,20,YES,0,20,archive_extracted=20
+bicycle,20,YES,0,20,archive_extracted=20
+bus,20,YES,0,20,archive_extracted=20
+son,20,YES,0,20,archive_extracted=20
+daughter,20,YES,0,20,archive_extracted=20
+mother,20,YES,0,20,archive_extracted=20
+father,20,YES,0,20,archive_extracted=20
+parent,20,YES,0,20,archive_extracted=20
+baby,20,YES,0,20,archive_extracted=20
+man,20,YES,0,20,archive_extracted=20
+woman,20,YES,0,20,archive_extracted=20
+sister,20,YES,0,20,archive_extracted=20
+husband,20,YES,0,20,archive_extracted=20
+wife,20,YES,0,20,archive_extracted=20
+king,20,YES,0,20,archive_extracted=20
+queen,20,YES,0,20,archive_extracted=20
+president,20,YES,0,20,archive_extracted=20
+neighbour,20,YES,0,20,archive_extracted=20
+girl,20,YES,0,20,archive_extracted=20
+child,20,YES,0,20,archive_extracted=20
+adult,20,YES,0,20,archive_extracted=20
+friend,20,YES,0,20,archive_extracted=20
+player,20,YES,0,20,archive_extracted=20
+crowd,20,YES,0,20,archive_extracted=20
+city,20,YES,0,20,archive_extracted=20
+house,20,YES,0,20,archive_extracted=20
+street or road,20,YES,0,20,archive_extracted=20
+train station,20,YES,0,20,archive_extracted=20
+restaurant,20,YES,0,20,archive_extracted=20
+school,20,YES,0,20,archive_extracted=20
+office,20,YES,0,20,archive_extracted=20
+university,20,YES,0,20,archive_extracted=20
+park,20,YES,0,20,archive_extracted=20
+store or shop,20,YES,0,20,archive_extracted=20
+library,20,YES,0,20,archive_extracted=20
+hospital,20,YES,0,20,archive_extracted=20
+temple,20,YES,0,20,archive_extracted=20
+market,20,YES,0,20,archive_extracted=20
+india,20,YES,0,20,archive_extracted=20
+ground,20,YES,0,20,archive_extracted=20
+bank,20,YES,0,20,archive_extracted=20
+location,20,YES,0,20,archive_extracted=20
+manager,19,YES,5,14,archive_extracted=14; word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+suit,19,YES,0,19,archive_extracted=19
+skirt,19,YES,0,19,archive_extracted=19
+family,17,YES,0,17,archive_extracted=17
+grandfather,17,YES,0,17,archive_extracted=17
+grandmother,17,YES,0,17,archive_extracted=17
+author,16,YES,2,14,archive_extracted=14; word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+year,15,YES,0,15,archive_extracted=15
+second,15,YES,0,15,archive_extracted=15
+night,15,YES,0,15,archive_extracted=15
+time,15,YES,0,15,archive_extracted=15
+fan,15,YES,0,15,archive_extracted=15
+paint,15,YES,0,15,archive_extracted=15
+priest,15,YES,0,15,archive_extracted=15
+fall,15,YES,0,15,archive_extracted=15
+attack,15,YES,0,15,archive_extracted=15
+ball,15,YES,0,15,archive_extracted=15
+sunday,14,YES,0,14,archive_extracted=14
+monday,14,YES,0,14,archive_extracted=14
+tuesday,14,YES,0,14,archive_extracted=14
+wednesday,14,YES,0,14,archive_extracted=14
+thursday,14,YES,0,14,archive_extracted=14
+friday,14,YES,0,14,archive_extracted=14
+saturday,14,YES,0,14,archive_extracted=14
+today,14,YES,0,14,archive_extracted=14
+tomorrow,14,YES,0,14,archive_extracted=14
+yesterday,14,YES,0,14,archive_extracted=14
+week,14,YES,0,14,archive_extracted=14
+month,14,YES,0,14,archive_extracted=14
+hour,14,YES,0,14,archive_extracted=14
+minute,14,YES,0,14,archive_extracted=14
+morning,14,YES,0,14,archive_extracted=14
+afternoon,14,YES,0,14,archive_extracted=14
+evening,14,YES,0,14,archive_extracted=14
+lamp,14,YES,0,14,archive_extracted=14
+cell phone,14,YES,0,14,archive_extracted=14
+computer,14,YES,0,14,archive_extracted=14
+laptop,14,YES,0,14,archive_extracted=14
+screen,14,YES,0,14,archive_extracted=14
+camera,14,YES,0,14,archive_extracted=14
+television,14,YES,0,14,archive_extracted=14
+radio,14,YES,0,14,archive_extracted=14
+table,14,YES,0,14,archive_extracted=14
+chair,14,YES,0,14,archive_extracted=14
+bed,14,YES,0,14,archive_extracted=14
+dream,14,YES,0,14,archive_extracted=14
+window,14,YES,0,14,archive_extracted=14
+door,14,YES,0,14,archive_extracted=14
+bedroom,14,YES,0,14,archive_extracted=14
+kitchen,14,YES,0,14,archive_extracted=14
+bathroom,14,YES,0,14,archive_extracted=14
+pencil,14,YES,0,14,archive_extracted=14
+pen,14,YES,0,14,archive_extracted=14
+photograph,14,YES,0,14,archive_extracted=14
+soap,14,YES,0,14,archive_extracted=14
+book,14,YES,0,14,archive_extracted=14
+page,14,YES,0,14,archive_extracted=14
+key,14,YES,0,14,archive_extracted=14
+letter,14,YES,0,14,archive_extracted=14
+paper,14,YES,0,14,archive_extracted=14
+lock,14,YES,0,14,archive_extracted=14
+telephone,14,YES,0,14,archive_extracted=14
+bag,14,YES,0,14,archive_extracted=14
+box,14,YES,0,14,archive_extracted=14
+gift,14,YES,0,14,archive_extracted=14
+card,14,YES,0,14,archive_extracted=14
+ring,14,YES,0,14,archive_extracted=14
+tool,14,YES,0,14,archive_extracted=14
+teacher,14,YES,0,14,archive_extracted=14
+student,14,YES,0,14,archive_extracted=14
+lawyer,14,YES,0,14,archive_extracted=14
+doctor,14,YES,0,14,archive_extracted=14
+patient,14,YES,0,14,archive_extracted=14
+waiter,14,YES,0,14,archive_extracted=14
+secretary,14,YES,0,14,archive_extracted=14
+police,14,YES,0,14,archive_extracted=14
+soldier,14,YES,0,14,archive_extracted=14
+artist,14,YES,0,14,archive_extracted=14
+reporter,14,YES,0,14,archive_extracted=14
+actor,14,YES,0,14,archive_extracted=14
+job,14,YES,0,14,archive_extracted=14
+summer,14,YES,0,14,archive_extracted=14
+spring,14,YES,0,14,archive_extracted=14
+winter,14,YES,0,14,archive_extracted=14
+season,14,YES,0,14,archive_extracted=14
+ex monsoon,14,YES,0,14,archive_extracted=14
+religion,14,YES,0,14,archive_extracted=14
+energy,14,YES,0,14,archive_extracted=14
+war,14,YES,0,14,archive_extracted=14
+peace,14,YES,0,14,archive_extracted=14
+election,14,YES,0,14,archive_extracted=14
+newspaper,14,YES,0,14,archive_extracted=14
+gun,14,YES,0,14,archive_extracted=14
+sport,14,YES,0,14,archive_extracted=14
+exercise,14,YES,0,14,archive_extracted=14
+death,14,YES,0,14,archive_extracted=14
+price,14,YES,0,14,archive_extracted=14
+sign,14,YES,0,14,archive_extracted=14
+science,14,YES,0,14,archive_extracted=14
+god,14,YES,0,14,archive_extracted=14
+medicine,14,YES,0,14,archive_extracted=14
+money,14,YES,0,14,archive_extracted=14
+bill,14,YES,0,14,archive_extracted=14
+marriage,14,YES,0,14,archive_extracted=14
+team,14,YES,0,14,archive_extracted=14
+race ethnicity,14,YES,0,14,archive_extracted=14
+technology,14,YES,0,14,archive_extracted=14
+clock,13,YES,0,13,archive_extracted=13
+necessity,10,NO,10,0,word-description-dataset_v1.1.csv=6; word-presence-dataset_v1.1.csv=4
+mean,8,NO,0,8,archive_extracted=8
+rich,8,NO,0,8,archive_extracted=8
+poor,8,NO,0,8,archive_extracted=8
+thick,8,NO,0,8,archive_extracted=8
+expensive,8,NO,0,8,archive_extracted=8
+cheap,8,NO,0,8,archive_extracted=8
+flat,8,NO,0,8,archive_extracted=8
+curved,8,NO,0,8,archive_extracted=8
+male,8,NO,0,8,archive_extracted=8
+female,8,NO,0,8,archive_extracted=8
+tight,8,NO,0,8,archive_extracted=8
+loose,8,NO,0,8,archive_extracted=8
+high,8,NO,0,8,archive_extracted=8
+low,8,NO,0,8,archive_extracted=8
+soft,8,NO,0,8,archive_extracted=8
+hard,8,NO,0,8,archive_extracted=8
+deep,8,NO,0,8,archive_extracted=8
+shallow,8,NO,0,8,archive_extracted=8
+clean,8,NO,0,8,archive_extracted=8
+dirty,8,NO,0,8,archive_extracted=8
+strong,8,NO,0,8,archive_extracted=8
+weak,8,NO,0,8,archive_extracted=8
+dead,8,NO,0,8,archive_extracted=8
+alive,8,NO,0,8,archive_extracted=8
+heavy,8,NO,0,8,archive_extracted=8
+light,8,NO,0,8,archive_extracted=8
+famous,8,NO,0,8,archive_extracted=8
+sad,8,NO,0,8,archive_extracted=8
+beautiful,8,NO,0,8,archive_extracted=8
+ugly,8,NO,0,8,archive_extracted=8
+deaf,8,NO,0,8,archive_extracted=8
+blind,8,NO,0,8,archive_extracted=8
+reflect,7,NO,7,0,word-description-dataset_v1.1.csv=2; word-presence-dataset_v1.1.csv=5
+assure,6,NO,6,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=5
+phenomenal,6,NO,6,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=5
+shrivel,6,NO,6,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=5
+errand,6,NO,6,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=5
+settle down,6,NO,6,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=5
+survive,6,NO,6,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=5
+immediate,6,NO,6,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=5
+advertisement,6,NO,6,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=5
+nuisance,6,NO,6,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=5
+upright,6,NO,6,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=5
+ease,6,NO,6,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=5
+diverse,6,NO,6,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=5
+ashamed,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+veracity,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+avail of,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+bestow,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+suitable,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+adopt,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+agency,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+convivial,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+embarrassed,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+crucial,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+laud,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+soothing,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+answer back,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+immaculate,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+petrified,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+adroit,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+integrate,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+stance,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+bewildered,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+rescue,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+repine,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+conclude,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+surpass,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+opportunity,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+stumble,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+phenomenon,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+revoke,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+anarchy,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+defamation,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+vacate,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+vain,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+proactive,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+estrangement,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+dishevelled,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+certain,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+forbid,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+fulfil,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+jerk,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+owing to,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+depict,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+alter,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+fetching,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+redo,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+disturb,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+startle,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+urge,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+choke up,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+flexible,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+ambiguous,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+laugh at,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+profound,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+betray,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+attractive,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+meditation,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+slash,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+bunch,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+cranky,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+seasoning,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+weird,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+mysterious,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+displeased,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+anonymous,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+matter,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+penchant,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+intend,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+approximately,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+binge-watch,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+punctual,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+attire,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+frustration,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+premises,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+residential,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+imitate,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+dejected,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+vaguely,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+honour,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+stupendous,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+cringe,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+keep out,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+beyond,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+apart,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+dialogue,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+interaction,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+situation,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+talent,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+bask,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+particularly,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+rectify,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+essential,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+require,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+accomplish,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+deduction,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+primitive,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+wholeheartedly,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+consciousness,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+mundane,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+inconvenience,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+observation,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+toil,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+character,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+meddle,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+petulant,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+horde,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+compare,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+interface,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+impatient,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+abstain,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+dignity,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+awareness,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+carry on,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+ponder,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+become,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+technique,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+replenish,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+budget,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+severe,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+call off,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+witty,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+heap,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+summon,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+ancient,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+dull,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+no one,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+twitchy,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+bossy,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+penniless,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+berate,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+autonomous,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+sprinkle,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+craving,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+think over,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+proficient,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+rude,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+soft skills,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+properly,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+biography,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+garrulous,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+stunned,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+audience,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+tiff,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+giggle,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+drawback,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+enthusiasm,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+announce,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+anthology,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+overt,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+permit,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+behaviour,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+come down with,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+eager,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+firmly,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+mellow,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+excuse,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+belong to,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+abduct,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+initiate,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+attach,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+bibliophile,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+policy,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+emulate,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+see off,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+advantage,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+immature,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+atrocious,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+misfortune,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+insult,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+concept,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+funeral,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+dump,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+perpetual,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+disciplinary,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+pejorative,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+society,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+discharge,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+punish,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+convert,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+tumid,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+culprit,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+bad tempered,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+admire,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+convince,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+forsake,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+liberty,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+strive,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+brawl,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+protect,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+further,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+assist,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+expand,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+mannerly,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+flummox,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+censure,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+shatter,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+furtively,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+afraid,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+congenial,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+grumpy,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+accuse,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+heed,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+ridiculous,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+immovable,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+buddy,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+afford,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+attempt,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+persist,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+emphasize,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+benefactor,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+compliment,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+confine,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+fatuous,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+elucidate,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+unexpected,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+flourish,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+evocative,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+adapt,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+predict,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+savvy,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+abnegation,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+fare,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+calligraphy,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+supposition,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+advocate,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+recede,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+shrewd,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+empathy,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+exempt,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+procrastinate,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+wail,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+construed,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+foretell,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+altruism,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+bolster,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+cheer up,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+bouquet,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+ooze,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+duplicate,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+addict,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+grinch,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+inestimable,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+impel,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+prominent,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+giant,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+snicker,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+adore,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+discern,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+terse,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+stan,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+spoilsport,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+realm,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+defense,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+moreover,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+amuse,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+hassle,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+thwart,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+depend on,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+peevish,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+ravishing,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+compel,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+chillax,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+inspire,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+remorse,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+arrange,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+superior,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+distinguish,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+compensation,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+cognitive,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+decisive,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+report,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+favor,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+buzzy,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+bargain,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+conscious,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+treatment,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+racism,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+obtain,5,NO,5,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=4
+capable,4,NO,4,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=3
+break down,4,NO,4,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=3
+issue,4,NO,4,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=3
+zealot,4,NO,4,0,word-description-dataset_v1.1.csv=3; word-presence-dataset_v1.1.csv=1
+influence,4,NO,4,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=3
+scowl,4,NO,4,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=3
+hike,4,NO,4,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=3
+revision,4,NO,4,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=3
+collapse,4,NO,4,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=3
+agitate,4,NO,4,0,word-description-dataset_v1.1.csv=2; word-presence-dataset_v1.1.csv=2
+behalf,4,NO,4,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=3
+abandon,4,NO,4,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=3
+pick out,4,NO,4,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=3
+admit,4,NO,4,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=3
+candidate,4,NO,4,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=3
+thin,4,NO,0,4,archive_extracted=4
+nice,4,NO,0,4,archive_extracted=4
+inhabitant,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+remove,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+direct,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+pretend,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+leave,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+enclose,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+surreptitious,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+unfamiliar,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+ceo,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+add,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+action,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+willing,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+control,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+cram,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+consensus,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+abstract,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+convenient,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+extended,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+preoccupied,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+whisper,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+accompany,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+decorate,3,NO,3,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=2
+maintenance,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+concerned,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+quandary,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+discussion,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+outpouring,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+taunt,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+pat,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+zap,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+via - 2,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+diplomacy,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+mental,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+persecutions,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+nevertheless,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+exit,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+zygote,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+duly,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+agnostic,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+advert,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+notion,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+equip,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+arbitrary,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+noise,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+everywhere,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+pending,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+examination,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+rancour,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+cafe,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+swamp,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+brainteaser,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+underestimate - 2,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+unreserved,2,NO,2,0,word-presence-dataset_v1.1.csv=2
+reconcile,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+minister,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+nearby,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+ravenous,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+each,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+towards,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+neighborhood,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+nominate,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+ebb,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+gloat,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+quest,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+allude,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+query,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+sanctify,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+expectation,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+intrigue,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+transfer,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+adversarial,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+advice,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+effusive,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+analysis,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+exactly,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+eloquence,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+hunch,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+snuggle,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+burden,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+accolade,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+include,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+miracle,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+adventure,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+anticipate,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+deceptive,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+date,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+charity,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+majority,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+look out,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+nerve,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+absorb,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+missile,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+efface,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+astonishment,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+succumb,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+million,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+elude - 2,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+accurate,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+abysmal,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+component,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+excess,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+underdog - 2,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+queue,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+multiple,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+wander,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+dearth,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+acquisition,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+sacrifice,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+myth,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+nobody,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+actually,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+aspiring,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+message,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+neither,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+mere,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+elevator,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+frolic,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+avid,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+implore,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+refrain,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+complicated,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+meter,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+effective,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+ellipsis,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+enable,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+bulk,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+mood,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+menu,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+vibes,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+radical,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+anger,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+foremost,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+plausible,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+secured,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+argue,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+elan,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+thrilled,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+emanate - 1,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+modest,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+retain,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+enjoin,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+trivial,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+abash,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+metal,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+mourn,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+zenith,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+native,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+alliance,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+deport,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+tolerant,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+unbreakable,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+tact,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+discrimination,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+qualitative,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+eclectic,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+refuse,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+zone,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+relegate,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+embassy,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+exhibition,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+annoy,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+aerobics,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+raconteur,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+customer,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+eccentric,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+dereliction,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+acknowledge,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+electricity,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+aggravation,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+quiescent,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+abuse,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+military,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+ankle,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+avarice,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+rapport,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+repudiate,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+edgy,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+evolve,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+permission,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+qulam,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+earful,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+expose,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+wry,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+choice,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+accent,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+consultant,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+outspoken,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+stupid,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+euro,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+ache,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+underdog - 1,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+knotty,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+debate,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+negotiation,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+the wherewithal,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+emanate - 2,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+altercation,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+explorer,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+exact,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+miser,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+mission,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+exult,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+mode,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+already,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+reception,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+tenacious,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+release,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+succinct,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+avenue,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+unconditionally,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+bribe,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+dribble,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+employ,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+reconciliation,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+via - 1,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+exceed,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+tenable,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+quiver,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+enrol,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+deem,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+narrative,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+ruminate,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+altogether,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+underestimate - 1,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+excess capacity,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+nick,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+manufacturer,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+entertain,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+regard,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+mechanism,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+persuade,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+effrontery,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+elude - 1,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+remedy,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+ravage,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+moan,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+engaged,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+enhance,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+company,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+possibility,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+objective,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+mixture,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+recoil,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+maker,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+plead,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+resemble,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+fortune,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+earring,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+tender,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+settle,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+quote,2,NO,2,0,word-description-dataset_v1.1.csv=1; word-presence-dataset_v1.1.csv=1
+shill,1,NO,1,0,word-description-dataset_v1.1.csv=1
+ambidextrous,1,NO,1,0,word-description-dataset_v1.1.csv=1
+sustain,1,NO,1,0,word-description-dataset_v1.1.csv=1
+foul,1,NO,1,0,word-description-dataset_v1.1.csv=1
+edible,1,NO,1,0,word-description-dataset_v1.1.csv=1
+accidentally,1,NO,1,0,word-description-dataset_v1.1.csv=1
+competent,1,NO,1,0,word-description-dataset_v1.1.csv=1
+abroad,1,NO,1,0,word-description-dataset_v1.1.csv=1
+blossom,1,NO,1,0,word-description-dataset_v1.1.csv=1
+unreserved - 2,1,NO,1,0,word-description-dataset_v1.1.csv=1
+amphibious,1,NO,1,0,word-description-dataset_v1.1.csv=1
+bide your time,1,NO,1,0,word-description-dataset_v1.1.csv=1
+reassuring,1,NO,1,0,word-description-dataset_v1.1.csv=1
+dissipate,1,NO,1,0,word-description-dataset_v1.1.csv=1
+unreserved - 1,1,NO,1,0,word-description-dataset_v1.1.csv=1
+swap,1,NO,1,0,word-description-dataset_v1.1.csv=1
+kindred,1,NO,1,0,word-description-dataset_v1.1.csv=1
+outstanding,1,NO,1,0,word-description-dataset_v1.1.csv=1
+newfangled,1,NO,1,0,word-description-dataset_v1.1.csv=1
+whole,1,NO,1,0,word-description-dataset_v1.1.csv=1
+misgiving,1,NO,1,0,word-description-dataset_v1.1.csv=1
+rapid,1,NO,1,0,word-description-dataset_v1.1.csv=1
+waddle,1,NO,1,0,word-description-dataset_v1.1.csv=1
+against,1,NO,1,0,word-description-dataset_v1.1.csv=1
+demonstrate,1,NO,1,0,word-description-dataset_v1.1.csv=1
+disposed,1,NO,1,0,word-description-dataset_v1.1.csv=1

@@ -126,10 +126,14 @@ class WordTeacher(nn.Module):
         probs = F.softmax(logits.float(), dim=-1)
 
         if self.row_map and max(self.row_map) < probs.shape[1]:
-            idx = torch.tensor([max(0, r) for r in self.row_map], device=probs.device)
+            # Build a safe index: unknown classes (row_map == -1) map to row 0
+            # temporarily so indexing doesn't fail; they are zeroed right after.
+            idx = torch.tensor([r if r >= 0 else 0 for r in self.row_map],
+                               device=probs.device)
             probs = probs[:, idx]
-            # a class the teacher does not know gets zero probability
-            unknown = torch.tensor([r < 0 for r in self.row_map], device=probs.device)
+            # Zero out classes the teacher does not know.
+            unknown = torch.tensor([r < 0 for r in self.row_map],
+                                   device=probs.device)
             if unknown.any():
                 probs = probs.masked_fill(unknown.unsqueeze(0), 0.0)
         return probs

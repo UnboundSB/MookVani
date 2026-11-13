@@ -29,10 +29,10 @@ Behaviour
   or a busy CPU does not change signing speed as the model sees it.
 
 Usage (from the repo root or Backend/)
-    python Backend/live_inference_conformer.py                       # webcam 0
-    python Backend/live_inference_conformer.py --source clip.mp4     # video file
-    python Backend/live_inference_conformer.py --simulate t.pt       # saved (T,163) tensor, no camera
-    python Backend/live_inference_conformer.py --ckpt Backend/models/isl_real_sentences/real_sentence_ema_best.pth
+    python Backend/live_inference.py                       # webcam 0
+    python Backend/live_inference.py --source clip.mp4     # video file
+    python Backend/live_inference.py --simulate t.pt       # saved (T,163) tensor, no camera
+    python Backend/live_inference.py --ckpt Backend/models/isl_real_sentences/real_sentence_ema_best.pth
 
 The decision logic (LiveRecognizer) has no camera or MediaPipe dependency, so it can be
 tested offline. cv2 and mediapipe are imported only when the camera/video loop runs.
@@ -319,7 +319,10 @@ def load_model(ckpt_path, classes_path, device):
     # old class list cannot be loaded verbatim.  The mismatching head is
     # dropped (and reported), the backbone is kept.
     missing, unexpected = load_flexible(model, sd, label="LIVE")
-    bad = [k for k in missing if not k.endswith("pe")] + list(unexpected)
+    # Allow missing head keys when vocabulary has changed (ctc_proj.1.* for CTC models,
+    # head.4.* for word models, classifier.4.* for pretrainer, aux_proj.* for aux head).
+    head_prefixes = ("ctc_proj.1.", "head.4.", "classifier.4.", "aux_proj.")
+    bad = [k for k in missing if not k.endswith("pe") and not k.startswith(head_prefixes)] + list(unexpected)
     if bad:
         raise RuntimeError(f"Checkpoint does not match the model ({len(bad)} mismatched keys, e.g. {bad[:3]}). "
                            f"Is {ckpt_path} a Conformer-CTC checkpoint with {len(classes)} classes?")

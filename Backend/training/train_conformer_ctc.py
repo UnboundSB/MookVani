@@ -110,253 +110,14 @@ def compute_wer(ref, hyp):
 # =============================================================================
 # 2. POSE AUGMENTATIONS (uniform sentence-level)
 # =============================================================================
-def _reclamp(seq):
-    """Normalise the encoding of an UNDETECTED hand to a single convention: zeros.
-
-    Why zeros and not the canonical resting pose?  The resting pose (-1.5, 3, 0) is
-    defined RELATIVE TO THE CLIP'S OWN ANCHOR, and the three corpora use three
-    different anchors (the image origin for the word corpus, the nose for the sentence
-    corpus).  Writing the absolute (-1.5, 3, 0) into every corpus therefore moves the
-    absent hand to a completely different place in each of them - up to four shoulder
-    widths away from where the pretraining corpus had it.
-
-    That broke the synthetic stage 1 completely: the frozen Phase 6 backbone was
-    pretrained with the absent hand at the origin and suddenly saw it somewhere else,
-    so the exact-sentence accuracy stayed at 0% (the original code reached 52% by
-    epoch 8 and 74.6% by epoch 20).
-
-    Zeros are the convention of the corpus the backbone was pretrained on, and the
-    presence flag already tells the model that the hand is missing, so the geometry of
-    an absent hand carries no information anyway.
-
-    This also removes the right-hand sign bug: the old code put the missing RIGHT hand
-    at -1.5, i.e. on the LEFT side of the body.
-    """
-    lh_missing = seq[:, 159] < 0.5
-    rh_missing = seq[:, 160] < 0.5
-    if lh_missing.any():
-        seq[lh_missing, 0:63] = 0.0
-    if rh_missing.any():
-        seq[rh_missing, 63:126] = 0.0
-    return seq
-
-def harmonize_features(seq, zero_face=True, offset=None):
-    """Move a landmark clip into the frame the backbone was pretrained in.
-
-    The three tensor corpora in Backend/data were extracted at different times with
-    different normalisation conventions, so the same physical point sits in three
-    different places.  Measured on the finished tensors, using the neck (the shoulder
-    midpoint) as the reference point:
-
-      tensors_include50_word_level  (the backbone pretraining corpus)
-          neck at (3.592, 2.769, -1.233)   - the anchor was the image origin
-      tensors_isl_csltr_word_level   (current scripts/extraction.py)
-          neck at (0.000, 0.000,  0.000)   - the anchor was the neck
-      tensors_sentence_level
-          neck at (0.011, 0.605, -0.523)   - the anchor was the nose, because the face
-                                               was detected in 89% of the frames
-
-    Handing a backbone that was pretrained in the first frame a clip expressed in the
-    third one is a severe domain shift: the whole skeleton is displaced by more than
-    three shoulder widths, and the 21 face dimensions that are identically zero in the
-    pretraining corpus suddenly carry values.  That is enough to destroy the pretrained
-    representation on the very first epoch of fine-tuning - the real-sentence run
-    collapsed to 100% blank on epoch 1 with its validation loss rising from 5.8 to 10.1
-    while the training loss was still falling.
-
-    The correction is a single constant translation per corpus, because the crop
-    geometry is not recoverable from the normalised landmarks.  The corpus means are
-    matched exactly by translating the continuous corpus by NECK_OFFSET; the pretraining
-    corpus needs no shift at all, so the Phase 6 weights stay valid (verified: 62.0% ->
-    60.7% word accuracy, the small drop coming from the missing-modality harmonisation).
-
-    The face block is cleared because it is identically zero in the pretraining corpus;
-    leaving it populated would make those 21 dimensions mean something else during
-    fine-tuning than during pretraining.
-
-    Order matters: call this BEFORE _reclamp(), so that the canonical resting pose of an
-    undetected hand is written in the final frame.
-    """
-    if seq.shape[-1] != 163:
-        return seq
-    if offset is None:
-        offset = NECK_OFFSET
-    seq = seq.contiguous().clone()
-    if any(abs(float(v)) > 1e-9 for v in offset):
-        lm = seq[:, :159].reshape(-1, 53, 3)
-        off = seq.new_tensor(offset).view(1, 1, 3)
-        seq[:, :159] = (lm + off).reshape(-1, 159)
-    if zero_face:
-        # The face block is identically zero in the pretraining corpus.
-        seq[:, 138:159] = 0.0
-        seq[:, 162] = 0.0
-    return seq
-
-
-def match_pretraining_domain(seq, target_wrist=2.96, target_hand=0.463):
-    """Rewrite a clip so it looks like the ISOLATED-WORD corpus the backbone was
-    pretrained on.
-
-    Measured domain gap (in shoulder widths):
-
-        include50_word  (pretraining)  hand extent 0.463   wrist-to-neck 2.961
-        sentence_level  (fine-tuning)  hand extent 0.318   wrist-to-neck 0.935
-
-    In the isolated-word videos the sign is performed with the arm EXTENDED (the wrist
-    is three times further from the neck) and the hand is 1.46x bigger relative to the
-    shoulders (a tighter crop).  In the continuous videos the arm is relaxed and the
-    shot is wide.  The backbone therefore reads the two domains as completely different
-    things.
-
-    This rotates each hand about its elbow until the wrist-to-neck distance matches the
-    pretraining corpus, and scales the hand about the wrist until its extent matches.
-    The rotation is analytic (solve for the angle that puts the wrist on the circle of
-    radius |wrist - target| around the neck), so the result is a clean rigid rotation of
-    the hand - no landmark is distorted.
-    """
-    if seq.shape[-1] != 163:
-        return seq
-    seq = seq.contiguous().clone()
-    T = seq.shape[0]
-    lm = seq[:, :159].reshape(T, 53, 3)
-    neck = (lm[:, 42] + lm[:, 43]) / 2.0
-
-    for wrist_i, elbow_i, lo, hi in ((0, 44, 0, 21), (21, 45, 21, 42)):
-        for t in range(T):
-            w = lm[t, wrist_i]; e = lm[t, elbow_i]; nk = neck[t]
-            v = w - e; u = nk - e
-            lv, lu = float(np.linalg.norm(v)), float(np.linalg.norm(u))
-            if lv < 1e-6 or lu < 1e-6:
-                continue
-            cos = (lv * lv + lu * lu - target_wrist ** 2) / (2 * lv * lu)
-            if not (-1.0 <= cos <= 1.0):
-                continue
-            phi = math.atan2(float(u[1] * v[0] - u[0] * v[1]), float(u[0] * v[0] + u[1] * v[1]))
-            theta = math.acos(cos) - phi
-            c, s = math.cos(theta), math.sin(theta)
-            d = lm[t, lo:hi, :2] - e[:2]
-            rot = torch.stack([d[:, 0] * c - d[:, 1] * s, d[:, 0] * s + d[:, 1] * c], dim=1)
-            lm[t, lo:hi, :2] = rot + e[:2]
-
-    # scale the hand about its own wrist
-    for lo, hi in ((0, 21), (21, 42)):
-        blk = lm[:, lo:hi]
-        w = blk[:, 0:1]
-        ext = torch.linalg.norm(blk - w, dim=2).mean(1)
-        f = torch.where(ext > 1e-6, torch.full_like(ext, target_hand) / ext.clamp(min=1e-6),
-                        torch.ones_like(ext))
-        lm[:, lo:hi] = w + (blk - w) * f[:, None, None]
-
-    seq[:, :159] = lm.reshape(T, 159)
-    return seq
-
-
-def harmonize_frame(feat):
-    """Align a SINGLE 163-dim frame to the reference frame of the backbone.
-
-    Same operation as harmonize_features() + _reclamp(), but for the live inference
-    path, which produces the features frame by frame.  Without it the live stream is
-    expressed in a different geometric frame than the one the model was trained on and
-    the recogniser returns nothing.
-    """
-    f = np.asarray(feat, dtype=np.float32).copy()
-    if f.shape[-1] != 163:
-        return f
-    # The 159 landmark dims are 53 landmarks x 3 coordinates, so the offset is repeated.
-    f[:159] += np.tile(np.asarray(NECK_OFFSET, dtype=np.float32), 53)
-    f[138:159] = 0.0
-    f[162] = 0.0
-    if f[159] < 0.5:
-        f[0:63] = 0.0
-    if f[160] < 0.5:
-        f[63:126] = 0.0
-    return f
-
-
-def aug_flip(seq):
-    seq = seq.clone(); T = seq.shape[0]
-    c = seq[:, :159].view(T, 53, 3).clone()
-    # 1. Flip X-coordinate horizontally only (Y and Z stay upright)
-    c[:, :, 0] *= -1.0
-
-    # 2. Swap Hands: Left Hand (0:21) <-> Right Hand (21:42)
-    c[:, 0:21], c[:, 21:42] = c[:, 21:42].clone(), c[:, 0:21].clone()
-
-    # 3. Swap Arms: Left Shoulder (42) <-> Right Shoulder (43), Left Elbow (44) <-> Right Elbow (45)
-    c[:, 42], c[:, 43] = c[:, 43].clone(), c[:, 42].clone()
-    c[:, 44], c[:, 45] = c[:, 45].clone(), c[:, 44].clone()
-
-    # 4. Swap Face: Eyes (46 <-> 47), Cheeks (49 <-> 50), Mouth Corners (51 <-> 52)
-    c[:, 46], c[:, 47] = c[:, 47].clone(), c[:, 46].clone()  # Left Eye <-> Right Eye
-    c[:, 49], c[:, 50] = c[:, 50].clone(), c[:, 49].clone()  # Left Cheek <-> Right Cheek
-    c[:, 51], c[:, 52] = c[:, 52].clone(), c[:, 51].clone()  # Left Mouth <-> Right Mouth
-    # Nose (48) is centerline, stays at 48
-
-    seq[:, :159] = c.view(T, 159)
-    # Swap presence flags for Left Hand (159) and Right Hand (160)
-    seq[:, 159], seq[:, 160] = seq[:, 160].clone(), seq[:, 159].clone()
-    return _reclamp(seq)
-
-def aug_shift(seq, dx=0.06, dy=0.02):
-    seq = seq.clone(); T = seq.shape[0]
-    c = seq[:, :BODY_DIMS].view(T, -1, 3)
-    c[:, :, 0] += random.uniform(-dx, dx)
-    c[:, :, 1] += random.uniform(-dy, dy)
-    seq[:, :BODY_DIMS] = c.view(T, BODY_DIMS)
-    return _reclamp(seq)
-
-def aug_tilt(seq, deg=10.0):
-    seq = seq.clone(); T = seq.shape[0]
-    a = math.radians(random.uniform(-deg, deg)); ca, sa = math.cos(a), math.sin(a)
-    R = torch.tensor([[ca,-sa],[sa,ca]], dtype=torch.float32)
-    c = seq[:, :BODY_DIMS].view(T, -1, 3)
-    c[:, :, :2] = (c[:, :, :2].reshape(-1, 2) @ R.T).view(T, -1, 2)
-    seq[:, :BODY_DIMS] = c.view(T, BODY_DIMS)
-    return _reclamp(seq)
-
-def aug_speed(seq, lo=0.80, hi=1.25):
-    """Speed up (lo < 1.0) or slow down (hi > 1.0) sign execution smoothly.
-
-    Only the 159 landmark channels are resampled.  The 4 presence flags are discrete
-    and are resampled with nearest-neighbour and re-thresholded: the previous version
-    linearly interpolated all 163 channels, which produced fractional flags (0.5, 0.3,
-    ...) and silently corrupted the _reclamp() bookkeeping of every augmented clip.
-    """
-    T, D = seq.shape
-    factor = random.uniform(lo, hi)
-    new_T = max(8, int(round(T * factor)))
-    if new_T == T: return seq
-    lm = F.interpolate(seq[:, :159].T.unsqueeze(0), size=new_T,
-                       mode="linear", align_corners=True).squeeze(0).T
-    fl = F.interpolate(seq[:, 159:163].T.unsqueeze(0), size=new_T,
-                       mode="nearest").squeeze(0).T
-    return torch.cat([lm, (fl > 0.5).to(seq.dtype)], dim=1)
-
-def aug_temporal_mask(seq, max_mask=4, n_masks=2):
-    """SpecAugment-style temporal cutout over the landmark channels.
-
-    The presence flags are cleared for the masked frames so the model never sees the
-    inconsistent state "modality present but geometry exactly zero".  That state does
-    not occur in the extracted data (verified: 0 such frames across both corpora), so
-    creating it in training only adds label noise.
-    """
-    seq = seq.clone(); T = seq.shape[0]
-    for _ in range(random.randint(1, n_masks)):
-        ml = random.randint(1, max_mask)
-        st = random.randint(0, max(0, T - ml))
-        seq[st:st+ml, :159] = 0.0
-        seq[st:st+ml, 159:163] = 0.0
-    return seq
-
-def augment(seq, strength=1.0):
-    # Pure horizontal mirror (X inverted + hands swapped, Y and Z preserved upright)
-    if random.random() < 0.40 * strength: seq = aug_flip(seq)
-    if random.random() < 0.50 * strength: seq = aug_tilt(seq, 10.0 * strength)
-    if random.random() < 0.50 * strength: seq = aug_shift(seq, 0.05 * strength, 0.02 * strength)
-    # Slow down or speed up frames (0.80x - 1.25x)
-    if random.random() < 0.50 * strength: seq = aug_speed(seq, 0.80, 1.25)
-    if random.random() < 0.30 * strength: seq = aug_temporal_mask(seq, 3, 2)
-    return seq
+# All pose augmentation and harmonisation primitives live in
+# Backend/utils/pose_augmentation.py (the single source of truth).  They are
+# re-exported into this module's namespace via the import block above.
+# Local duplicates that used to live here were removed because they shadowed
+# the canonical ones and contained older/buggier logic (e.g. aug_flip did not
+# swap mouth corners, aug_shift/aug_tilt rotated around the origin instead of
+# the neck, aug_speed interpolated flags producing fractional values, and
+# _reclamp only zeroed the hand blocks instead of all four modality flags).
 
 # =============================================================================
 # 3. SYNTHETIC SENTENCE DATASET (WITH BEGIN/END NOISE)
@@ -1792,7 +1553,7 @@ def save_plots(history, plots_dir, stage):
 def run_epoch(model, loader, criterion, optimizer, device, blank_id,
               is_train=True, ema=None, max_norm=1.0, mask_padding=True, min_dur=3,
               beam_width=0, beam_lm=None, beam_alpha=0.0, beam_beta=0.0,
-              beam_topk=5, id_to_word=None,
+              beam_topk=5, id_to_word=None, lm_mode="bigram",
               teacher=None, kd_weight=0.0, kd_conf_threshold=0.5):
     model.train() if is_train else model.eval()
     total_loss = 0.0
@@ -1860,7 +1621,7 @@ def run_epoch(model, loader, criterion, optimizer, device, blank_id,
                 decoded = batch_decode_with_lm(
                     lp, out_lengths, blank_id, id_to_word=id_to_word, lm=beam_lm,
                     alpha=beam_alpha, beta=beam_beta, beam_width=beam_width,
-                    topk_labels=beam_topk,
+                    topk_labels=beam_topk, lm_mode=lm_mode,
                     min_dur=max(1, min_dur // max(1, getattr(model, "stride", 1))))
             else:
                 decoded = batch_decode(lp, out_lengths, blank_id,
@@ -2008,7 +1769,7 @@ def main():
     # ---- vocabulary ------------------------------------------------------
     # The CTC vocabulary is the vocabulary of the WORD loader: the top-most
     # frequent classes of the word corpus (a class below the 14-clip tier is
-    # eliminated) with a 15-clip budget per class.
+    # eliminated) with a 20-clip budget per class.
     classes = get_word_classes(
         args.data_dir,
         min_samples_per_class=args.min_samples_per_class,
@@ -2173,6 +1934,7 @@ def main():
     val_ds   = SyntheticSentenceDataset(args.data_dir, classes, args.val_samples,   False, cfg["max_w"], cfg["min_w"], 0.0,
                                         max_per_class=args.max_samples_per_class, fill_missing=args.fill_missing,
                                         return_spans=use_spans)
+    train_ld = DataLoader(train_ds, args.batch_size, shuffle=True,  collate_fn=collate, num_workers=args.num_workers)
     val_ld   = DataLoader(val_ds,   args.batch_size, shuffle=False, collate_fn=collate, num_workers=args.num_workers)
 
     # ---- word-level language model (optional) -----------------------------
@@ -2238,7 +2000,8 @@ def main():
                                           mask_padding=args.mask_padding,
                                           beam_width=args.beam_width, beam_lm=beam_lm,
                                           beam_alpha=args.beam_alpha, beam_beta=args.beam_beta,
-                                          beam_topk=args.beam_topk, id_to_word=classes)
+                                          beam_topk=args.beam_topk, id_to_word=classes,
+                                          lm_mode=args.beam_lm_mode)
 
         history["train_loss"].append(tl); history["val_loss"].append(vl); history["val_loss_ema"].append(ema_vl)
         history["wer"].append(vwer); history["wer_ema"].append(ema_wer)

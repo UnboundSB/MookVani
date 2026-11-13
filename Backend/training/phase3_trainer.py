@@ -384,7 +384,7 @@ def gen_plots(h, yt, yp, classes):
 
 def train_phase3(epochs=None, batch_size=None, num_workers=2, data_dir=None, save_dir=None):
     global SAVE_DIR, PLOTS_DIR, TOTAL_EP, BATCH_SZ
-    if data_dir and 'DATA_DIR':
+    if data_dir:
         DATA_DIR = data_dir
     if save_dir:
         SAVE_DIR = save_dir
