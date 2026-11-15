@@ -19,6 +19,8 @@ import os
 MODEL_ROOT = r"D:\mookvani"
 HOLISTIC_MODEL = "holistic_landmarker.task"
 
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
+
 MAX_SHARPEN_ATTEMPTS = 5
 SHARPEN_KERNEL_BASE = np.array([[-1, -1, -1],
                                 [-1,  9, -1],
