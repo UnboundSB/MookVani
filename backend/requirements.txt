@@ -1,0 +1,18 @@
+# Backend API requirements.
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
+
+# Spell correction for stable letter-to-word post-processing.
+symspellpy
+
+# Local text-to-speech for corrected sentences.
+pyttsx3
+pywin32; platform_system == "Windows"
+
+# Core inference dependencies already validated in the project .venv.
+opencv-python==5.0.0.93
+mediapipe==1.2.3
+numpy==2.4.6
+tensorflow-cpu==2.21.0

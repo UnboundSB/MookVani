@@ -1,0 +1,1 @@
+throw 'Deprecated script. Run the backend using the command in backend/README.md'

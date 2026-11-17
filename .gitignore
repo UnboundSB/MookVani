@@ -1,0 +1,23 @@
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Auto-downloaded runtime data (fetched on first backend start)
+backend/data/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,615 @@
+.welcome-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 28px;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(0, 159, 183, 0.18), transparent 46%),
+    radial-gradient(circle at 20% 85%, rgba(254, 215, 102, 0.14), transparent 42%),
+    var(--shadow-grey);
+  color: var(--platinum);
+}
+
+.welcome-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.aura {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 620px;
+  height: 620px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 159, 183, 0.24), transparent 62%);
+  transform: translate(-50%, -50%);
+  animation: aura-pulse 13s ease-in-out infinite;
+}
+
+.aura-2 {
+  width: 460px;
+  height: 460px;
+  background: radial-gradient(circle, rgba(254, 215, 102, 0.18), transparent 64%);
+  animation-duration: 16s;
+  animation-direction: reverse;
+}
+
+/* Ring systems --------------------------------------------------------- */
+.ring-set {
+  position: absolute;
+  inset: 0;
+}
+
+.ring-set.left {
+  z-index: 2;
+  animation: ring-group-float-left 22s ease-in-out infinite;
+}
+
+.ring-set.right {
+  z-index: 3;
+  animation: ring-group-float-right 18s ease-in-out infinite;
+}
+
+.ring-assembly {
+  position: absolute;
+  opacity: 0;
+}
+
+.ring-assembly.left-a {
+  top: 14%;
+  left: -70px;
+  width: 420px;
+  height: 420px;
+  animation: assemble-from-left 0.75s cubic-bezier(0.22, 0.68, 0.31, 1) 0.14s forwards;
+}
+
+.ring-assembly.left-b {
+  bottom: 12%;
+  left: 44px;
+  width: 300px;
+  height: 300px;
+  animation: assemble-from-left 0.75s cubic-bezier(0.22, 0.68, 0.31, 1) 0.28s forwards;
+}
+
+.ring-assembly.right-a {
+  top: 20%;
+  right: -60px;
+  width: 360px;
+  height: 360px;
+  animation: assemble-from-right 0.75s cubic-bezier(0.22, 0.68, 0.31, 1) 0.22s forwards;
+}
+
+.ring-assembly.right-b {
+  bottom: 18%;
+  right: 74px;
+  width: 260px;
+  height: 260px;
+  animation: assemble-from-right 0.75s cubic-bezier(0.22, 0.68, 0.31, 1) 0.36s forwards;
+}
+
+.ring-spin {
+  position: absolute;
+  inset: 0;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(239, 241, 243, 0.12);
+}
+
+.ring-outer {
+  border-color: rgba(0, 159, 183, 0.24);
+  border-top-color: var(--mustard);
+  border-right-color: rgba(0, 159, 183, 0.55);
+  box-shadow: 0 0 40px rgba(0, 159, 183, 0.12);
+}
+
+.ring-inner {
+  border-color: rgba(254, 215, 102, 0.18);
+  border-bottom-color: var(--pacific-blue);
+  border-left-color: rgba(254, 215, 102, 0.55);
+}
+
+.ring-semi {
+  border-color: transparent;
+}
+
+.ring-semi.semi-top {
+  border-top-color: rgba(254, 215, 102, 0.75);
+  border-right-color: rgba(254, 215, 102, 0.75);
+}
+
+.ring-semi.semi-bottom {
+  border-bottom-color: rgba(0, 159, 183, 0.75);
+  border-left-color: rgba(0, 159, 183, 0.75);
+}
+
+.spin-cw {
+  animation: spin-cw 16s linear infinite;
+}
+
+.spin-ccw {
+  animation: spin-ccw 14s linear infinite;
+}
+
+/* Animated gradient ring illusion -------------------------------------- */
+.ring-gradient {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-image: linear-gradient(
+    180deg,
+    rgba(254, 215, 102, 0) 0%,
+    rgba(254, 215, 102, 0.85) 35%,
+    rgba(0, 159, 183, 0.85) 65%,
+    rgba(0, 159, 183, 0) 100%
+  );
+  background-size: 100% 260%;
+  background-position: 0% 0%;
+  opacity: 0.85;
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  animation: ring-gradient-pan-up 6.5s linear infinite alternate;
+}
+
+.ring-gradient.g2 {
+  animation-duration: 8s;
+}
+
+.ring-gradient.g3 {
+  animation-duration: 7.5s;
+}
+
+.ring-gradient.g4 {
+  animation-duration: 9s;
+}
+
+.ring-gradient.down {
+  animation-name: ring-gradient-pan-down;
+}
+
+/* Floating transparent shapes ----------------------------------------- */
+.floating-shapes {
+  position: absolute;
+  inset: 0;
+}
+
+.shape-orbit {
+  position: absolute;
+  display: block;
+  opacity: 0;
+  animation: orbit-fade-in 0.6s ease forwards;
+}
+
+.shape {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(239, 241, 243, 0.28);
+  background: rgba(239, 241, 243, 0.07);
+  backdrop-filter: blur(1px);
+  box-shadow: inset 0 0 20px rgba(0, 159, 183, 0.08);
+  transition: none;
+}
+
+.shape.circle {
+  border-radius: 50%;
+  border-top-color: var(--mustard);
+  border-right-color: rgba(0, 159, 183, 0.78);
+  animation: shape-spin-cw 11s linear infinite;
+}
+
+.shape.square {
+  border-radius: 10px;
+  border-bottom-color: var(--pacific-blue);
+  border-left-color: var(--mustard);
+  animation: shape-spin-ccw 14s linear infinite;
+}
+
+.shape-orbit.o1 {
+  top: 21%;
+  left: 17%;
+  width: 62px;
+  height: 62px;
+  animation: orbit-fade-in 0.6s ease 0.45s forwards,
+    shape-drift-a 16s ease-in-out 0.45s infinite;
+}
+
+.shape-orbit.o2 {
+  top: 66%;
+  left: 28%;
+  width: 42px;
+  height: 42px;
+  animation: orbit-fade-in 0.6s ease 0.55s forwards,
+    shape-drift-b 18s ease-in-out 0.55s infinite;
+}
+
+.shape-orbit.o3 {
+  bottom: 24%;
+  right: 34%;
+  width: 78px;
+  height: 78px;
+  animation: orbit-fade-in 0.6s ease 0.65s forwards,
+    shape-drift-c 15s ease-in-out 0.65s infinite;
+}
+
+.shape-orbit.o4 {
+  top: 30%;
+  right: 22%;
+  width: 54px;
+  height: 54px;
+  animation: orbit-fade-in 0.6s ease 0.5s forwards,
+    shape-drift-b 17s ease-in-out 0.5s infinite reverse;
+}
+
+.shape-orbit.o5 {
+  bottom: 18%;
+  right: 16%;
+  width: 72px;
+  height: 72px;
+  animation: orbit-fade-in 0.6s ease 0.6s forwards,
+    shape-drift-a 20s ease-in-out 0.6s infinite reverse;
+}
+
+.shape-orbit.o6 {
+  bottom: 34%;
+  left: 44%;
+  width: 36px;
+  height: 36px;
+  animation: orbit-fade-in 0.6s ease 0.7s forwards,
+    shape-drift-c 15s ease-in-out 0.7s infinite reverse;
+}
+
+.top-glow {
+  position: absolute;
+  top: -120px;
+  left: 50%;
+  width: 720px;
+  height: 240px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(254, 215, 102, 0.18), transparent 72%);
+  filter: blur(14px);
+  transform: translateX(-50%);
+  animation: glow-slide 15s ease-in-out infinite;
+}
+
+/* Welcome content ------------------------------------------------------ */
+.welcome-content {
+  position: relative;
+  z-index: 4;
+  display: grid;
+  justify-items: center;
+  max-width: 900px;
+  text-align: center;
+}
+
+.welcome-title {
+  margin: 0;
+  color: var(--mustard);
+  font-size: clamp(48px, 9vw, 104px);
+  font-weight: 900;
+  line-height: 0.96;
+  letter-spacing: -0.05em;
+  opacity: 0;
+  animation: assemble-from-left 0.7s cubic-bezier(0.22, 0.68, 0.31, 1) 0.16s forwards;
+}
+
+.welcome-subtitle {
+  max-width: 34ch;
+  margin: 18px 0 0;
+  color: rgba(239, 241, 243, 0.78);
+  font-size: clamp(16px, 2.2vw, 23px);
+  line-height: 1.5;
+  opacity: 0;
+  animation: assemble-from-right 0.7s cubic-bezier(0.22, 0.68, 0.31, 1) 0.28s forwards;
+}
+
+.welcome-screen .welcome-enter {
+  width: min(52vw, 172px);
+  height: min(52vw, 172px);
+  margin-top: 42px;
+  border-radius: 50%;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  box-shadow: 0 20px 46px rgba(254, 215, 102, 0.24);
+  opacity: 0;
+  animation: assemble-center 0.7s cubic-bezier(0.22, 0.68, 0.31, 1) 0.48s forwards;
+}
+
+.welcome-screen .welcome-enter:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.02) !important;
+}
+
+.welcome-screen .welcome-enter:active:not(:disabled) {
+  transform: translateY(1px) scale(0.98) !important;
+}
+
+/* Exit choreography ---------------------------------------------------- */
+.page-transition.welcome-route.is-leaving .welcome-title {
+  animation: exit-to-left 0.42s ease forwards;
+}
+
+.page-transition.welcome-route.is-leaving .welcome-subtitle {
+  animation: exit-to-right 0.42s ease forwards;
+}
+
+.page-transition.welcome-route.is-leaving .welcome-screen .welcome-enter {
+  animation: exit-to-center 0.42s ease forwards;
+}
+
+.page-transition.welcome-route.is-leaving .ring-set,
+.page-transition.welcome-route.is-leaving .floating-shapes,
+.page-transition.welcome-route.is-leaving .aura,
+.page-transition.welcome-route.is-leaving .top-glow {
+  animation: exit-fade 0.42s ease forwards;
+}
+
+/* Keyframes ------------------------------------------------------------- */
+@keyframes spin-cw {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spin-ccw {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes ring-group-float-left {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(18px, -14px, 0);
+  }
+}
+
+@keyframes ring-gradient-pan-up {
+  0% {
+    background-position: 0% 0%;
+  }
+  100% {
+    background-position: 0% 100%;
+  }
+}
+
+@keyframes ring-gradient-pan-down {
+  0% {
+    background-position: 0% 100%;
+  }
+  100% {
+    background-position: 0% 0%;
+  }
+}
+
+@keyframes ring-group-float-right {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(-18px, 16px, 0);
+  }
+}
+
+@keyframes shape-spin-cw {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes shape-spin-ccw {
+  from {
+    transform: rotate(180deg);
+  }
+  to {
+    transform: rotate(-180deg);
+  }
+}
+
+@keyframes orbit-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes assemble-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-56px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes assemble-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(56px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes assemble-center {
+  from {
+    opacity: 0;
+    transform: translateY(36px) scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes exit-to-left {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-52px);
+  }
+}
+
+@keyframes exit-to-right {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(52px);
+  }
+}
+
+@keyframes exit-to-center {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+}
+
+@keyframes exit-fade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes aura-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.07);
+  }
+}
+
+@keyframes glow-slide {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translate(-50%, 0);
+  }
+  50% {
+    opacity: 0.85;
+    transform: translate(-50%, 28px);
+  }
+}
+
+@keyframes shape-drift-a {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(28px, -34px, 0) rotate(24deg);
+  }
+}
+
+@keyframes shape-drift-b {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(-32px, 24px, 0) rotate(-20deg);
+  }
+}
+
+@keyframes shape-drift-c {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(22px, 30px, 0) rotate(16deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .ring-assembly.left-a {
+    left: -110px;
+    width: 320px;
+    height: 320px;
+  }
+
+  .ring-assembly.left-b {
+    left: -30px;
+    width: 240px;
+    height: 240px;
+  }
+
+  .ring-assembly.right-a {
+    right: -100px;
+    width: 280px;
+    height: 280px;
+  }
+
+  .ring-assembly.right-b {
+    right: -20px;
+    width: 220px;
+    height: 220px;
+  }
+
+  .shape.c1,
+  .shape.c3,
+  .shape.s2 {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-screen *,
+  .welcome-screen {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .welcome-title,
+  .welcome-subtitle,
+  .welcome-screen .welcome-enter,
+  .ring-assembly,
+  .shape-orbit {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
